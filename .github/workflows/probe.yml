@@ -1,0 +1,53 @@
+name: probe
+
+# Asks each candidate source once from GitHub's own servers (the collector's host): a source that answers a home address may
+# refuse a datacenter. The answers (status, bytes, type, milliseconds, one structural check: never content) are published as the
+# single commit of the "probe" branch: results.md and results.json. Nothing here touches the feed or the collector's state.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/probe/**'
+
+permissions:
+  contents: write
+
+# One probe at a time; a newer one replaces a waiting one.
+concurrency:
+  group: probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROBE_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
+      - name: Ask each source once
+        run: node .github/probe/probe.js --out probe-out
+
+      - name: Show the table
+        run: cat probe-out/results.md >> "$GITHUB_STEP_SUMMARY"
+
+      # The same way publish-feed.sh publishes the feed: a fresh repository, one commit, force-pushed with the built-in token.
+      - name: Publish the results as the single commit of the probe branch
+        run: |
+          set -euo pipefail
+          REMOTE="${PROBE_REMOTE:?PROBE_REMOTE is not set}"
+          [ -f probe-out/results.json ] && [ -f probe-out/results.md ] || { echo "no results to publish"; exit 1; }
+          tmp="$(mktemp -d)"
+          cp probe-out/results.json probe-out/results.md "$tmp/"
+          cd "$tmp"
+          git init -q -b probe
+          git add -A
+          # (an identity with no address behind it: git only needs the two fields to be set)
+          git -c user.name="ideas-probe" -c user.email="ideas-probe" commit -q -m "probe $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "$REMOTE" probe
+          echo "published results.md and results.json to the probe branch"
