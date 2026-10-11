@@ -1,10 +1,6 @@
-# scratch state and feed of hand-run cycles (node collect.js --state .state-local --out .out-local)
-.state-local/
-.out-local/
-
-# overnight runs on the Mac, and the folders a hosted cycle works in
-.state-mac/
-.out-mac/
 state/
 out/
 cycle.json
+cycle.log
+.state-*/
+.out-*/
