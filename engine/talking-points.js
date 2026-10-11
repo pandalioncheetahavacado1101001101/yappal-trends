@@ -999,7 +999,9 @@ function pointOf(c, ctx) {
   // name, a death when ARREST_OTHERS_MIN of them say it was killed, else nothing. Collector only)
   if (noun0 && noun0.f && noun0.f.key === 'arrest') {
     const whose = whoseArrest(titles, near);
-    if (!whose.own && whose.others >= ARREST_OTHERS_MIN) {
+    // (one headline that reads as the name's own does not outweigh sixteen that tell someone else's: "Nancy Guthrie arrest" was
+    // published over the arrest of a man detained in the search for her. Reviewers, 2026-10-12)
+    if (whose.others >= ARREST_OTHERS_MIN && whose.own * 2 < whose.others) {
       const killed = titles.filter((t) => KILLED.test(t) && mentions(hay(t), near.split(' ').slice(-1)[0])).length;
       noun0 = killed >= ARREST_OTHERS_MIN ? { f: TN.FAMILY.get('death'), noun: 'death', count: killed, share: killed / Math.max(1, titles.length), explained: noun0.explained } : null;
     }
@@ -1366,6 +1368,13 @@ function arrestOf(title, near) {
     const at = upTo.indexOf(last);
     const before = upTo.slice(0, Math.max(0, at - (nw.length - 1)));
     if (at < 0) return null;
+    // (and only when nobody else stands before the noun, and the name is there whole: "Luke Daley Arrested Again As Guthrie Case
+    // Lingers" arrests Luke Daley)
+    const lead = title.slice(0, m.index).split(/\s+/).map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').replace(/[’']s$/, '')).filter(Boolean);
+    const someoneElse = lead.some((w, i) => /^\p{Lu}[\p{L}’'-]+$/u.test(w) && !nw.includes(w.toLowerCase()) && (W.isFirstName(w.toLowerCase()) || (i > 0 && !W.inDict(w.toLowerCase()))));
+    const whole = nw.every((w, i) => upTo[at - (nw.length - 1) + i] === w);
+    if (someoneElse) return 'other';
+    if (!whole) return null;
     return before.length <= ARREST_NEAR - 1 && !before.some((w) => ARREST_OF_ANOTHER.has(w) || ARRESTED_OTHER.test(w)) ? 'own' : 'other';
   }
   const pre = words(title.slice(0, m.index));
@@ -1463,7 +1472,10 @@ function eventText(row, subject, surface, f, lex, spelt = []) {
   const posted = row.fam === 'reddit' || row.youtube;
   if (posted && (TN.WRONGDOING.test(clean) || TN.POST_CLAIM.test(clean) || /\b(?:i|my|me|we|our)\b/i.test(clean))) return null;
   const last = subject.split(' ').slice(-1)[0];
-  const said = posted && f && TN.statesClaim(clean, f, last) && !POST_HEDGE.test(clean) ? TN.reported(clean, f) : clean;
+  // (a flat claim is told as reported whoever printed it, as the card's own line is: "Kai Cenat paid Gorgeous Doll $200K to get an
+  // abortion." in a timeline is as flat as it would be on the card. Collector only, 2026-10-12)
+  const flat = !!f && TN.statesClaim(clean, f, last) && !(posted ? POST_HEDGE : TN.REPORTED).test(clean);
+  const said = flat ? (posted ? TN.reported(clean, f) : TN.reportedClaim(clean, f)) : clean;
   let line = TN.recaseName(TN.sentenceLine(said, lex), subject, surface);
   for (const [key, shown] of spelt) line = TN.recaseName(line, key, shown);
   line = TL.tidyLine(TL.plainWords(line)).replace(/[.!…]+(['’"”]?)$/, '$1');
@@ -1471,10 +1483,16 @@ function eventText(row, subject, surface, f, lex, spelt = []) {
     // (cut where a clause ends, never dropping who says so)
     const cut = [...line.matchAll(/[,;:]\s|\s[—–-]\s/g)].map((m) => m.index).filter((i) => i + 1 <= EVENT_TEXT_MAX && i >= 30).pop();
     if (cut === undefined || EVENT_SAYS_WHO.test(line.slice(cut))) return null;
+    // (nor a cut that drops how it ended, or that it was not so: "... arrested in Miami on Saturday night, charges dropped hours later")
+    if (EVENT_OUTCOME.test(line.slice(cut))) return null;
     line = line.slice(0, cut);
   }
+  // (a sentence that no longer names who the row is about is someone else's: a heading cut off its headline. "From sneaking into
+  // Edinburgh pubs at 15 to WrestleMania." under "Logan Paul $250K loss")
+  if (mentions(hay(clean), last) && !mentions(hay(line), last)) return null;
   return line.split(/\s+/).length >= EVENT_TEXT_WORDS ? `${line}.` : null;
 }
+const EVENT_OUTCOME = /(?<![\p{L}\p{N}])(?:not|never|no|denies|denied|deny|dropped|dismissed|cleared|acquitted|released|withdrawn|withdrew|retracted|apologi[sz]\w+|false|fake|hoax|overturned|tossed)(?![\p{L}\p{N}])/iu;
 const EVENT_SAYS_WHO = /\b(?:claims?|alleg\w+|says?|said|according to|report\w*|police|lawsuit|sources?|accus\w+|den(?:y|ies|ied|ial))\b/i;
 // a headline that is a label and a clause ("Kai Cenat Threatens Lawsuit: Streamer rejects ...") reads worse than a plain one
 const LABELLED = /[:;|]/;

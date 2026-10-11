@@ -142,7 +142,9 @@ const LEGAL_STEP = new Set(['arrest', 'lawsuit', 'verdict', 'sentencing', 'mistr
 const OWNED_UP = /\b(?:admits?|admitted|apologi[sz]\w+|confess\w+|confirms?|confirmed|pleads? guilty|pleaded guilty)\b/i;
 // (breaking a silence or responding is no denial: "Bachelor star Sam Wood ... break silence after domestic violence charges")
 // (suing on its own is no denial: "victim suing Cornell University")
-const DENIAL = /\b(?:den(?:y|ies|ied|ial)(?!\s+(?:bail|entry|access|parole|visa))|innocent|not true|false claims|fires? back|(?:is|are|was) lying|slams (?:the )?(?:claims|allegations|accusations)|pushes back|threatens (?:to sue|lawsuit|legal action)|(?:plans|announces|takes|vows) legal action|says (?:he|she|they)(?:’|')?(?:s| is| are| will be) suing)\b/i;
+// (collector only, 2026-10-12: "refutes", "disputes", "rebuts", "rejects the claims", "dismisses ... as lies", "calls ... baseless",
+// "none of it happened" are denials too: "Kai Cenat refutes new video claims he paid ..." carried no denial and the card dropped it)
+const DENIAL = /\b(?:den(?:y|ies|ied|ial)(?!\s+(?:bail|entry|access|parole|visa))|refut(?:es|ed|ing)|disput(?:es|ed|ing)|rebut(?:s|ted|ting)|rejects? (?:the |all |these |those |new )?(?:\S+ )?(?:claims?|allegations?|accusations?|reports?|rumou?rs?)|dismiss(?:es|ed) [^,;:]{0,40}?(?:as )?(?:lies|false|baseless|untrue|fabricated|rumou?rs?|nonsense)|calls? [^,;:]{0,30}?(?:lies|baseless|fabricated)|baseless|fabricated|none of it (?:happened|is true)|innocent|not true|false claims|fires? back|(?:is|are|was) lying|slams (?:the )?(?:claims|allegations|accusations)|pushes back|threatens (?:to sue|lawsuit|legal action)|(?:plans|announces|takes|vows) legal action|says (?:he|she|they)(?:’|')?(?:s| is| are| will be) suing)\b/i;
 // a denial in so many words (a threat to sue is no denial of the claim: "Kai Cenat threatens lawsuit after Reggie ..." still needs one)
 const STRICT_DENIAL = /\b(?:den(?:y|ies|ied|ial)(?!\s+(?:bail|entry|access|parole|visa))|rejects?|innocent|not true|false claims|slams (?:the )?(?:claims|allegations|accusations)|pushes back)\b/i;
 // demand, not the noun: people want it explained
@@ -199,9 +201,14 @@ function really(s, f, m) {
     const clause = clauseBefore(s, m.index);
     return !NOT_YET.test(clause) && !NOT_YET_AUX.test(clause) && !/\?\s*$/.test(s);
   }
-  if (f.key === 'arrest') return !NOT_SO.test(before) && !UNDONE.test(after);
+  // (a cardiac arrest is no arrest: "Nana Patekar suffers cardiac arrest at Mumbai home". Collector only)
+  if (f.key === 'arrest') return !NOT_SO.test(before) && !UNDONE.test(after) && !(/^arrests?$/i.test(m[0]) && /(?:cardiac|heart|respiratory|cardiopulmonary)\s+$/i.test(before));
   if (f.key === 'death') return !DEATH_HOAXED.test(s) && !DEATH_NEAR.test(before) && !(/^(?:killed|dead)$/i.test(m[0]) && DEATH_FIGURE.test(after));
-  if (f.key === 'quit') return !(QUIT_DONE.test(m[0]) && QUIT_FIGURE.test(after));
+  // (a suspended fine or sentence is no suspension: "Xhaka handed suspended fine". Collector only)
+  if (f.key === 'quit') return !(QUIT_DONE.test(m[0]) && QUIT_FIGURE.test(after)) && !(/^suspended$/i.test(m[0]) && /^\s+(?:\S+\s+)?(?:fine|sentence|jail|prison|term)(?![\p{L}\p{N}])/iu.test(after));
+  // (a clash is a feud between two people, never a fixture: "Haaland fit for Anfield clash". Said with who it is with, or of two
+  // names joined by "and". Collector only)
+  if (f.key === 'feud') return !(/^clash(?:es)?$/i.test(m[0]) && !/^\s+(?:with|between)(?![\p{L}\p{N}])/iu.test(after) && !/(?<![\p{L}\p{N}])and\s+(?:[\p{L}’'.-]+\s+){1,3}$/iu.test(before));
   if (f.key === 'apology') return !APOLOGY_ASKED.test(before);
   // (a figure of speech is no fight: "Matthew Lillard says he still has to fight for acting jobs", "fights back tears", "fighting to
   // keep her show". Collector only: the card read "Matthew Lillard fight")
@@ -209,7 +216,7 @@ function really(s, f, m) {
   return true;
 }
 const FIGHT_FIGURE = /^[’'"”]?\s+(?:for|to|back|off|against\s+(?:cancer|addiction|depression|the\s+odds|time|stigma|misinformation|claims?|rumou?rs?|allegations?))(?![\p{L}\p{N}])/iu;
-const CHECKED_FAMS = new Set(['verdict', 'sentencing', 'arrest', 'death', 'quit', 'apology', 'fight']);
+const CHECKED_FAMS = new Set(['verdict', 'sentencing', 'arrest', 'death', 'quit', 'apology', 'fight', 'feud']);
 /** A family's first match in a text that is the thing itself (see `really`), as `text.match(f.re)` gives it; or null. */
 function saidIn(text, f) {
   const s = String(text || '');
@@ -860,6 +867,8 @@ function cleanHeadline(title, publisher) {
   s = s.replace(/\s+[|–—-]\s+[^|–—-]{2,40}$/, (m) => (/\b(?:news|com|online|magazine|daily|times|post|tv|radio|weekly|media|herald|journal|report)\b/i.test(m) ? '' : m));
   // (nor are an outlet's pictures: "🏳️‍🌈🕯️ Queer Punjabi makeup artist ..." is the sentence after them. Collector only)
   s = s.replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}]+(?:[_\s]*[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}]+)*/gu, ' ').replace(/\s+/g, ' ').trim();
+  // (nor a site's own tag after its mark: "... in leaked court documents ᐉ News from Fakti.bg - Curious". Collector only)
+  s = s.replace(/\s*[ᐉ►▶»›⟶➤➜]\s.*$/u, '').trim();
   // (a shouted tail is no part of the line: "... at gunpoint in LA -- OMG!". Collector only)
   s = s.replace(/\s+(?:--|–|—)\s+(?:\p{Lu}{2,}[!?]*\s*){1,3}$/u, '');
   s = s.replace(/\s+\|\s+[^|]+$/, '').replace(CLEAN_LEAD, '').replace(/\s*\((?:video|photos?|watch|exclusive|updated?)\)\s*$/i, '').replace(SOURCE_TAG, '');

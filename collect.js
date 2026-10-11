@@ -9,7 +9,12 @@
  *
  * Fetches within the request budget, upserts every reply into the engine's store, builds once and ranks per audience, matches every
  * row to its trend, samples and measures it, builds and validates the feed, publishes it. Safe to run every 15 minutes: a second run
- * finds the lock and exits 2. Exit 0: a feed was published; 1: nothing new was published (the feed already out is untouched).
+ * finds the lock and exits 2. Exit 0: a feed was published; 1: nothing new was published (the feed already out is untouched: the
+ * slot is behind the last one out, the last network cycle began under ten minutes ago, or no list passed whole); 2: another cycle
+ * holds the lock, or took it from this one before it wrote; 3: the cycle failed (the engine or an error nobody foresaw: the
+ * host's job fails on it and shows the log) or its clock is not to be trusted.
+ *        [--force]   run although the last network cycle began under ten minutes ago, or --now is given on a state a real cycle
+ *                    published to inside the last two hours
  * stdout: one JSON line { cycle, slot, requests, blocked, items, modelLines, ms }; everything else goes to stderr.
  *
  * --record saves each reply under <dir>/<slot>/ with a manifest; --replay answers every request from such a folder instead of the
@@ -71,6 +76,12 @@ const HOST_NAMES = { 'news.google.com': 'google-news', 'trends.google.com': 'goo
 const X_NAMES_PER_CYCLE = 2;
 const THREAD_BACK_MS = 72 * 3600e3;
 const TIKTOK_TAGS_KEPT = 40;
+// (the budget is a cycle's, and a cycle is a quarter hour: two inside ten minutes send every host twice its share. A4)
+const NETWORK_AGAIN_SECONDS = 10 * 60;
+const LIVE_LATELY_SECONDS = 2 * HOUR;
+const THIRD_ROUND_NEWS = 3;
+const CLOCK_SKEW_MAX_SECONDS = SLOT_SECONDS;
+const CLOCK_SAMPLES_MIN = 3;
 
 const log = (...a) => process.stderr.write(`${a.join(' ')}\n`);
 
@@ -84,6 +95,7 @@ function parseArgs(argv) {
     else if (flag === '--out') out.out = value();
     else if (flag === '--now') out.now = Date.parse(value());
     else if (flag === '--offline') out.offline = true;
+    else if (flag === '--force') out.force = true;
     else if (flag === '--audiences') out.audiences = value().split(',').map((x) => x.trim()).filter((x) => AUDIENCES.includes(x));
     else if (flag === '--max-requests') out.maxRequests = Math.max(0, Number(value()) || 0);
     else if (flag === '--deadline-seconds') out.deadlineSeconds = Math.max(30, Number(value()) || 420);
@@ -152,11 +164,35 @@ async function runCycle(opts) {
     const cycle = (meta.get('cycle', 0) || 0) + 1;
     // never backwards: a slot before the last one published (a clock set back, a stray --now on the live state) would write over newer
     // samples and put an older list out. The same slot again is fine (A3)
-    const lastPublish = meta.get('lastPublish', null);
+    let lastPublish = meta.get('lastPublish', null);
+    const wall = Math.floor(Date.now() / 1000);
+    const pinned = opts.now !== undefined;
+    const real = !opts.replay && !opts.transport;
+    // (a pinned clock on a state a real cycle published to lately is a stray --now on the live state: one such run with a clock a
+    // day ahead froze the list until real time passed it. Refused unless forced)
+    if (pinned && real && !opts.force && lastPublish && !lastPublish.pinned && Number.isFinite(lastPublish.at) && wall - lastPublish.at < LIVE_LATELY_SECONDS && Math.abs(nowS - wall) > SLOT_SECONDS) {
+      log(`[collect] --now ${instant(nowS)} on a state a real cycle published to ${wall - lastPublish.at} s ago: nothing done (use --force, or a copy of the state)`);
+      return { code: 3, summary: null };
+    }
+    // (and a last publish that is ahead of the real clock is no guard to hold a real cycle back by: a wrong clock, once. Loudly)
+    if (!pinned && lastPublish && Number.isFinite(lastPublish.t) && lastPublish.t > slotOf(Date.now()) + SLOT_SECONDS) {
+      log(`[collect] WARNING: the last published slot ${instant(lastPublish.t)} is ahead of the clock ${instant(wall)}: it was written with a wrong clock and is set aside`);
+      meta.set('lastPublishBogus', lastPublish);
+      lastPublish = null;
+      meta.set('lastPublish', null);
+    }
     if (lastPublish && Number.isFinite(lastPublish.t) && t < lastPublish.t) {
       log(`[collect] slot ${instant(t)} is before the last published slot ${instant(lastPublish.t)}: nothing done, the feed already out stays`);
       return { code: 1, summary: null };
     }
+    // (every cap is a cycle's: a second network cycle inside ten minutes of the last, a delayed run and the next one back to back or
+    // a slot run again by hand, would send each host its share twice. It does nothing; --force, a replay and --offline are not held)
+    const lastNetworkAt = meta.get('lastNetworkAt', null);
+    if (real && !opts.offline && !opts.force && Number.isFinite(lastNetworkAt) && wall >= lastNetworkAt && wall - lastNetworkAt < NETWORK_AGAIN_SECONDS) {
+      log(`[collect] the last network cycle began ${wall - lastNetworkAt} s ago: nothing done (the request budget is a quarter hour's; use --force)`);
+      return { code: 1, summary: null };
+    }
+    if (real && !opts.offline) meta.set('lastNetworkAt', wall);
     if (meta.get('firstCycleAt') === null) meta.set('firstCycleAt', t);
     const store = ST.openStore(paths.store);
     // (the store is only ever renamed into place, so one that is there and does not read is a damaged disk or a bad restore: it is
@@ -171,7 +207,10 @@ async function runCycle(opts) {
     obs.roster = TS.rosterNames(paths.wiki);
     const hosts = new Map(db.prepare('SELECT * FROM hosts').all().map((r) => [r.host, { ...r }]));
     const off = new Set((env.IDEAS_SOURCES_OFF || '').split(',').map((x) => x.trim()).filter(Boolean));
-    const budget = B.createBudget({ cap: opts.offline ? 0 : opts.maxRequests, hosts, now: nowS, off });
+    // (a few Google News requests are kept back for the third round: the name a roster flare or a new game on the chart wants
+    // searched in the same cycle. The second round spent the whole cap on 35 of 39 recorded cycles. Reviewers, 2026-10-12)
+    const budget = B.createBudget({ cap: opts.offline ? 0 : opts.maxRequests, hosts, now: nowS, off, reserve: { 'news.google.com': THIRD_ROUND_NEWS } });
+    const skews = [];
     const transport = opts.offline ? null : opts.transport || (opts.replay ? replayTransport(opts.replay, t) : F.netTransport(env));
     const fetchDeadline = started + Math.min(B.FETCH_DEADLINE_SECONDS, opts.deadlineSeconds) * 1000;
     const recorded = {};
@@ -186,6 +225,8 @@ async function runCycle(opts) {
       const results = await F.send(requests, { budget, hosts, clock, deadlineMs: fetchDeadline, transport, ...(opts.replay || opts.transport ? { gap: () => 0 } : {}) });
       for (const r of results) {
         const { request } = r;
+        // (the server's own clock against this machine's, from every reply that carries one)
+        if (r.date && Number.isFinite(Date.parse(r.date))) skews.push(Date.parse(r.date) / 1000 - Date.now() / 1000);
         outcome.sent += r.tried;
         outcome.byHost[request.host] = (outcome.byHost[request.host] || 0) + r.tried;
         // the raw reply first: `.new`, then renamed
@@ -304,12 +345,19 @@ async function runCycle(opts) {
       // and what the creator-native lists newly show: a creator of the roster X began to talk about inside the last three hours, a
       // game new to Twitch's most-watched (lib/discover.js). Each is worth its own search now, unless it was searched lately
       const lately = (name) => searchedAt.has(TS.talkKey(name)) && nowS - searchedAt.get(TS.talkKey(name)) < B.PAGE_RESEARCH_SECONDS;
-      const games = obs.games ? DISC.gameMoves(meta.get('twitchGames', null), obs.games, t) : null;
-      if (games) meta.set('twitchGames', games.state);
+      const gamesWas = meta.get('twitchGames', null);
+      const games = obs.games ? DISC.gameMoves(gamesWas, obs.games, t) : null;
       const shown = [...SOCIAL.newCreators(obs.x, inputs0.roster, t).slice(0, X_NAMES_PER_CYCLE), ...(games ? games.fresh.map((g) => g.name) : [])].filter((name) => !lately(name) && !picked.now.includes(TS.talkKey(name)));
       if (shown.length) log(`[discover] ${shown.join(', ')}`);
       const wantedNow = [...new Set([...flared, ...shown])];
-      if (wantedNow.length) await round(wantedNow.flatMap((name) => NAMES.nameRequests(name, 1)).filter((r) => r.kind === 'name-news'));
+      budget.release('news.google.com');
+      const thirdRound = wantedNow.length ? await round(wantedNow.flatMap((name) => NAMES.nameRequests(name, 1)).filter((r) => r.kind === 'name-news')) : [];
+      // (a signal is used up only when its search was sent: a name the budget refused flares again next cycle, with its noun still
+      // new, and a game whose search was not sent is still new to the chart then)
+      const sent = new Set(thirdRound.map((r) => TS.talkKey((r.request.args || {}).name || '')));
+      for (const name of flared) { const key = TS.talkKey(name); if (!sent.has(key)) { if (watchState.carried && watchState.carried[key]) carried[key] = watchState.carried[key]; else delete carried[key]; } }
+      const gamesSent = !games || games.fresh.every((g) => sent.has(TS.talkKey(g.name)) || lately(g.name) || picked.now.includes(TS.talkKey(g.name)));
+      if (games && gamesSent) meta.set('twitchGames', games.state);
       meta.set('rosterWatch', { cursor: watch.cursor, carried });
       // (the first plan ever was made on tier 0 alone: the names the rest of this cycle's replies brought are already waiting, they
       // are not "new" to the next cycle, which reads the list's own rows first)
@@ -343,14 +391,14 @@ async function runCycle(opts) {
     } catch (e) {
       log(`[collect] the engine failed, the feed already out stays: ${e.stack || e.message}`);
       meta.set('cycle', cycle);
-      return { code: 1, summary: null };
+      return { code: 3, summary: null };
     }
     // the desk (lib/desk.js): an editor's pass over the engine's rows, before they are matched to trends and measured
     const recent = [...store.rows.values()].filter((r) => (r.fam === 'gnews' || r.fam === 'celeb') && Number.isFinite(r.t) && nowMs - r.t < THREAD_BACK_MS && r.t <= nowMs)
       .map((r) => ({ t: r.t, title: r.title, outlet: r.publisher || r.label || null }));
     const isBeat = (outlet) => TC.CREATOR_PRESS.test(outlet) || TN.MAJOR.test(outlet);
     // (the desk never holds a list back: should it fail on a row nobody foresaw, that audience's rows go out as the engine made them)
-    const deskOf = (a) => { const rows = ROWS.rowsOf(a, built.byAudience[a], built); try { return DESK.edit(rows, { recent, now: nowMs, isBeat }); } catch (e) { log(`[desk] ${a}: failed, the engine's rows stand: ${e.message}`); return { rows, notes: [] }; } };
+    const deskOf = (a) => { const rows = ROWS.rowsOf(a, built.byAudience[a], built); try { return DESK.edit(rows, { recent, now: nowMs, isBeat, lex: built.lex }); } catch (e) { log(`[desk] ${a}: failed, the engine's rows stand: ${e.message}`); return { rows, notes: [] }; } };
     const edited = Object.fromEntries(opts.audiences.map((a) => [a, deskOf(a)]));
     const rowsByAudience = Object.fromEntries(opts.audiences.map((a) => [a, edited[a].rows]));
     const deskNotes = (edited[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || { notes: [] }).notes;
@@ -361,15 +409,28 @@ async function runCycle(opts) {
     const warm = !!db.prepare('SELECT 1 FROM fetches WHERE status = 200 AND t >= ? AND t < ? LIMIT 1').get(t - WARM_SECONDS, t);
     const newestWiki = fs.readdirSync(paths.wiki).filter((n) => /^wiki-(?:top|featured-feed)-\d{4}-\d\d-\d\d\.json$/.test(n)).map((n) => Date.parse(n.match(/(\d{4}-\d\d-\d\d)/)[1]) / 1000).sort().pop();
     obs.origins = ING.originsOf(store);
-    const cycleState = H.step(db, { t, rowsByAudience, obs, warm, wikiFresh: Number.isFinite(newestWiki) && nowS - newestWiki <= 36 * HOUR + DAY, lifetimes: H.lifetimesOf(db, t) });
+    const cycleState = H.step(db, { t, rowsByAudience, obs, warm, wikiFresh: Number.isFinite(newestWiki) && nowS - newestWiki <= 36 * HOUR + DAY, lifetimes: H.lifetimesOf(db, t),
+      // (every timeline sentence is told by the desk's one function: lib/desk.js tellEvent)
+      tell: (row, r) => DESK.tellEvent(row, r, built.lex) });
+    for (const f of cycleState.failed || []) log(`[history] "${f.title}" left out of this cycle: ${f.error}`);
     lap('measure');
 
     // ---- step 6, lines (G): at most 6 model calls, 60 s in all; a line is shown as the model's only when the claim check passes it ----
     // (no calls offline or in a replay, unless a test hands the model's transport in; a line written before is still read from its cache)
     const llm = opts.offline || ((opts.replay || opts.transport) && !opts.llmCall) ? null : LLM.configOf(env);
+    if (llm && llm.keyIgnored) log(`[lines] IDEAS_LLM_API_KEY is set and ${llm.host} takes no key: it is not sent`);
     // (the page laid out once each row's status and start are known: what is still going leads, what is fading follows. lib/desk.js `order`)
     const statusOf = (row) => { const c = cycleState.trends.get(row.id); return !c ? row.engineStatus : Object.values(c.early || {}).some(Boolean) ? 'rising' : c.status; };
-    const startedOf = (row) => { const c = cycleState.trends.get(row.id); return c && Number.isFinite(c.next.startedAt) ? c.next.startedAt : null; };
+    // (how long a row has been going, for the page: from its start, or from its newest chapter. A second accuser, or the accused
+    // answering, starts a story's week again, as it does for "still told": lib/measure.js. The benchmark row, thirteen days old with
+    // a new chapter that morning, is this week's story and not "nobody's heads-up")
+    const startedOf = (row) => {
+      const c = cycleState.trends.get(row.id);
+      if (!c || !Number.isFinite(c.next.startedAt)) return null;
+      // (or from its newest turn: a headline of the story's own people that does not print its subject's name moves no badge and
+      // alerts nobody, and is still the story going on. lib/desk.js withThread)
+      return Math.max(c.next.startedAt, ...[c.next.chapterAt, c.turnAt].filter((x) => Number.isFinite(x) && x <= t));
+    };
     const orderOf = (a, rows) => { try { return DESK.order(rows, { statusOf, startedOf, now: t }); } catch (e) { log(`[desk] ${a}: order failed, the engine's order stands: ${e.message}`); return rows; } };
     // (the writer asks for the rows a reader meets first: the page as it will be laid out, not as the engine ranked it)
     const laidOut = Object.fromEntries(Object.entries(rowsByAudience).map(([a, rows]) => [a, orderOf(a, rows)]));
@@ -378,6 +439,7 @@ async function runCycle(opts) {
       lined = await LW.writeLines({ db, meta, t, rowsByAudience: laidOut, isEarly: (row) => { const c = cycleState.trends.get(row.id); return !!c && Object.values(c.early || {}).some(Boolean); },
         lex: built.lex, config: llm, ...(opts.llmCall ? { call: opts.llmCall } : {}), ...(opts.llmWait ? { wait: opts.llmWait } : {}), log });
     } catch (e) { log(`[lines] the writer failed, every line stays its headline: ${e.message}`); }
+    for (const [id, w] of lined.lines) if (w.drop) log(`[lines] "${(Object.values(rowsByAudience).flat().find((r) => r.id === id) || {}).title || id}" left out: ${w.drop}`);
     const linedRows = Object.fromEntries(Object.entries(LW.applyLines(rowsByAudience, lined.lines)).map(([a, rows]) => [a, orderOf(a, DESK.respellLines(rows))]));
     lap('lines');
 
@@ -397,7 +459,20 @@ async function runCycle(opts) {
     }
 
     // ---- step 5 (written once the ranks are final): history, in one transaction ----
-    H.commit(db, cycleState, feeds.published);
+    // (fenced: the lock is still this run's and nothing newer was published while it worked. A cycle that slept through its turn,
+    // or had its lock taken, writes nothing and publishes nothing: A3)
+    const fenced = () => {
+      if (!STATE.holdsLock(opts.state, nowS)) return 'the lock is no longer this run’s';
+      const lp = meta.get('lastPublish', null);
+      return lp && Number.isFinite(lp.t) && lp.t > t ? `slot ${instant(lp.t)} was published while this one ran` : null;
+    };
+    try {
+      H.commit(db, cycleState, feeds.published, { guard: () => { const why = fenced(); if (why) { const e = new Error(why); e.fenced = true; throw e; } } });
+    } catch (e) {
+      if (!e.fenced) throw e;
+      log(`[collect] ${e.message}: nothing written, nothing published`);
+      return { code: 2, summary: null };
+    }
     Q.sync(db, Object.values(OWED.owedRequests(built.owed)).flat().concat((built.owed.recent || []).filter((n) => {
       const l = store.lookups.get(`talk-${TS.talkKey(n)}`);
       return !(l && l.tprecentAt && nowMs - l.tprecentAt < 20 * HOUR * 1000);
@@ -445,13 +520,24 @@ async function runCycle(opts) {
       const bad = V.validateNames(names, { bytes: Buffer.byteLength(JSON.stringify(names)) });
       if (bad.length) { log(`[feed] names.json not written: ${bad[0]}`); names = null; }
     }
+    // (the slot against a clock that can be trusted: the Date header of this cycle's own replies. A machine whose clock is out by
+    // more than a slot publishes nothing: lists dated ahead would hold every later cycle back)
+    const skew = skews.length >= CLOCK_SAMPLES_MIN ? [...skews].sort((a, b) => a - b)[Math.floor(skews.length / 2)] : null;
+    if (!pinned && real && skew !== null && Math.abs(skew) > CLOCK_SKEW_MAX_SECONDS) {
+      log(`[collect] this machine's clock is ${Math.round(-skew)} s off the servers' own: nothing published`);
+      meta.set('cycle', cycle);
+      return { code: 3, summary: null };
+    }
+    const lost = fenced();
+    if (lost) { log(`[collect] ${lost}: nothing published`); return { code: 2, summary: null }; }
     const written = PUB.publish(opts.out, { cycle, feeds, audiences: good, status, names });
     if (names) meta.set('namesDay', today);
-    PUB.pruneDetails(opts.out);
+    // (by what the state knows: every trend seen inside the last 48 hours keeps its detail, any other file goes)
+    PUB.pruneDetails(opts.out, Date.now() / 1000, { keep: new Set([...db.prepare('SELECT id FROM trends WHERE last_seen >= ?').all(t - PUB.DETAIL_KEPT_SECONDS).map((r) => r.id), ...feeds.details.keys()]) });
     PUB.archive(paths.archive, Object.fromEntries(good.map((a) => [a, feeds.lists[a]])), t);
     if (coreRead) meta.set('sourcesAt', t);
     meta.set('publishLags', [...lags, Math.max(0, clock() - t)].slice(-LAG_KEPT));
-    meta.set('lastPublish', { cycle, t, at: clock() });
+    meta.set('lastPublish', { cycle, t, at: Math.floor(Date.now() / 1000), ...(pinned ? { pinned: true } : {}) });
     const hour = Math.floor(t / HOUR);
     if (meta.get('compactedHour', 0) < hour) { const folded = H.compact(db, t); meta.set('compactedHour', hour); if (folded) log(`[history] compacted ${folded} samples`); }
     H.prune(db, t);
@@ -482,5 +568,7 @@ if (require.main === module) {
     // (the line is flushed before the process ends: stdout may be a pipe, and a pipe is written behind the call)
     if (summary) process.stdout.write(`${JSON.stringify(summary)}\n`, () => process.exit(code));
     else process.exit(code);
-  }).catch((e) => { log(e.stack || String(e)); process.exit(1); });
+  // (an error nobody foresaw is not "nothing new": 3, so the host's job fails and shows the log. A row that makes a step throw
+  // stays in the store for days, and with 1 every one of those runs was green)
+  }).catch((e) => { log(e.stack || String(e)); process.exit(3); });
 }

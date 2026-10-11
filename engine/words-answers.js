@@ -116,10 +116,14 @@ function wikiMeaning(lookup) {
   const text = X.tidyMeaning(m ? m[1] : null);
   return text && saysWhat(text) ? { text, quality: 3.5, from: 'Wikipedia' } : null;
 }
+const NEW_SLANG_LABEL = /\b(?:internet|gen z|gen alpha|aave|african-american vernacular|tiktok|twitch|gaming|youth)\b/i;
 function wiktMeaning(lookup, term) {
   const senses = (lookup && lookup.wikt && lookup.wikt.senses) || [];
   const plainWord = term && term.split(' ').length === 1 && W.inDict(W.words(term)[0] || '');
-  const sense = senses.find((x) => SLANG_LABEL.test(x.label)) || (plainWord ? null : senses[0]);
+  // (what people mean by it now before what the dictionary lists first: a sense labelled internet slang, then one labelled slang,
+  // then any informal one. "Crash out" read "To fall asleep from exhaustion", its first informal sense, where the word that is
+  // trending is the internet one, to lose control in anger. Collector only, reviewers 2026-10-12)
+  const sense = senses.find((x) => NEW_SLANG_LABEL.test(x.label)) || senses.find((x) => /\bslang\b/i.test(x.label)) || senses.find((x) => SLANG_LABEL.test(x.label)) || (plainWord ? null : senses[0]);
   const text = sense && X.tidyMeaning(sense.text);
   return text ? { text, quality: 3, from: 'Wiktionary' } : null;
 }

@@ -18,6 +18,11 @@ const KINDS = ['talk', 'word', 'sound', 'moment'];
 const STATUSES = ['rising', 'peaking', 'fading'];
 const WRITERS = ['model', 'headline'];
 const PRECISIONS = ['hour', 'day'];
+// (a row's start may also be known only to the month: what the month's list of trends dates. The phone says "Started this month")
+const START_PRECISIONS = ['hour', 'day', 'month'];
+// the badge and the graph are one story (C2): "peaking" is not said over a line that ends under this share of a peak this far behind
+const PEAKING_MIN_SHARE = 40;
+const PEAKING_PEAK_BEHIND_HOURS = 24;
 // (demand is how much something is wanted or watched: never a count of the videos that already exist, IDEAS-FEED D3)
 const DEMAND_KINDS = ['search', 'reads', 'outlets', 'views', 'listed'];
 const TOPICS = ['celebs', 'memes', 'music', 'screen', 'sports', 'beauty', 'food', 'lifeHacks', 'lifestyle', 'shopping'];
@@ -54,7 +59,7 @@ function validateItem(item, index, pageSize, say, now = NaN) {
   need(STATUSES.includes(item.status), `status must be one of ${STATUSES.join(', ')}`);
   need(typeof item.isEarly === 'boolean', 'isEarly must be a boolean');
   need(item.startedAt === null || isInstant(item.startedAt), 'startedAt: an instant or null');
-  need(item.startedAt === null || PRECISIONS.includes(item.startedPrecision), 'startedPrecision: hour or day when startedAt is set');
+  need(item.startedAt === null || START_PRECISIONS.includes(item.startedPrecision), 'startedPrecision: hour, day or month when startedAt is set');
   need(item.peakAt === null || isInstant(item.peakAt), 'peakAt: an instant or null');
   // (rounded by the collector: to 6 hours under 36, to whole days from 48, a week at most)
   const left = item.timeLeftHours;
@@ -102,6 +107,10 @@ function validateItem(item, index, pageSize, say, now = NaN) {
   need(flare === null || item.status === 'rising', 'flareAt: only on a rising row');
   need(flare === null || !Number.isFinite(now) || (flare <= now && now - flare <= RULES.flareHours * HOUR), `flareAt: inside the last ${RULES.flareHours} hours`);
   need(flare === null || started === null || flare >= started - (byHour ? 0 : RULES.daySlackHours * HOUR), 'flareAt is before startedAt');
+  // (a status nobody measured, the engine's one-snapshot word, alerts and hurries nobody and forecasts nothing: C1, J9)
+  const unmeasured = item.statusMeasured === false && !item.isEarly;
+  need(!unmeasured || (flare === null && !item.spike && !item.filmWithin24h), 'an unmeasured status carries no flareAt, spike or filmWithin24h');
+  need(!unmeasured || left === null, 'an unmeasured status carries no time left');
   const peak = isInstant(item.peakAt) ? Date.parse(item.peakAt) : null;
   need(peak === null || item.status !== 'rising', 'peakAt: null while the row is rising');
   need(peak === null || !Number.isFinite(now) || peak <= now, 'peakAt is after the list was built');
@@ -217,6 +226,25 @@ function validateBundle(bundle, { bytes = 0, audience = null } = {}) {
   return out;
 }
 
+/**
+ * A row against its own detail (C2, C5, as built 2026-10-12): the badge never says what the card's graph denies. A "peaking" row
+ * whose graph ends under 40% of a peak a day or more behind is a problem; so is "Interest peaks." in the timeline of a row that is
+ * rising or tagged Early. No detail, or no graph: nothing to hold the row to.
+ */
+function statusAgainstGraph(item, detail) {
+  const out = [];
+  if (!item || !detail) return out;
+  const g = detail.graph;
+  if (g && Array.isArray(g.v) && g.v.length && isInstant(g.t0) && GRAPH_STEPS.includes(g.stepMinutes) && item.status === 'peaking') {
+    const top = g.v.lastIndexOf(Math.max(...g.v));
+    const behindHours = ((g.v.length - 1 - top) * g.stepMinutes) / 60;
+    const last = g.v[g.v.length - 1];
+    if (last < PEAKING_MIN_SHARE && behindHours >= PEAKING_PEAK_BEHIND_HOURS) out.push(`peaking, but its graph ends at ${last}% of a peak ${Math.round(behindHours)} hours behind`);
+  }
+  if ((item.status === 'rising' || item.isEarly) && Array.isArray(detail.timeline) && detail.timeline.some((e) => e && e.text === 'Interest peaks.')) out.push('rising or Early, but its timeline says "Interest peaks."');
+  return out;
+}
+
 /** The names file's problems (none when valid): D6. */
 function validateNames(file, { bytes = 0 } = {}) {
   if (!file || typeof file !== 'object') return ['not a JSON object'];
@@ -241,6 +269,7 @@ function validateFolder(dir) {
   const problems = [];
   let files = 0;
   const revs = new Map();
+  const rowsOf = new Map();
   for (const [stem, audience] of Object.entries(AUDIENCES)) {
     const file = path.join(dir, `${stem}.json`);
     if (!fs.existsSync(file)) continue;
@@ -248,7 +277,7 @@ function validateFolder(dir) {
     const { json, bytes, error } = readJson(file);
     const found = error ? [`not JSON: ${error}`] : validateList(json, { bytes, audience });
     problems.push(...found.map((p) => `${stem}.json: ${p}`));
-    for (const item of (json && Array.isArray(json.items) ? json.items : [])) if (item && item.id) revs.set(item.id, item.detailRev);
+    for (const item of (json && Array.isArray(json.items) ? json.items : [])) if (item && item.id) { revs.set(item.id, item.detailRev); rowsOf.set(item.id, [...(rowsOf.get(item.id) || []), { stem, item }]); }
     const bundleFile = path.join(dir, `${stem}.details.json`);
     if (!fs.existsSync(bundleFile)) continue;
     files += 1;
@@ -273,11 +302,12 @@ function validateFolder(dir) {
     problems.push(...found);
     if (json && `${json.id}.json` !== name) problems.push(`d/${name}: the file is named by its id`);
     if (json && revs.has(json.id) && revs.get(json.id) !== json.rev) problems.push(`d/${name}: rev ${json.rev} is not the row's detailRev ${revs.get(json.id)}`);
+    for (const { stem, item } of (json && rowsOf.get(json.id)) || []) if (item.detailRev === json.rev) problems.push(...statusAgainstGraph(item, json).map((p) => `${stem}.json: "${item.title}": ${p}`));
   }
   return { problems, files };
 }
 
-module.exports = { validateRow, validateList, validateDetail, validateBundle, validateNames, validateFolder, keyOf, LIMITS, RULES, SCHEMA_VERSION };
+module.exports = { validateRow, validateList, validateDetail, validateBundle, validateNames, validateFolder, statusAgainstGraph, keyOf, LIMITS, RULES, SCHEMA_VERSION };
 
 if (require.main === module) {
   const dir = process.argv[2];

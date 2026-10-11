@@ -436,11 +436,17 @@ const GERUND_LEAD = /^((?:[A-Z][\w’'.-]+ ){1,3})([a-z]{4,}ing)\b/;
  * word that opens a sentence is not a surname unless it owns something ("Swift’s tour"): "Sounds kind of good" is not "BBC Sounds".
  */
 function expandSurname(s, lex) {
-  const first = s.split(' ')[0];
-  const full = lex.bySurname && lex.bySurname.get(words(first)[0]);
+  const [first, second] = s.split(' ');
+  const key = words(first)[0];
+  const full = lex.bySurname && lex.bySurname.get(key);
   if (!full || !isCapWord(first) || words(first).length !== 1) return s;
-  if (inDict(words(first)[0]) && !/['’]s\W*$/.test(first)) return s;
-  const pretty = full.split(' ').map((w) => lex.surface.get(w) || capFirst(w)).join(' ');
+  if (inDict(key) && !/['’]s\W*$/.test(first)) return s;
+  // Collector only. A first name that opens its own full name is no bare surname: "Meghan Markle Makes First Public Appearance ..."
+  // read "Harry Meghan’s Markle makes ..." once a search for "harry meghan" had been learned as a name (seen on the review run of
+  // 2026-10-12). Nor does a surface learned with its possessive lend it to the name.
+  const next = second && isCapWord(second) && !/['’]s\W*$/.test(first) ? words(second)[0] : null;
+  if (next && (FIRST_NAMES.has(key) || (lex.firstNames && lex.firstNames.has(key)) || ((lex.byFirst && lex.byFirst.get(key)) || []).includes(`${key} ${next}`))) return s;
+  const pretty = full.split(' ').map((w) => (lex.surface.get(w) || capFirst(w)).replace(/['’]s$/, '')).join(' ');
   return pretty + (first.match(/['’]s\W*$/) || [''])[0] + s.slice(first.length);
 }
 
@@ -724,4 +730,5 @@ module.exports = {
   recase, curlQuotes, looksVerb,
   gerundToPresent, explainerHeadline, cleanForHeadline, isTitleCase, isDictWord: (w) => inDictExact(w), inDict,
   isProperWord: (w) => !!PROPER_WORDS && PROPER_WORDS.has(w), isFirstName: (w) => FIRST_NAMES.has(w),
+  expandSurname,
 };
