@@ -5,6 +5,11 @@ on:
   schedule:
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
+    inputs:
+      cold_start:
+        description: 'Start from nothing on purpose: do not read the history back from the feed already out'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -19,13 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 14
     env:
-      # The line writer. With no variables set it uses the keyless endpoint (about one line a cycle).
-      # A key is never written in this repository: it goes in the SECRET IDEAS_LLM_API_KEY, with the VARIABLES
-      # IDEAS_LLM_BASE_URL and IDEAS_LLM_MODEL.
-      IDEAS_LLM_BASE_URL: ${{ vars.IDEAS_LLM_BASE_URL || 'https://text.pollinations.ai/openai' }}
+      # The line writer needs no model: every line is composed from its own source sentences and held to the claim check.
+      # An OpenAI-compatible endpoint may be named in the VARIABLE IDEAS_LLM_BASE_URL (with IDEAS_LLM_MODEL); none is set by default.
+      IDEAS_LLM_BASE_URL: ${{ vars.IDEAS_LLM_BASE_URL }}
       IDEAS_LLM_MODEL: ${{ vars.IDEAS_LLM_MODEL }}
-      IDEAS_LLM_API_KEY: ${{ secrets.IDEAS_LLM_API_KEY }}
       FEED_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+      FRESH: ${{ inputs.cold_start && '--fresh' || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,7 +37,9 @@ jobs:
         with:
           node-version: 26
 
-      # The history lives only in the Actions cache: it is never committed or published.
+      # The history lives only in the Actions cache: it is never committed or published. The cache is not storage (GitHub evicts
+      # it at will), so a run that finds none does not start cold: the collector reads its history back from the feed that is
+      # already out, which is public anyway (every listed id, start, status and graph), and marks what it read back as such.
       - name: Restore state from the last cycle
         uses: actions/cache/restore@v4
         with:
@@ -48,19 +54,30 @@ jobs:
         id: cycle
         run: |
           set +e
-          node collect.js --state state --out out --deadline-seconds=600 > cycle.json 2> cycle.log
+          node collect.js --state state --out out --deadline-seconds=600 $FRESH > cycle.json 2> cycle.log
           code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
           cat cycle.json
-          # 0: a feed was published; 1: nothing new (the feed already out stands); 2: another cycle holds the lock
-          if [ "$code" -gt 2 ]; then tail -n 20 cycle.log; exit "$code"; fi
+          grep -E '^\[(reseed|collect)\]' cycle.log || true
+          # 0: a feed was published; 1: nothing new (the feed already out stands); 2: another cycle holds the lock;
+          # 3 or more: the cycle failed (the engine, an error nobody foresaw, a clock that cannot be trusted)
+          if [ "$code" -ne 0 ]; then echo "--- cycle.log (exit $code) ---"; tail -n 40 cycle.log; fi
+          if [ "$code" -ge 3 ]; then exit "$code"; fi
 
       - name: Publish the feed
         if: steps.cycle.outputs.code == '0'
         run: bash .github/scripts/publish-feed.sh
 
-      - name: Save state for the next cycle
+      # Never an empty or a failed state over a good one: the folder is saved as the newest only after a cycle that did not fail,
+      # and only when the collector itself says it holds a state worth keeping (it opens, passes its integrity check, has finished
+      # a cycle and knows a trend). Anything else leaves the last good cache the newest.
+      - name: Is the state worth saving
+        id: health
         if: always()
+        run: bash .github/scripts/state-health.sh "${{ steps.cycle.outputs.code }}"
+
+      - name: Save state for the next cycle
+        if: always() && steps.health.outputs.ok == 'true'
         uses: actions/cache/save@v4
         with:
           path: state

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Before a cycle: the feed already published, so a cycle that publishes nothing leaves it as it was and the collector never puts out
-# an older list over a newer one. The state folder comes from the Actions cache alone.
+# an older list over a newer one. The state folder comes from the Actions cache alone; when the cache gave none, the collector reads
+# its history back from this very feed (every listed id, start and graph: all of it public already), so nothing is minted again.
 set -u
 FEED_REMOTE="${FEED_REMOTE:?FEED_REMOTE is not set}"
 
