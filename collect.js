@@ -15,6 +15,9 @@
  * host's job fails on it and shows the log) or its clock is not to be trusted.
  *        [--force]   run although the last network cycle began under ten minutes ago, or --now is given on a state a real cycle
  *                    published to inside the last two hours
+ *        [--fresh]   start from nothing on purpose: a state with no history is not re-seeded from the feed already in <out>
+ *        [--check-state]  no cycle: says whether <state> holds a state worth keeping ({ ok, why, cycle, trends } on stdout; exit 0
+ *                    when it does, 4 when not). What the host asks before it saves the folder as the newest (A8)
  * stdout: one JSON line { cycle, slot, requests, blocked, items, modelLines, ms }; everything else goes to stderr.
  *
  * --record saves each reply under <dir>/<slot>/ with a manifest; --replay answers every request from such a folder instead of the
@@ -51,14 +54,49 @@ const CLIPS = require('./lib/sources/clips');
 const SOCIAL = require('./lib/sources/social');
 const TIKTOK = require('./lib/sources/tiktok');
 const DISC = require('./lib/discover');
+const LEDGER = require('./lib/native-ledger');
+const NS = require('./lib/native-signals');
+const NDESK = require('./lib/native-desk');
+const ASKED = require('./lib/sources/asked');
+const YT = require('./lib/sources/yt-roster');
+const LSF = require('./lib/sources/lsf');
+const ARCTIC = require('./lib/sources/arctic');
+const IVR = require('./lib/sources/ivr');
+const SULLY = require('./lib/sources/sully');
+const BANS = require('./lib/sources/streamerbans');
+const FAMOUS = require('./lib/sources/famous');
+const ONTD = require('./lib/sources/ontd');
+const PRESS = require('./lib/sources/press');
+const BING = require('./lib/sources/bing');
+const PS = require('./lib/platform-signals');
+const PDESK = require('./lib/platform-desk');
+const TTS = require('./lib/sources/tts');
+const ROUNDUPS = require('./lib/sources/roundups');
+const REELS = require('./lib/sources/reels');
+const SHAZAM = require('./lib/sources/shazam');
+const KWORB = require('./lib/sources/kworb');
+const WIKIH = require('./lib/sources/wiki-hourly');
+const GDELT = require('./lib/sources/gdelt');
+const WIKT = require('./lib/sources/wikt-slang');
+const TYPED = require('./lib/sources/typed');
+const PINTEREST = require('./lib/sources/pinterest');
+const APPS = require('./lib/sources/apps');
+const ROBLOX = require('./lib/sources/roblox');
+const STEAM = require('./lib/sources/steam');
+const YTR = require('./lib/sources/yt-results');
+const TTSOUND = require('./lib/sources/tiktok-sound');
+const TTPROFILE = require('./lib/sources/tiktok-profile');
+const SWITCH = require('./lib/sources/switch');
+const D = require('./lib/describe');
 const M = require('./lib/measure');
 const NM = require('./lib/names');
 const LLM = require('./lib/llm');
 const LW = require('./lib/line-writer');
 const HY = require('./lib/hygiene');
+const RESEED = require('./lib/reseed');
 const DESK = require('./lib/desk');
 const V = require('./samples/validate.cjs');
-const { AUDIENCES, slotOf, instant, HOUR, DAY, SLOT_SECONDS, localDay } = require('./lib/util');
+const { AUDIENCES, slotOf, instant, HOUR, DAY, SLOT_SECONDS, localDay, keyOf } = require('./lib/util');
 
 const RAW_KEPT_SECONDS = 48 * HOUR;
 const TODAY_FEED_REFRESH_SECONDS = 6 * HOUR;
@@ -72,7 +110,25 @@ const LAST_READ_KEPT_SECONDS = 30 * DAY;
 const EMPTY_STORE_BYTES = 200;
 const HOST_NAMES = { 'news.google.com': 'google-news', 'trends.google.com': 'google-trends', 'trends.google.com/rss': 'google-trends-rss', 'suggestqueries.google.com': 'youtube-completions',
   'www.reddit.com': 'reddit', wikimedia: 'wikipedia', 'knowyourmeme.com': 'knowyourmeme', 'public.api.bsky.app': 'bluesky', 'hn.algolia.com': 'hacker-news',
-  'gql.twitch.tv': 'twitch', 'kick.com': 'kick', 'trends24.in': 'x-trends24', 'www.tiktok.com': 'tiktok-web' };
+  'gql.twitch.tv': 'twitch', 'kick.com': 'kick', 'trends24.in': 'x-trends24', 'www.tiktok.com': 'tiktok-web',
+  // (the keyless drama sources, L)
+  'www.youtube.com': 'youtube-roster', 'arctic-shift.photon-reddit.com': 'arctic-shift', 'api.livestreamfails.com': 'livestreamfails', 'api.ivr.fi': 'ivr', 'sullygnome.com': 'sullygnome',
+  'streamerbans.com': 'streamerbans', 'www.famousbirthdays.com': 'famous-birthdays', 'ohnotheydidnt.livejournal.com': 'ontd', 'api.bing.com': 'bing-completions', 'www.bing.com': 'bing-news',
+  'pagesix.com': 'page-six', 'www.ladbible.com': 'ladbible', 'www.complex.com': 'complex', 'theshaderoom.com': 'the-shade-room', 'www.hotnewhiphop.com': 'hotnewhiphop',
+  // (the platform, word and craze sources, M)
+  'trendingtiktoksongs.com': 'trending-tiktok-songs', 'later.com': 'later', 'www.ramd.am': 'ramdam', 'creatordb.app': 'creatordb-reels-audio', 'www.shazam.com': 'shazam', 'kworb.net': 'kworb',
+  'dumps.wikimedia.org': 'wikipedia-hourly', 'storage.googleapis.com': 'gdelt', 'trends.pinterest.com': 'pinterest-trends', 'rss.marketingtools.apple.com': 'apple-top-free', 'itunes.apple.com': 'apple-photo-video',
+  'apis.roblox.com': 'roblox', 'games.roblox.com': 'roblox-games', 'api.steampowered.com': 'steam' };
+// (a native row is never "on the page" by where it was put: it sits past the page until the series tags it. lib/native-desk.js)
+const NATIVE_RANK_FROM = 21;
+// every adapter id of the keyless drama sources (L): what IDEAS_SOURCES_OFF names to switch them off, one or all
+const NATIVE_SOURCES = ['asked', 'asked-bing', 'yt-roster', 'lsf', 'arctic', 'ivr', 'sully', 'streamerbans', 'famous', 'ontd', 'bing-news', ...PRESS.OUTLETS.map((o) => o.id)];
+// every adapter id of the platform, word and craze sources (M): what IDEAS_SOURCES_OFF names to switch them off, one or all
+const PLATFORM_SOURCES = ['tts', ...ROUNDUPS.PAGES.map((p) => `roundup-${p.id}`), 'reels', 'shazam', 'kworb', 'wiki-hourly', 'gdelt', 'wikt-slang', 'typed', 'pinterest', 'apps', 'roblox', 'steam'];
+// (how many of the list's people the hourly files and GDELT are read for, and how many hours read are remembered)
+const PLATFORM_NAMES_KEPT = 80;
+const WIKI_HOURS_KEPT = 48;
+const HOURLY_DETAILS_SECONDS = HOUR;
 const X_NAMES_PER_CYCLE = 2;
 const THREAD_BACK_MS = 72 * 3600e3;
 const TIKTOK_TAGS_KEPT = 40;
@@ -96,6 +152,8 @@ function parseArgs(argv) {
     else if (flag === '--now') out.now = Date.parse(value());
     else if (flag === '--offline') out.offline = true;
     else if (flag === '--force') out.force = true;
+    else if (flag === '--fresh') out.fresh = true;
+    else if (flag === '--check-state') out.checkState = true;
     else if (flag === '--audiences') out.audiences = value().split(',').map((x) => x.trim()).filter((x) => AUDIENCES.includes(x));
     else if (flag === '--max-requests') out.maxRequests = Math.max(0, Number(value()) || 0);
     else if (flag === '--deadline-seconds') out.deadlineSeconds = Math.max(30, Number(value()) || 420);
@@ -103,6 +161,7 @@ function parseArgs(argv) {
     else if (flag === '--replay') out.replay = value();
     else throw new Error(`unknown argument ${a}`);
   }
+  if (out.checkState && out.state) return out;
   if (!out.state || !out.out) throw new Error('usage: node collect.js --state <dir> --out <dir> [--now=ISO] [--offline] [--audiences=US,GB,AU,CA,mixed] [--max-requests=80] [--deadline-seconds=420]');
   if (out.now !== undefined && !Number.isFinite(out.now)) throw new Error('--now must be an ISO instant');
   if (!out.audiences.length) throw new Error('--audiences names none of US, GB, AU, CA, mixed');
@@ -159,8 +218,17 @@ async function runCycle(opts) {
   if (!STATE.takeLock(opts.state, nowS)) { log('[collect] another cycle holds the lock'); return { code: 2, summary: null }; }
   let state = null;
   try {
+    // (a collector.db that does not read is set aside, never opened and never written over: the cycle starts from the newest daily
+    // backup in the folder, else from nothing. A6, N)
+    const recovered = STATE.recover(opts.state);
+    if (recovered.setAside) log(`[collect] collector.db did not read: set aside as ${path.basename(recovered.setAside)}${recovered.restored ? `, restored from backup/${recovered.restored}` : ', starting from no state'}`);
     state = STATE.openState(opts.state);
     const { db, paths, meta } = state;
+    // (a state with no history, and a feed already out: the collector re-seeds itself from what that feed says in public, so every
+    // listed id, start and graph survives a lost cache and nothing new is ever published to keep them. lib/reseed.js, N)
+    const hostOfName = (name) => (Object.entries(HOST_NAMES).find(([, n]) => n === name) || [name.includes('.') ? name : null])[0];
+    const reseeded = opts.fresh ? null : RESEED.reseed({ db, meta, out: opts.out, t, hostOf: hostOfName, missing: !!recovered.restored, log });
+    if (reseeded) log(`[reseed] no state, and a feed out: ${reseeded.trends} trends and ${reseeded.samples} graph points read back from the feed of ${instant(reseeded.from)} (marked re-seeded)`);
     const cycle = (meta.get('cycle', 0) || 0) + 1;
     // never backwards: a slot before the last one published (a clock set back, a stray --now on the live state) would write over newer
     // samples and put an older list out. The same slot again is fine (A3)
@@ -205,6 +273,36 @@ async function runCycle(opts) {
     const obs = ING.newObservations(t);
     // (who is a creator, as the last cycles' roster pages say: the clip charts' reader asks it which names a clip's title carries)
     obs.roster = TS.rosterNames(paths.wiki);
+    // the creator-native sources (L): who is already known as a creator, and the ledger of what those sources showed. Each step is
+    // fenced: a source that died, or a reply nobody foresaw, costs its own signal and nothing else of the cycle
+    let nativeIndex = { byKey: new Map(), alias: new Map() };
+    try { LEDGER.ensure(db); nativeIndex = NS.peopleIndex({ roster: obs.roster, streamers: IVR.streamers() }); } catch (e) { log(`[native] the roster did not read: ${e.message}`); }
+    let nativeBooked = 0;
+    const nativeStats = { fresh: 0, research: [] };
+    const bookNative = () => {
+      const batches = obs.native.slice(nativeBooked);
+      nativeBooked = obs.native.length;
+      if (!batches.length) return;
+      try { nativeStats.fresh += LEDGER.record(db, t, NS.merge(...batches)).fresh; } catch (e) { log(`[native] the ledger was not written: ${e.message}`); }
+    };
+    const peopleNow = (index = nativeIndex) => { try { return NS.peopleOf(LEDGER.load(db, t), index, t); } catch (e) { log(`[native] the signals did not read: ${e.message}`); return new Map(); } };
+    // the platform, word and craze sources (M): their own ledger, and what it holds read into things. Fenced like the creators' side:
+    // a source that died, or a reply nobody foresaw, costs its own rows and nothing else of the cycle
+    const PL = LEDGER.platform;
+    try { PL.ensure(db); } catch (e) { log(`[platform] the ledger was not made: ${e.message}`); }
+    let platformBooked = 0;
+    const platformStats = { fresh: 0, wiki: null };
+    const bookPlatform = () => {
+      const batches = obs.platform.slice(platformBooked);
+      platformBooked = obs.platform.length;
+      if (!batches.length) return;
+      try { platformStats.fresh += PL.record(db, t, LEDGER.merge(...batches)).fresh; } catch (e) { log(`[platform] the ledger was not written: ${e.message}`); }
+    };
+    const EMPTY_LEDGER = { items: [], series: new Map(), reads: new Map() };
+    const platformLedger = () => { try { return PL.load(db, t); } catch (e) { log(`[platform] the ledger did not read: ${e.message}`); return EMPTY_LEDGER; } };
+    const thingsOf = (ledger) => { try { return PS.thingsOf(ledger, t); } catch (e) { log(`[platform] the things did not read: ${e.message}`); return PS.thingsOf(EMPTY_LEDGER, t); } };
+    // (who the engine is asked to evaluate: everyone the signals are about that can be named, and the shortlist)
+    const nativeNames = (people) => [...people.values()].filter((p) => NDESK.nameable(p) && (Object.keys(p.kinds).length || p.shortlist)).map((p) => ({ key: p.key, kinds: Object.keys(p.kinds).length, creator: p.creator }));
     const hosts = new Map(db.prepare('SELECT * FROM hosts').all().map((r) => [r.host, { ...r }]));
     const off = new Set((env.IDEAS_SOURCES_OFF || '').split(',').map((x) => x.trim()).filter(Boolean));
     // (a few Google News requests are kept back for the third round: the name a roster flare or a new game on the chart wants
@@ -218,11 +316,14 @@ async function runCycle(opts) {
     const outcome = { sent: 0, ok: 0, gnSent: 0, gnOk: 0, byHost: {} };
     const putFetch = db.prepare('INSERT OR REPLACE INTO fetches (cycle, source, host, t, status, bytes, ms) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const putHost = db.prepare('INSERT OR REPLACE INTO hosts (host, blocked_until, strikes, last_ok_at, last_status, first_turned_away_at, timeouts, last_request_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    // (what a page that changes once a day answered with last time: it is asked for again only if it has changed. M)
+    const validators = { ...(meta.get('validators', {}) || {}) };
 
     /** Sends a round, saves and reads every reply in the order asked, and books what happened. */
     const round = async (requests) => {
       if (!transport || !requests.length) return [];
-      const results = await F.send(requests, { budget, hosts, clock, deadlineMs: fetchDeadline, transport, ...(opts.replay || opts.transport ? { gap: () => 0 } : {}) });
+      const results = await F.send(requests.map((r) => (r.conditional && validators[r.id] && fs.existsSync(path.join(paths.raw, r.file)) ? { ...r, validators: validators[r.id] } : r)),
+        { budget, hosts, clock, deadlineMs: fetchDeadline, transport, ...(opts.replay || opts.transport ? { gap: () => 0 } : {}) });
       for (const r of results) {
         const { request } = r;
         // (the server's own clock against this machine's, from every reply that carries one)
@@ -241,6 +342,15 @@ async function runCycle(opts) {
             ok = ING.ingest(store, obs, request, r.text, nowMs, { status: r.status, tried: r.tried, guessed: r.guessed });
           }
         }
+        // (not changed since it was last read: the saved reply is what the page still says, and it is read again as this cycle's)
+        if (r.status === 304 && request.conditional) {
+          const saved = path.join(paths.raw, request.file);
+          if (fs.existsSync(saved)) { ok = ING.ingest(store, obs, request, fs.readFileSync(saved, 'utf8'), nowMs, { status: 200, tried: r.tried, guessed: r.guessed }); if (ok) { const at = new Date(); fs.utimesSync(saved, at, at); } }
+          if (!ok) delete validators[request.id];
+        } else if (request.conditional) {
+          if (ok && (r.etag || r.lastModified)) validators[request.id] = { ...(r.etag ? { etag: r.etag } : {}), ...(r.lastModified ? { lastModified: r.lastModified } : {}) };
+          else delete validators[request.id];
+        }
         if (request.host === 'news.google.com') { outcome.gnSent += 1; if (ok) outcome.gnOk += 1; }
         if (ok) { outcome.ok += 1; lastRead.set(request.rotationId || request.id, t); if (request.queued) Q.done(db, request.id); } else if (request.queued) Q.failed(db, request.id, nowS);
         putFetch.run(cycle, request.id, request.host, t, r.status, r.bytes, r.ms);
@@ -252,15 +362,70 @@ async function runCycle(opts) {
         }
         if (!ok) log(`[fetch] ${request.id}: ${r.status || r.error || 'failed'}${proper ? ' (not a proper reply)' : ''}`);
       }
+      meta.set('validators', validators);
       for (const [host, row] of hosts) putHost.run(host, row.blocked_until ?? null, row.strikes || 0, row.last_ok_at ?? null, row.last_status ?? null, row.first_turned_away_at ?? null, row.timeouts || 0, row.last_request_at ?? null);
       return results;
+    };
+
+    const saveHost = (host) => { const row = hosts.get(host); if (row) putHost.run(host, row.blocked_until ?? null, row.strikes || 0, row.last_ok_at ?? null, row.last_status ?? null, row.first_turned_away_at ?? null, row.timeouts || 0, row.last_request_at ?? null); };
+    /**
+     * Wikipedia's newest hourly file, read for the pages the list holds (M4): sixty megabytes gzipped, so it is streamed and never
+     * held, one file an hour and never one a cycle, behind the budget and the host's own back-off like any request. A file that is
+     * not out yet (404) is asked for again next cycle; a failure costs this hour's reading and nothing else. names: [{ key, title }].
+     */
+    const wikiHourly = async (names) => {
+      // (never the network in a replay or a test: there the reader is handed in, or nothing is read)
+      const read = opts.wikiRead || (real ? WIKIH.read : null);
+      if (!read || opts.offline || !names.length) return;
+      const hours = new Set(meta.get('wikiHours', []) || []);
+      const hour = WIKIH.hourDue(nowS, hours, meta.get('wikiHourNotYet', null));
+      const host = WIKIH.HOST;
+      const request = { id: `wiki-hourly-${hour}`, host, source: 'wiki-hourly' };
+      if (hour === null || Date.now() > fetchDeadline - 60000 || !budget.take(request)) return;
+      const titles = new Map(names.map((n) => [n.title, n.key]));
+      let result = null;
+      try { result = await read(hour, new Set(titles.keys()), { agent: B.userAgent(env) }); } catch (e) {
+        result = { status: 0, error: e && e.message ? e.message : String(e), timeout: !!e && (e.name === 'TimeoutError' || e.name === 'AbortError'), bytes: 0, ms: 0 };
+      }
+      hosts.set(host, { ...B.hostAfter(hosts.get(host), { status: result.status, retryAfter: B.retryAfterSeconds(result.retryAfter, clock()), timeout: !!result.timeout }, clock(), host), host });
+      saveHost(host);
+      if (result.date && Number.isFinite(Date.parse(result.date))) skews.push(Date.parse(result.date) / 1000 - Date.now() / 1000);
+      outcome.sent += 1;
+      outcome.byHost[host] = (outcome.byHost[host] || 0) + 1;
+      putFetch.run(cycle, request.id, host, t, result.status, result.bytes || 0, result.ms || 0);
+      if (result.status === 200) {
+        outcome.ok += 1;
+        obs.platform.push(PS.fromWikiHourly(hour, new Map([...result.views].map(([title, views]) => [titles.get(title), views]))));
+        meta.set('wikiHours', [...new Set([...hours, hour])].sort((a, b) => a - b).slice(-WIKI_HOURS_KEPT));
+        platformStats.wiki = { hour: instant(hour), pages: result.views.size, bytes: result.bytes, ms: result.ms };
+        log(`[platform] wikipedia hour ${instant(hour)}: ${result.views.size} of ${titles.size} pages, ${Math.round(result.bytes / 1e6)} MB read in ${Math.round(result.ms / 100) / 10} s`);
+      } else if (result.status === 404) {
+        meta.set('wikiHourNotYet', hour);
+        log(`[platform] wikipedia hour ${instant(hour)} is not out yet`);
+      } else log(`[fetch] ${request.id}: ${result.status || result.error || 'failed'}`);
     };
 
     // ---- step 2: fetch (tier 0, then the names that need a look now, the rotation, and what is owed) ----
     if (transport) {
       // (the clip charts are tier 0 too: what stands in for the streamer boards where Reddit turns the host away. A4)
-      await round([...FIXED.tier0({ rssTrends: !B.hostOpen(hosts.get('trends.google.com'), nowS) }), CLIPS.twitchRequest(env), CLIPS.kickRequest()]);
-      const inputs0 = engineInputs(paths.wiki, nowMs);
+      // (and the creator-native sources that say who to look at in this very cycle: the questions people type, the commentary roster's
+      // feeds in turn, the clips with their scores, the streamers' own figures, two drama boards' comments. L1-L5)
+      const rosterNewest = meta.get('rosterNewest', {}) || {};
+      // (a feed that was asked and did not answer has had its turn all the same: a channel whose feed is gone is asked again in an
+      // hour with the rest, never every cycle. L2)
+      const rosterTried = meta.get('rosterTried', {}) || {};
+      const rosterTurns = new Map([...lastRead, ...Object.entries(rosterTried).filter(([id, at]) => Number.isFinite(at) && at > (lastRead.get(id) ?? -Infinity))]);
+      const nativeFirst = [...ASKED.googleRequests(), ...YT.turn(rosterTurns, rosterNewest, nowS).map(YT.feedRequest), LSF.lsfRequest(), IVR.ivrRequest(),
+        ...ARCTIC.turn(cycle).flatMap((sub) => ARCTIC.boardRequests(sub, nowS, meta.get('arcticSlow', {}) || {}))];
+      const firstRound = await round([...FIXED.tier0({ rssTrends: !B.hostOpen(hosts.get('trends.google.com'), nowS) }), CLIPS.twitchRequest(env), CLIPS.kickRequest(), ...nativeFirst]);
+      // (the mirror's "slow down" to a board's posts search is remembered: that search is not sent again for six hours. L4)
+      const feedsTried = firstRound.filter((r) => r.request.kind === 'yt-roster').map((r) => [r.request.id, t]);
+      if (feedsTried.length) meta.set('rosterTried', Object.fromEntries([...Object.entries(rosterTried).filter(([, at]) => t - at < DAY), ...feedsTried]));
+      const slowed = firstRound.filter((r) => r.request.kind === 'arctic-posts' && r.status === 422).map((r) => r.request.args.sub);
+      if (slowed.length) meta.set('arcticSlow', { ...(meta.get('arcticSlow', {}) || {}), ...Object.fromEntries(slowed.map((sub) => [sub, nowS])) });
+      bookNative();
+      const people0 = peopleNow();
+      const inputs0 = { ...engineInputs(paths.wiki, nowMs), native: nativeNames(people0) };
       const lastRows = meta.get('lastRows', []) || [];
       const searchedAt = new Map([...store.lookups.entries()].filter(([k, l]) => k.startsWith('talk-') && l.tpnewsAt).map(([k, l]) => [k.slice(5), Math.floor(l.tpnewsAt / 1000)]));
       let wanted = { lookup: [], drama: [] };
@@ -303,9 +468,35 @@ async function runCycle(opts) {
       const roster = OWED.rosterRequests(nowS, savedAt);
       const rosterNew = roster.filter((r) => !savedAt.has(r.file));
       const ofKind = (kinds, n) => owed.filter((r) => kinds.includes(r.kind)).slice(0, n);
+      // the slower creator-native sources and the outlets read at their own address (L5-L8): Bing's completions in turn, the ban
+      // feed, the hourly tables, the outlets that are due, Bing News for a few listed names, and the titles of busy threads
+      const askedBing = ASKED.bingRequests(meta.get('askedBingCursor', 0) || 0);
+      const threadKnown = db.prepare('SELECT 1 FROM native_items WHERE source = ? AND key = ?');
+      const nativeSecond = [...askedBing.requests, BANS.bansRequest(), SULLY.sullyRequest(lastRead.get('sully-losers'), nowS), FAMOUS.famousRequest(lastRead.get('famous-trending'), nowS),
+        ONTD.ontdRequest(lastRead.get('ontd'), nowS), ...PRESS.due(lastRead, nowS).map(PRESS.pressRequest), ...BING.pick(lastRows, lastRead, nowS).map(BING.newsRequest),
+        ARCTIC.idsRequest(obs.arcticBusy.filter((id) => !obs.arcticKnown.has(id) && !threadKnown.get('arctic', id)))].filter(Boolean);
       // the origin searches owed (C4): a listed story whose start sits where its week's search began to look; each asked once
       const origins = (meta.get('originsWanted', []) || []).map((w) => NAMES.originRequest(w.name, w.edge))
         .filter((r) => !(lastRead.has(r.id) && t - lastRead.get(r.id) < ORIGIN_ASK_AGAIN_SECONDS)).slice(0, B.ORIGINS_PER_CYCLE);
+      // the platform, word and craze sources (M): what people type about a word, a trend and a thing to buy, in turn; GDELT's newest
+      // slot for the list's own people; and, each when it is due, the sound charts and one sound's own page, the roundups, the Reels
+      // page, Shazam and Kworb, Wiktionary's newest slang and two entries, Pinterest, an App Store chart, Roblox and Steam
+      const platformNames = (meta.get('platformNames', []) || []).filter((n) => n && n.key && n.title);
+      const want = (() => { try { return PDESK.wanted(thingsOf(platformLedger()), t); } catch (e) { log(`[platform] nothing asked for: ${e.message}`); return { songs: [], entries: [], roblox: [], steam: [] }; } })();
+      const typed = TYPED.requests(meta.get('typedCursor', 0) || 0);
+      const gdelt = platformNames.length ? GDELT.tocRequest(nowS, meta.get('gdeltSlot', null)) : null;
+      const song = TTS.songTurn(want.songs, lastRead, nowS);
+      const hourly = (id) => !(Number.isFinite(lastRead.get(id)) && nowS - lastRead.get(id) < HOURLY_DETAILS_SECONDS);
+      // (the owner's switches, off unless IDEAS_SOURCES_ON names them: M11)
+      const ytResults = SWITCH.isOn(env, 'youtube-results') ? YTR.requests(meta.get('ytResultsCursor', 0) || 0) : null;
+      const switched = [...(ytResults ? ytResults.requests : []), ...(SWITCH.isOn(env, 'tiktok-sound') ? TTSOUND.turn(want.songs, lastRead) : []), ...(SWITCH.isOn(env, 'tiktok-profile') ? TTPROFILE.turn(lastRead, nowS) : [])];
+      const platformSecond = [...typed.requests, gdelt ? { ...gdelt, args: { ...gdelt.args, names: platformNames.map((n) => n.key) } } : null, ...TTS.chartRequests(lastRead, nowS), song ? TTS.songRequest(song) : null,
+        ...ROUNDUPS.roundupRequests(lastRead, nowS), REELS.reelsRequest(lastRead.get('reels-audio'), nowS), SHAZAM.shazamRequest(lastRead.get('shazam-discovery'), nowS), KWORB.kworbRequest(lastRead.get('kworb-us-daily'), nowS),
+        ...WIKT.categoryRequests(lastRead, nowS), ...WIKT.entryTurn(want.entries, lastRead, nowS), PINTEREST.pinterestRequest(lastRead.get('pinterest-trends'), nowS), APPS.chartRequest(lastRead, nowS),
+        ROBLOX.exploreRequest(lastRead.get('roblox-explore'), nowS), hourly('roblox-games') ? ROBLOX.gamesRequest(want.roblox) : null, STEAM.chartRequest(lastRead.get('steam-chart'), nowS),
+        hourly('steam-names') ? STEAM.namesRequest(want.steam) : null, ...switched].filter(Boolean);
+      // Wikipedia's newest hourly file, for the pages the list holds: streamed beside the round, never one a cycle (M4)
+      const wikiJob = wikiHourly(platformNames);
       const second = [
         ...(trendNews ? [trendNews] : []),
         ...picked.now.flatMap((key) => NAMES.nameRequests(nameOf(key), 1)),
@@ -315,6 +506,7 @@ async function runCycle(opts) {
         // (X's trends: one country's page a cycle, the one read longest ago, so each about hourly)
         SOCIAL.xRequest(SOCIAL.xTurn(lastRead)),
         OWED.redditRequest(B.redditTurn(cycle)),
+        ...nativeSecond,
         ...rosterNew,
         ...watch.names.filter((n) => !picked.now.includes(TS.talkKey(n))).map(NAMES.watchRequest),
         ...picked.later.flatMap((key) => NAMES.nameRequests(nameOf(key), 3)),
@@ -325,9 +517,22 @@ async function runCycle(opts) {
         ...roster.filter((r) => savedAt.has(r.file)).slice(0, 1),
         ...OWED.crazeRequests(nowS, savedAt),
         ...ofKind(['feed', 'name-recent'], 3),
+        ...platformSecond,
         ...tiktok,
       ];
       await round(second);
+      bookNative();
+      await wikiJob;
+      bookPlatform();
+      // (a sound's page that was asked for and did not answer has had its turn all the same: the next sound is asked next cycle)
+      if (song && !obs.read.has(`tts-song-${song.id}`)) lastRead.set(`tts-song-${song.id}`, t);
+      // (the turn moves on by what was read: a template the budget refused is the first asked next cycle)
+      const typedRead = typed.requests.filter((r) => obs.read.has(r.id)).length;
+      if (typedRead) meta.set('typedCursor', ((meta.get('typedCursor', 0) || 0) + typedRead) % TYPED.TEMPLATES.length);
+      if (obs.gdelt) meta.set('gdeltSlot', obs.gdelt.slot);
+      if (ytResults && ytResults.requests.some((r) => obs.read.has(r.id))) meta.set('ytResultsCursor', ytResults.cursor);
+      if (askedBing.requests.some((r) => obs.read.has(r.id))) meta.set('askedBingCursor', askedBing.cursor);
+      if (Object.keys(obs.rosterNewest).length) meta.set('rosterNewest', { ...rosterNewest, ...obs.rosterNewest });
       if (obs.tiktok.size) meta.set('tiktokReadAt', Object.fromEntries([...Object.entries(tiktokReadAt), ...[...obs.tiktok.keys()].map((tag) => [tag, t])].slice(-4 * TIKTOK_TAGS_KEPT)));
       // X's trends: the lists read now and the ones held from the last hour and a half (the page is hourly)
       obs.x = SOCIAL.heldLists(meta.get('xTrends', {}) || {}, obs.xRead, t);
@@ -349,7 +554,10 @@ async function runCycle(opts) {
       const games = obs.games ? DISC.gameMoves(gamesWas, obs.games, t) : null;
       const shown = [...SOCIAL.newCreators(obs.x, inputs0.roster, t).slice(0, X_NAMES_PER_CYCLE), ...(games ? games.fresh.map((g) => g.name) : [])].filter((name) => !lately(name) && !picked.now.includes(TS.talkKey(name)));
       if (shown.length) log(`[discover] ${shown.join(', ')}`);
-      const wantedNow = [...new Set([...flared, ...shown])];
+      // (and who the creator-native signals are about, or the shortlist names, that no search has looked at lately: L6, L10)
+      nativeStats.research = NDESK.research(peopleNow(), { lately: (name) => lately(name) || picked.now.includes(TS.talkKey(name)) });
+      if (nativeStats.research.length) log(`[native] worth a search: ${nativeStats.research.join(', ')}`);
+      const wantedNow = [...new Set([...flared, ...shown, ...nativeStats.research])];
       budget.release('news.google.com');
       const thirdRound = wantedNow.length ? await round(wantedNow.flatMap((name) => NAMES.nameRequests(name, 1)).filter((r) => r.kind === 'name-news')) : [];
       // (a signal is used up only when its search was sent: a name the budget refused flares again next cycle, with its noun still
@@ -385,9 +593,11 @@ async function runCycle(opts) {
     ST.prune(store, nowMs);
     ST.saveStore(store, paths.store);
     const inputs = engineInputs(paths.wiki, nowMs);
+    // (the creators' side as this cycle leaves it; with no network, as the ledger last had it)
+    const people = peopleNow();
     let built;
     try {
-      built = ENGINE.build({ store, ...inputs, now: nowMs, audiences: opts.audiences });
+      built = ENGINE.build({ store, ...inputs, now: nowMs, audiences: opts.audiences, native: nativeNames(people) });
     } catch (e) {
       log(`[collect] the engine failed, the feed already out stays: ${e.stack || e.message}`);
       meta.set('cycle', cycle);
@@ -400,7 +610,39 @@ async function runCycle(opts) {
     // (the desk never holds a list back: should it fail on a row nobody foresaw, that audience's rows go out as the engine made them)
     const deskOf = (a) => { const rows = ROWS.rowsOf(a, built.byAudience[a], built); try { return DESK.edit(rows, { recent, now: nowMs, isBeat, lex: built.lex }); } catch (e) { log(`[desk] ${a}: failed, the engine's rows stand: ${e.message}`); return { rows, notes: [] }; } };
     const edited = Object.fromEntries(opts.audiences.map((a) => [a, deskOf(a)]));
-    const rowsByAudience = Object.fromEntries(opts.audiences.map((a) => [a, edited[a].rows]));
+    // the creators' side (lib/native-desk.js): attached to the rows the engine lists for the same people, and, where two kinds of
+    // creator-native signal agree on a creator no row tells yet, a row of its own for the series to tag Early
+    // (read again with the list's own subjects known by name: what the boards, the roster and the questions say of a celebrity the
+    // list already carries reaches that row. Nobody is made a row for it: lib/native-desk.js nameable)
+    const listedNow = Object.values(edited).flatMap((e) => e.rows).filter((r) => r.type === 'point' && !r.wordish && r.subject).map((r) => ({ key: r.subject, name: r.surface || null }));
+    let listedIndex = nativeIndex;
+    try { listedIndex = NS.peopleIndex({ roster: obs.roster, streamers: IVR.streamers(), listed: listedNow }); } catch (e) { log(`[native] the list's names did not read: ${e.message}`); }
+    const peopleListed = peopleNow(listedIndex);
+    // (taken: everyone the engine already lists, under the name its row uses and under the one the rosters know them by)
+    const taken = new Set(Object.values(edited).flatMap((e) => e.rows).filter((r) => r.type === 'point' && !r.wordish).flatMap((r) => [keyOf(r.subject || ''), keyOf(r.surface || '')])
+      .flatMap((k) => [k, nativeIndex.alias.get(k)]).filter(Boolean));
+    let nativeRows = {};
+    try {
+      nativeRows = NDESK.rowsOf(peopleListed, { t, audiences: opts.audiences, taken, rankFrom: Object.fromEntries(opts.audiences.map((a) => [a, Math.max(NATIVE_RANK_FROM, 1 + edited[a].rows.reduce((m, r) => Math.max(m, r.engineRank || 0), 0))])) });
+    } catch (e) { log(`[native] no rows made: ${e.message}`); }
+    const withNative = (a) => { try { return [...NDESK.attach(edited[a].rows, peopleListed, listedIndex, t), ...(nativeRows[a] || [])]; } catch (e) { log(`[native] ${a}: nothing attached: ${e.message}`); return edited[a].rows; } };
+    const nativeByAudience = Object.fromEntries(opts.audiences.map((a) => [a, withNative(a)]));
+    // the platform, word and craze sources (lib/platform-desk.js): a sound with its count, a format a roundup dates, a word a
+    // dictionary defines, a thing shoppers call viral, an app or a game new to a chart, each a row of its kind after the engine's
+    // own; and on the rows the list has for a person, the hourly reading of their page and the news titles that named them
+    const ledgerP = platformLedger();
+    const things = thingsOf(ledgerP);
+    let platformRows = {};
+    try {
+      // (taken: what the list already holds as a word, a format or a sound, by its name without its kind word)
+      const taken = new Set(Object.values(nativeByAudience).flat().filter((r) => r.type === 'word' || r.wordish).flatMap((r) => [keyOf(D.ownName(r.title)), keyOf(r.subject || '')]).filter(Boolean));
+      const nextRank = (a) => 1 + nativeByAudience[a].reduce((m, r) => Math.max(m, r.engineRank || 0), 0);
+      platformRows = PDESK.rowsOf(things, { t, audiences: opts.audiences, taken, rankFrom: Object.fromEntries(opts.audiences.map((a) => [a, Math.max(NATIVE_RANK_FROM, nextRank(a))])) });
+    } catch (e) { log(`[platform] no rows made: ${e.message}`); }
+    const withPlatform = (a) => { try { return [...PDESK.attach(nativeByAudience[a], ledgerP, t), ...(platformRows[a] || [])]; } catch (e) { log(`[platform] ${a}: nothing added: ${e.message}`); return nativeByAudience[a]; } };
+    const rowsByAudience = Object.fromEntries(opts.audiences.map((a) => [a, withPlatform(a)]));
+    for (const r of platformRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || []) log(`[platform] ${r.platform.sub} "${r.title}"${r.platform.status ? ` (${r.platform.status})` : ''}${r.platform.page ? ' [page]' : ''}: ${r.line}`);
+    for (const r of nativeRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || []) log(`[native] "${r.title}": ${Object.keys(r.meta.native.kinds).join(' + ')} | ${r.line}`);
     const deskNotes = (edited[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || { notes: [] }).notes;
     for (const n of deskNotes.slice(0, 40)) log(`[desk] "${n.title}": ${n.did}`);
     lap('build');
@@ -420,7 +662,9 @@ async function runCycle(opts) {
     const llm = opts.offline || ((opts.replay || opts.transport) && !opts.llmCall) ? null : LLM.configOf(env);
     if (llm && llm.keyIgnored) log(`[lines] IDEAS_LLM_API_KEY is set and ${llm.host} takes no key: it is not sent`);
     // (the page laid out once each row's status and start are known: what is still going leads, what is fading follows. lib/desk.js `order`)
-    const statusOf = (row) => { const c = cycleState.trends.get(row.id); return !c ? row.engineStatus : Object.values(c.early || {}).some(Boolean) ? 'rising' : c.status; };
+    // (a row whose "fading" is not said, a young story or one with a turn inside the last day and a half, is still going: the
+    // page places it among what is, as its card words it. lib/measure.js heatWordSaid)
+    const statusOf = (row) => { const c = cycleState.trends.get(row.id); return !c ? row.engineStatus : Object.values(c.early || {}).some(Boolean) ? 'rising' : c.plain && c.status === 'fading' ? 'peaking' : c.status; };
     // (how long a row has been going, for the page: from its start, or from its newest chapter. A second accuser, or the accused
     // answering, starts a story's week again, as it does for "still told": lib/measure.js. The benchmark row, thirteen days old with
     // a new chapter that morning, is this week's story and not "nobody's heads-up")
@@ -434,13 +678,13 @@ async function runCycle(opts) {
     const orderOf = (a, rows) => { try { return DESK.order(rows, { statusOf, startedOf, now: t }); } catch (e) { log(`[desk] ${a}: order failed, the engine's order stands: ${e.message}`); return rows; } };
     // (the writer asks for the rows a reader meets first: the page as it will be laid out, not as the engine ranked it)
     const laidOut = Object.fromEntries(Object.entries(rowsByAudience).map(([a, rows]) => [a, orderOf(a, rows)]));
-    let lined = { lines: new Map(), stats: { asked: 0, calls: 0, passed: 0, failedCheck: 0, unanswered: 0, shown: 0, headlinesChanged: 0, off: null } };
+    let lined = { lines: new Map(), casing: new Map(), stats: { asked: 0, calls: 0, passed: 0, failedCheck: 0, unanswered: 0, shown: 0, headlinesChanged: 0, off: null } };
     try {
       lined = await LW.writeLines({ db, meta, t, rowsByAudience: laidOut, isEarly: (row) => { const c = cycleState.trends.get(row.id); return !!c && Object.values(c.early || {}).some(Boolean); },
         lex: built.lex, config: llm, ...(opts.llmCall ? { call: opts.llmCall } : {}), ...(opts.llmWait ? { wait: opts.llmWait } : {}), log });
     } catch (e) { log(`[lines] the writer failed, every line stays its headline: ${e.message}`); }
     for (const [id, w] of lined.lines) if (w.drop) log(`[lines] "${(Object.values(rowsByAudience).flat().find((r) => r.id === id) || {}).title || id}" left out: ${w.drop}`);
-    const linedRows = Object.fromEntries(Object.entries(LW.applyLines(rowsByAudience, lined.lines)).map(([a, rows]) => [a, orderOf(a, DESK.respellLines(rows))]));
+    const linedRows = Object.fromEntries(Object.entries(LW.applyLines(rowsByAudience, lined.lines, lined.casing)).map(([a, rows]) => [a, orderOf(a, DESK.respellLines(rows))]));
     lap('lines');
 
     // ---- step 7: the feed, validated ----
@@ -482,9 +726,19 @@ async function runCycle(opts) {
     meta.set('originsWanted', [...cycleState.trends.values()].filter((c) => c.originOwed).sort((a, b) => rankOf(a) - rankOf(b)).slice(0, ORIGINS_WANTED_KEPT).map((c) => c.originOwed));
     // what the next cycle's tier 1 reads: the rows as published, each with the name its searches are stored under
     const us = feeds.lists[good.includes('US') ? 'US' : good[0]] || { items: [] };
+    // (person: the row is about someone, which is what Bing News is asked a second opinion on. L8)
     meta.set('lastRows', us.items.map((it) => { const c = cycleState.trends.get(it.id); return { name: c && c.info.name, rank: it.rank, rising: it.status === 'rising', early: it.isEarly,
-      accelerating: !!(c && c.measure.a > 0 && c.measure.v > 0) }; }).filter((r) => r.name));
+      accelerating: !!(c && c.measure.a > 0 && c.measure.v > 0), person: it.people.length > 0 }; }).filter((r) => r.name));
 
+    // whose pages and whose press the next cycle's hourly file and GDELT slot are read for: the people the lists hold, by rank (M4, M5)
+    try {
+      const named = new Map();
+      for (const r of Object.values(rowsByAudience).flat().filter((x) => x.type === 'point' && !x.wordish && x.meta && x.meta.person && x.surface).sort((a, b) => a.engineRank - b.engineRank)) {
+        const key = keyOf(r.surface);
+        if (key.split(' ').length >= 2 && !named.has(key)) named.set(key, { key, title: WIKIH.titleOf(r.surface.charAt(0).toUpperCase() + r.surface.slice(1)) });
+      }
+      meta.set('platformNames', [...named.values()].slice(0, PLATFORM_NAMES_KEPT));
+    } catch (e) { log(`[platform] the list's names were not kept: ${e.message}`); }
     // the hashtags TikTok's adapter reads next, when it is on: the list's words, sounds and formats by rank
     if (TIKTOK.tiktokOn(env)) meta.set('tiktokTags', [...new Set(us.items.filter((it) => it.kind === 'word' || it.kind === 'sound').map((it) => TIKTOK.tagOf(it.title)).filter(Boolean))].slice(0, TIKTOK_TAGS_KEPT));
     if (!good.length) {
@@ -501,7 +755,21 @@ async function runCycle(opts) {
       originsOwed: (meta.get('originsWanted', []) || []).length,
       // (the creator-native lists as read this cycle: clips on the charts and how many of them tell something, X's lists in hand)
       clips: obs.clips.length, clipsTelling: CLIPS.clipRows(obs.clips, obs.roster).length, xLists: Object.keys(obs.x.lists).length, tiktokTags: obs.tiktok.size,
+      // (the creator-native sources, L: people with a signal, how many of them two kinds agree on, the rows made of them, the engine's
+      // rows they are attached to, what was new by observation this cycle, and who was sent for a search)
+      native: { people: [...peopleListed.values()].filter((p) => Object.keys(p.kinds).length).length, corroborated: [...peopleListed.values()].filter((p) => NDESK.corroborated(p.kinds, t)).length,
+        rows: (nativeRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || []).map((r) => r.title), attached: [...new Set(Object.values(rowsByAudience).flat().filter((r) => !r.native && r.meta && r.meta.native).map((r) => r.title))],
+        // (who was sent for a search is a count here: status.json is published, and a bare name there would say nothing true of anyone)
+        fresh: nativeStats.fresh, research: nativeStats.research.length },
+      // (the platform, word and craze sources, M: the rows made of them by kind, what the ledger holds, what was new by observation,
+      // this cycle's hourly file and GDELT slot)
+      platform: (() => { const made = platformRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || [];
+        return { rows: Object.fromEntries([...new Set(made.map((r) => r.platform.sub))].map((sub) => [sub, made.filter((r) => r.platform.sub === sub).map((r) => r.title)])),
+          measured: made.filter((r) => r.platform.status).map((r) => r.title), sounds: things.sounds.size, formats: things.formats.length, words: things.words.length, apps: things.apps.length, games: things.games.length,
+          fresh: platformStats.fresh, wiki: platformStats.wiki, gdelt: obs.gdelt }; })(),
       rowsLeftOut: Object.fromEntries(opts.audiences.map((a) => [a, (feeds.dropped[a] || []).length])),
+      // (this cycle began with no state and read its history back from the feed already out: how much. N)
+      ...(reseeded ? { reseeded: { trends: reseeded.trends, from: instant(reseeded.from) } } : {}),
       // (the line writer this cycle: calls made, lines the check passed and refused, headline lines the no-model path bettered. G)
       lines: { model: llm ? llm.model : null, ...lined.stats } };
     // model lines on the lists as published: distinct trends, whichever audience lists them
@@ -541,6 +809,8 @@ async function runCycle(opts) {
     const hour = Math.floor(t / HOUR);
     if (meta.get('compactedHour', 0) < hour) { const folded = H.compact(db, t); meta.set('compactedHour', hour); if (folded) log(`[history] compacted ${folded} samples`); }
     H.prune(db, t);
+    try { LEDGER.prune(db, t); } catch (e) { log(`[native] the ledger was not pruned: ${e.message}`); }
+    try { PL.prune(db, t); } catch (e) { log(`[platform] the ledger was not pruned: ${e.message}`); }
     for (const name of fs.readdirSync(paths.raw)) { const file = path.join(paths.raw, name); if (Date.now() / 1000 - fs.statSync(file).mtimeMs / 1000 > RAW_KEPT_SECONDS) fs.rmSync(file, { force: true }); }
     for (const name of fs.readdirSync(paths.wiki)) {
       const day = (name.match(/^wiki-(?:top|featured-feed)-(\d{4}-\d\d-\d\d)\.json$/) || [])[1];
@@ -559,11 +829,16 @@ async function runCycle(opts) {
   }
 }
 
-module.exports = { runCycle, parseArgs, replayTransport, engineInputs, beatNames };
+module.exports = { runCycle, parseArgs, replayTransport, engineInputs, beatNames, NATIVE_SOURCES, PLATFORM_SOURCES };
 
 if (require.main === module) {
   let opts;
   try { opts = parseArgs(process.argv.slice(2)); } catch (e) { log(e.message); process.exit(1); }
+  if (opts.checkState) {
+    const h = STATE.health(opts.state);
+    process.stdout.write(`${JSON.stringify(h)}\n`, () => process.exit(h.ok ? 0 : 4));
+    return;
+  }
   runCycle(opts).then(({ code, summary }) => {
     // (the line is flushed before the process ends: stdout may be a pipe, and a pipe is written behind the call)
     if (summary) process.stdout.write(`${JSON.stringify(summary)}\n`, () => process.exit(code));

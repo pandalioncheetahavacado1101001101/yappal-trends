@@ -1,0 +1,330 @@
+{
+ "note": "The commentary and drama channels whose public upload feeds the collector reads, about one each hour (ios/IDEAS-FEED.md A5). Public channel ids only. A channel silent for 21 days takes no turn until it uploads again.",
+ "channels": [
+  {
+   "id": "UCq6VFHwMzcMXbuKyG7SQYIg",
+   "name": "penguinz0",
+   "group": "streamers"
+  },
+  {
+   "id": "UCQeRaTukNYft1_6AZPACnog",
+   "name": "Asmongold TV",
+   "group": "streamers"
+  },
+  {
+   "id": "UCMwJJL5FJFuTRT55ksbQ4GQ",
+   "name": "Asmongold Clips",
+   "group": "streamers"
+  },
+  {
+   "id": "UCrPseYLGpNygVi34QpGNqpA",
+   "name": "Ludwig",
+   "group": "streamers"
+  },
+  {
+   "id": "UCmDTrq0LNgPodDOFZiSbsww",
+   "name": "xQc",
+   "group": "streamers"
+  },
+  {
+   "id": "UC554eY5jNUfDq3yDOJYirOQ",
+   "name": "Destiny",
+   "group": "streamers"
+  },
+  {
+   "id": "UCtoaZpBnrd0lhycxYJ4MNOQ",
+   "name": "HasanAbi",
+   "group": "streamers"
+  },
+  {
+   "id": "UCDKJdFer1phQI95UinPZehw",
+   "name": "Turkey Tom",
+   "group": "streamers"
+  },
+  {
+   "id": "UC228Y4vvOMPieeT_XYTbe-A",
+   "name": "Repzion",
+   "group": "streamers"
+  },
+  {
+   "id": "UCtMVHI3AJD4Qk4hcbZnI9ZQ",
+   "name": "SomeOrdinaryGamers",
+   "group": "streamers"
+  },
+  {
+   "id": "UCFQMnBA3CS502aghlcr0_aw",
+   "name": "Coffeezilla",
+   "group": "streamers"
+  },
+  {
+   "id": "UC6Mjg5R5QOJYjrio1JmP8Fg",
+   "name": "oompaville",
+   "group": "streamers"
+  },
+  {
+   "id": "UCLuqzTYgef441A0VYecDHxA",
+   "name": "iNabber",
+   "group": "streamers"
+  },
+  {
+   "id": "UCtvCq8Bj0RKQ1-W3Z0kPJaw",
+   "name": "Papa Gut",
+   "group": "streamers"
+  },
+  {
+   "id": "UC_iUeUzozCHEReJ-shKcCYA",
+   "name": "Internet Anarchist",
+   "group": "streamers"
+  },
+  {
+   "id": "UCg4vDcovXPJTcTcYxQ9iCrw",
+   "name": "wavywebsurf",
+   "group": "streamers"
+  },
+  {
+   "id": "UClFSU9_bUb4Rc6OYfTt5SPw",
+   "name": "Philip DeFranco",
+   "group": "streamers"
+  },
+  {
+   "id": "UCLtREJY21xRfCuEKvdki1Kw",
+   "name": "H3 Podcast",
+   "group": "streamers"
+  },
+  {
+   "id": "UCZZHPXsg6LopvdOKF7qM6cQ",
+   "name": "H3 Highlights",
+   "group": "streamers"
+  },
+  {
+   "id": "UCWWCHrEqzME9N6JTuL6YUaw",
+   "name": "Dexerto",
+   "group": "streamers"
+  },
+  {
+   "id": "UCgv4dPk_qZNAbUW9WkuLPSA",
+   "name": "Atrioc",
+   "group": "streamers"
+  },
+  {
+   "id": "UCMTk_R_Y49jvq-HQXDmKI0Q",
+   "name": "The Right Opinion",
+   "group": "streamers"
+  },
+  {
+   "id": "UCamLstJyCa-t5gfZegxsFMw",
+   "name": "Colin and Samir",
+   "group": "streamers"
+  },
+  {
+   "id": "UChPuCAEXg7iYkVNjQY1NGYg",
+   "name": "Full Send",
+   "group": "streamers"
+  },
+  {
+   "id": "UCGeBogGDZ9W3dsGx-mWQGJA",
+   "name": "Impaulsive",
+   "group": "streamers"
+  },
+  {
+   "id": "UCvCfpQXRXdJdL07pzTIA6Cw",
+   "name": "Kai Cenat Live",
+   "group": "streamers"
+  },
+  {
+   "id": "UCey-eDTR5J6xU6pZ2f4guoA",
+   "name": "Adin Live",
+   "group": "streamers"
+  },
+  {
+   "id": "UCb9iyrxkhvfG2mLUuI_1eUQ",
+   "name": "Rakai Live",
+   "group": "streamers"
+  },
+  {
+   "id": "UC8kJKPwTe6XopeSQHqz1YLg",
+   "name": "anna oop",
+   "group": "tea"
+  },
+  {
+   "id": "UCe7KQjGEUloxCv5yB4fSIOA",
+   "name": "Spill Sesh",
+   "group": "tea"
+  },
+  {
+   "id": "UCi7_FYUrdyRMgNwkWjNke9Q",
+   "name": "Zachary Michael",
+   "group": "tea"
+  },
+  {
+   "id": "UCIjMIhAKynZMG2DafgPm6uQ",
+   "name": "NoahGlennCarter",
+   "group": "tea"
+  },
+  {
+   "id": "UCTnFdC5jhEClcYhTn9wo-VQ",
+   "name": "The Hollywood Fix",
+   "group": "tea"
+  },
+  {
+   "id": "UCzztaOtjmaZoiLvWLagq7bg",
+   "name": "Def Noodles",
+   "group": "tea"
+  },
+  {
+   "id": "UC_HF-dqn4lCs4fEA4GB210g",
+   "name": "Swell Entertainment",
+   "group": "tea"
+  },
+  {
+   "id": "UCqBdhITIto1mF0k8C8t313w",
+   "name": "Angelika Oles",
+   "group": "tea"
+  },
+  {
+   "id": "UCANrQFYjrZgZiZ3o9dzlIAw",
+   "name": "dustin dailey",
+   "group": "tea"
+  },
+  {
+   "id": "UC-XpWwkKCLxaVNoIXpIegmQ",
+   "name": "Kiki Chanel",
+   "group": "tea"
+  },
+  {
+   "id": "UC_BoqR94KleV3Stb5tE97Mg",
+   "name": "Do We Know Them?",
+   "group": "tea"
+  },
+  {
+   "id": "UCy2A0jf5lYUYQxi7iKHmHhQ",
+   "name": "Just Trish",
+   "group": "tea"
+  },
+  {
+   "id": "UCqW9ZAW0ZNqfWo9PZ3OX4Fg",
+   "name": "Without A Crystal Ball",
+   "group": "tea"
+  },
+  {
+   "id": "UCMT02e4ZJYFN2p8GKLugwvA",
+   "name": "Chicks in the Office",
+   "group": "tea"
+  },
+  {
+   "id": "UCg5iO7Pbg7f4gmufzOLD_zA",
+   "name": "King Akademiks",
+   "group": "hiphop"
+  },
+  {
+   "id": "UCo-PI1OrbpHkNc7e31C3Emw",
+   "name": "Underground Akademiks",
+   "group": "hiphop"
+  },
+  {
+   "id": "UCNNTZgxNQuBrhbO0VrG8woA",
+   "name": "No Jumper",
+   "group": "hiphop"
+  },
+  {
+   "id": "UCg7lal8IC-xPyKfgH4rdUcA",
+   "name": "djvlad",
+   "group": "hiphop"
+  },
+  {
+   "id": "UC23_r1bpkTWaBltbXsQxysA",
+   "name": "Joe Budden TV",
+   "group": "hiphop"
+  },
+  {
+   "id": "UChi08h4577eFsNXGd3sxYhw",
+   "name": "Breakfast Club",
+   "group": "hiphop"
+  },
+  {
+   "id": "UCs-6DggHVL7MySP0_LmFwmQ",
+   "name": "Cam Capone News",
+   "group": "hiphop"
+  },
+  {
+   "id": "UC0KfHrqdI1sWILqSBQTALGA",
+   "name": "Say Cheese",
+   "group": "hiphop"
+  },
+  {
+   "id": "UCzxG2q7N8jgMXaxjE6iVTDA",
+   "name": "The Shade Room",
+   "group": "hiphop"
+  },
+  {
+   "id": "UCQoxJOkwaCgyzQtiuAIDcuw",
+   "name": "Club Shay Shay",
+   "group": "hiphop"
+  },
+  {
+   "id": "UCE_--R1P5-kfBzHTca0dsnw",
+   "name": "Complex",
+   "group": "hiphop"
+  },
+  {
+   "id": "UCEH_fkvXZCMwPY1pKyEyM3Q",
+   "name": "DailyRapUpCrew",
+   "group": "hiphop"
+  },
+  {
+   "id": "UC_hBneA8h_0a_GOzlwTot6Q",
+   "name": "Hollywood Unlocked",
+   "group": "hiphop"
+  },
+  {
+   "id": "UC-yXuc1__OzjwpsJPlxYUCQ",
+   "name": "WorldStarHipHop",
+   "group": "hiphop"
+  },
+  {
+   "id": "UCK7IIV6Q2junGSdYK3BmZMg",
+   "name": "TMZ",
+   "group": "celebrity"
+  },
+  {
+   "id": "UCdtXPiqI2cLorKaPrfpKc4g",
+   "name": "Entertainment Tonight",
+   "group": "celebrity"
+  },
+  {
+   "id": "UCNWsXxEbKkKXOYzw-SwaXoA",
+   "name": "Page Six",
+   "group": "celebrity"
+  },
+  {
+   "id": "UCjDsbbzHgTrGc4Ff26TJtsA",
+   "name": "E! News",
+   "group": "celebrity"
+  },
+  {
+   "id": "UCCdicbO4cLE4s1wbXjJSuSg",
+   "name": "Popcorned Planet",
+   "group": "celebrity"
+  },
+  {
+   "id": "UCE-laOeM9gLfTcWF4HRBPpA",
+   "name": "Emily D. Baker",
+   "group": "celebrity"
+  },
+  {
+   "id": "UC1DGpYiEiqBrQtYXFbLhMVQ",
+   "name": "Nicki Swift",
+   "group": "celebrity"
+  },
+  {
+   "id": "UCAJnnJPeWf45gPDuQ15-Z6w",
+   "name": "Zach Sang Show",
+   "group": "celebrity"
+  },
+  {
+   "id": "UCyGi3eCuxko37WB6uUr7LjA",
+   "name": "Call Her Daddy",
+   "group": "celebrity"
+  }
+ ]
+}

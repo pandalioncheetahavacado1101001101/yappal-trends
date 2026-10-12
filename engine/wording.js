@@ -358,7 +358,15 @@ function recase(s, lex, titleCase) {
     // (a plain word after a first name is a surname only when the pair is seen capitalised in sentence-case text: "Lucy Hale", not
     // "Cornell Gang rape")
     const seenPair = !lex.capNames || lex.capNames.has(`${prevWord} ${low}`) || !inDictExact(low) || lex.proper.has(low);
-    if (titleCase && (kind[i] === 'lower' || kind[i] === 'inflected') && !STOP.has(low) && !looksVerb(core) && afterFirstName && seenPair) return w;
+    // (a word no dictionary knows, between a first name and a verb, is a surname whatever it ends in: "John Stamos Gets ...",
+    // "Mark Harris Says ..." lost their capital to the rule that reads a word ending in one "s" as a verb. "Drake Disses
+    // Kendrick" has no verb after it and stays one. Collector, the joined run of 2026-10-12: "John stamos gets over ...")
+    const nextLow = i + 1 < ws.length ? words(parts[i + 1].core).join('') : '';
+    // ("no dictionary knows": not the word, nor the word without its ending. The dictionary's own reading of endings is too
+    // generous here: it finds "stam" in "Stamos" and "harr" in "Harris")
+    const stemKnown = inDictExact(low) || (low.endsWith('s') && inDictExact(low.slice(0, -1))) || (low.endsWith('es') && inDictExact(low.slice(0, -2))) || (low.endsWith('ies') && inDictExact(`${low.slice(0, -3)}y`));
+    const surnameBeforeVerb = !stemKnown && !!nextLow && looksVerb(parts[i + 1].core) && inDict(nextLow);
+    if (titleCase && (kind[i] === 'lower' || kind[i] === 'inflected') && !STOP.has(low) && (!looksVerb(core) || surnameBeforeVerb) && afterFirstName && seenPair) return w;
     if (titleCase && /['’]s$/.test(w) && kind[i] === 'lower' && i + 1 < ws.length && isCapWord(ws[i + 1]) && isName(kind[i + 1])) return w;
     // a word no dictionary knows (even inflected) is most likely a name or a brand: "Minecraft", "Hyrox"
     if (kind[i] === 'lower' || kind[i] === 'inflected') return lead + core.toLowerCase() + tail;
@@ -592,9 +600,18 @@ function variantScore(v) {
   return v.cut ? s - 0.5 : s;
 }
 
+// what a sentence says of its subject is no filler (collector, the joined run of 2026-10-12: "John Stamos Gets Emotional Over
+// Beach Boys' Mike Love's Health Struggles" went out as "gets over ... health struggles", which says the opposite)
+const LINKING = new Set(splitList('get gets got getting is are was were be been being become becomes became go goes went going look looks looked feel feels felt turn turns turned grow grows grew seem seems seemed so too very more most how as'));
+/** A filler adjective goes where it dresses a noun ("an emotional tribute"); after a linking verb, or before a preposition or a clause, it is what the sentence says and stays ("gets emotional over", "was brutal", "goes wild after"). */
+const dropFillerAdj = (s) => s.replace(FILLER_ADJ, (m, adj, at) => {
+  const before = bare(s.slice(0, at).trim().split(/\s+/).pop() || '');
+  const after = bare(s.slice(at + m.length).split(/\s+/)[0] || '');
+  return LINKING.has(before) || SOFT.has(after) || CLAUSE.has(after) ? m : '';
+});
 /** Filler words always go; passive/perfect verbs and mid-sentence "the" go only when the title is too long. */
 function compact(s, tooLong) {
-  const t = s.replace(FILLER_ADV, '').replace(FILLER_ADJ, '');
+  const t = dropFillerAdj(s.replace(FILLER_ADV, ''));
   if (!tooLong) return t;
   let quoted = false;
   return t.replace(/\b(has|have) been (given|handed|awarded)\b/gi, 'gets').replace(/\b(has|have) been\b/gi, 'is')

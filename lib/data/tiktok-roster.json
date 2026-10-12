@@ -1,0 +1,25 @@
+{
+ "note": "Public TikTok creators whose public follower count the collector may read (ios/IDEAS-FEED.md M11). Read ONLY when the owner switches `tiktok-profile` on in IDEAS_SOURCES_ON; with the switch off, which is the default, nothing here is ever requested. Public handles of public figures only. The handles were written from memory and have NOT been checked against the site (checking is what the switch is for): a handle whose page does not read is simply never recorded.",
+ "creators": [
+  { "handle": "charlidamelio", "name": "Charli D'Amelio" },
+  { "handle": "khaby.lame", "name": "Khaby Lame" },
+  { "handle": "bellapoarch", "name": "Bella Poarch" },
+  { "handle": "addisonre", "name": "Addison Rae" },
+  { "handle": "zachking", "name": "Zach King" },
+  { "handle": "mrbeast", "name": "MrBeast" },
+  { "handle": "dixiedamelio", "name": "Dixie D'Amelio" },
+  { "handle": "lorengray", "name": "Loren Gray" },
+  { "handle": "brentrivera", "name": "Brent Rivera" },
+  { "handle": "spencerx", "name": "Spencer X" },
+  { "handle": "jamescharles", "name": "James Charles" },
+  { "handle": "noahbeck", "name": "Noah Beck" },
+  { "handle": "brycehall", "name": "Bryce Hall" },
+  { "handle": "joshrichards", "name": "Josh Richards" },
+  { "handle": "tanamongeau", "name": "Tana Mongeau" },
+  { "handle": "alixearle", "name": "Alix Earle" },
+  { "handle": "dylanmulvaney", "name": "Dylan Mulvaney" },
+  { "handle": "drewafualo", "name": "Drew Afualo" },
+  { "handle": "kaicenat", "name": "Kai Cenat" },
+  { "handle": "ishowspeed", "name": "IShowSpeed" }
+ ]
+}

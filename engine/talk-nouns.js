@@ -67,7 +67,8 @@ const FAMILIES = [
   // (something said that people are arguing about, as headlines put it: "... after ICE comments", "over his comments on female influencers")
   { key: 'remarks', w: 0.75, re: /\b(?:comments|remarks)\b(?! section)/i, noun: () => 'comments' },
   // (never one refused: "Jeremy Strong won't apologize for ...")
-  { key: 'apology', w: 0.8, re: /\b(?<!(?:won['’]t|will not|not|never|refuses to|refused to|no) )apolog\w+\b/i, noun: () => 'apology' },
+  // (nor a word that only looks like one: "an apologist for Adolf Hitler" apologises for nothing. Collector only, 2026-10-12)
+  { key: 'apology', w: 0.8, re: /\b(?<!(?:won['’]t|will not|not|never|refuses to|refused to|no) )apolog(?!ists?\b|ia\b|etics?\b)\w+\b/i, noun: () => 'apology' },
   { key: 'split', w: 0.9, re: /\b(?:split|splits|breakup|break up|broke up|divorce|divorced|divorces|divorcing|separated|separation)\b/i,
     noun: (s) => (/divorc/i.test(s) ? 'divorce' : 'split') },
   { key: 'romance', w: 0.8, re: /\b(?:dating|romance|engaged|engagement|wedding|marries|pregnant|pregnancy|affair)\b/i,
@@ -144,7 +145,7 @@ const OWNED_UP = /\b(?:admits?|admitted|apologi[sz]\w+|confess\w+|confirms?|conf
 // (suing on its own is no denial: "victim suing Cornell University")
 // (collector only, 2026-10-12: "refutes", "disputes", "rebuts", "rejects the claims", "dismisses ... as lies", "calls ... baseless",
 // "none of it happened" are denials too: "Kai Cenat refutes new video claims he paid ..." carried no denial and the card dropped it)
-const DENIAL = /\b(?:den(?:y|ies|ied|ial)(?!\s+(?:bail|entry|access|parole|visa))|refut(?:es|ed|ing)|disput(?:es|ed|ing)|rebut(?:s|ted|ting)|rejects? (?:the |all |these |those |new )?(?:\S+ )?(?:claims?|allegations?|accusations?|reports?|rumou?rs?)|dismiss(?:es|ed) [^,;:]{0,40}?(?:as )?(?:lies|false|baseless|untrue|fabricated|rumou?rs?|nonsense)|calls? [^,;:]{0,30}?(?:lies|baseless|fabricated)|baseless|fabricated|none of it (?:happened|is true)|innocent|not true|false claims|fires? back|(?:is|are|was) lying|slams (?:the )?(?:claims|allegations|accusations)|pushes back|threatens (?:to sue|lawsuit|legal action)|(?:plans|announces|takes|vows) legal action|says (?:he|she|they)(?:’|')?(?:s| is| are| will be) suing)\b/i;
+const DENIAL = /\b(?:den(?:y|ies|ied|ial)(?!\s+(?:bail|entry|access|parole|visa))|refut(?:es|ed|ing)|disput(?:es|ed|ing)|rebut(?:s|ted|ting)|rejects? (?:the |all |these |those |new )?(?:\S+ )?(?:claims?|allegations?|accusations?|reports?|rumou?rs?)|dismiss(?:es|ed) [^,;:]{0,40}?(?:as )?(?:lies|false|baseless|untrue|fabricated|rumou?rs?|nonsense)|calls? [^,;:]{0,30}?(?:lies|baseless|fabricated)|calls? (?:bs|b\.s\.|bull\S*|cap) on|baseless|fabricated|none of it (?:happened|is true)|innocent|not true|false claims|fires? back|(?:is|are|was) lying|slams (?:the )?(?:claims|allegations|accusations)|pushes back|threatens (?:to sue|lawsuit|legal action)|(?:plans|announces|takes|vows) legal action|says (?:he|she|they)(?:’|')?(?:s| is| are| will be) suing)\b/i;
 // a denial in so many words (a threat to sue is no denial of the claim: "Kai Cenat threatens lawsuit after Reggie ..." still needs one)
 const STRICT_DENIAL = /\b(?:den(?:y|ies|ied|ial)(?!\s+(?:bail|entry|access|parole|visa))|rejects?|innocent|not true|false claims|slams (?:the )?(?:claims|allegations|accusations)|pushes back)\b/i;
 // demand, not the noun: people want it explained
@@ -289,9 +290,13 @@ function nounOf(titles, { related = [], fresh = [], rest = '', name = '', only =
   for (const t of titles) {
     const ws = words(t);
     const at = name ? nameAt(ws, name) : [];
+    // (how far a noun stands from the name is counted from the name's nearer end: "Jack Doherty faces six-month social media ban"
+    // has its ban six words after "Doherty", and was read as seven from "Jack", one too far to be his. Judges, 2026-10-12)
+    const nameWords = name ? name.split(' ').length : 1;
+    const away = (i) => (x) => (x.at >= i + nameWords ? x.at - (i + nameWords - 1) : Math.abs(x.at - i));
     for (const x of familiesIn(t)) {
       // (someone else's noun is no noun of the name's, however near it stands)
-      const close = at.some((i) => Math.abs(x.at - i) <= nearWords) && !othersNoun(t, x, name);
+      const close = at.some((i) => away(i)(x) <= nearWords) && !othersNoun(t, x, name);
       add(x.f.key, x.surface, close ? 1 : at.length ? 0.3 : 0.5);
       if (at.length) said.set(x.f.key, (said.get(x.f.key) || 0) + 1);
       if (close) near.set(x.f.key, (near.get(x.f.key) || 0) + 1);

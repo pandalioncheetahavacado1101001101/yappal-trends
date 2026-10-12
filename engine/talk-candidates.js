@@ -682,8 +682,23 @@ const RELATED_MIN_SEARCH = 2.5; // a trend of about 300K US searches or more
 const RELATED_PRIOR = 0.6;
 const RELATED_WIKI_VIEWS = 150000;
 
+/**
+ * Collector only (ios/IDEAS-FEED.md L10). The creators the keyless creator-native signals are about right now (a roster cluster, a
+ * question newly typed, a clip, a ban): each is a people-drama name worth evaluating and searching, as a name a drama headline
+ * leads with is. A candidate is only a name to look at: whether it lists is decided on its headlines, like any other.
+ * native: [{ key, kinds (how many kinds of signal), creator }].
+ */
+const NATIVE_PRIOR = 1.2;
+const NATIVE_KIND_PRIOR = 0.3;
+function nativeCandidates(native) {
+  return (native || []).filter((n) => n && typeof n.key === 'string' && n.key && n.key.split(' ').length <= 3 && !LEAGUE_KW.test(n.key)).map((n) => {
+    const prior = Math.min(DRAMA_PRIOR_MAX, NATIVE_PRIOR + NATIVE_KIND_PRIOR * Math.max(1, n.kinds || 1) + (n.creator === false ? 0 : DRAMA_CREATOR_PRIOR));
+    return { key: n.key, from: 'drama', trends: [], related: [], rests: [], cats: new Set(), wiki: [], reddit: [], sports: false, drama: Math.max(1, n.kinds || 1), creator: n.creator !== false, native: true, dramaPrior: prior, prior };
+  });
+}
+
 /** Every candidate name, merged (a contained name folds into a trend's: "gypsy rose blanchard" into "gypsy rose"), by prior demand. */
-function candidates({ trends, wiki, wikiTop, items, now, lex, lookups, audience, roster }) {
+function candidates({ trends, wiki, wikiTop, items, now, lex, lookups, audience, roster, native }) {
   const out = trendCandidates(forAudience(trends, audience), now, lex);
   const wikiBy = wikiByKey(wiki, now);
   // (a related name already trending on its own, or already related under a bigger trend, is that candidate)
@@ -717,7 +732,7 @@ function candidates({ trends, wiki, wikiTop, items, now, lex, lookups, audience,
     if (c.outlets) host.outlets = Math.max(host.outlets || 0, c.outlets);
     if (c.recentOutlets) host.recentOutlets = Math.max(host.recentOutlets || 0, c.recentOutlets);
   };
-  [...dramaCandidates(items, now, lex, roster), ...wikiCandidates(wiki, now), ...wikiTopCandidates((wikiTop || []).filter((w) => !w.climb), lex), ...wikiClimbCandidates(wikiTop, lex),
+  [...dramaCandidates(items, now, lex, roster), ...nativeCandidates(native), ...wikiCandidates(wiki, now), ...wikiTopCandidates((wikiTop || []).filter((w) => !w.climb), lex), ...wikiClimbCandidates(wikiTop, lex),
     ...redditCandidates(items, now, lex, known), ...burstCandidates(items, now, lookups, lex)].forEach(fold);
   const sorted = out.sort((a, b) => b.prior - a.prior || a.key.localeCompare(b.key));
   // (each source keeps its seats, then the strongest of the rest)

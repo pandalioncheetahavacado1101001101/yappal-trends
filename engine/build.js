@@ -604,9 +604,10 @@ function sensitiveOf(st) {
 const talkTrendList = (store) => (store.talkTrends && store.talkTrends.size ? [...store.talkTrends.values()] : TS.fromStoreTrends([...store.trends.values()]));
 
 /** What every talking-points call reads, for one audience. */
-function talkContext({ store, wiki, wikiLists, crazes, roster, find = null, debug = null }, all, lex, audience) {
+function talkContext({ store, wiki, wikiLists, crazes, roster, native = null, find = null, debug = null }, all, lex, audience) {
   // (find + debug: one name's reasoning printed, for a person reading a build; never set by a cycle)
-  return { trends: talkTrendList(store), wiki, wikiTop: TS.wikiTopSpikes(wikiLists, NOW), wikiLists, crazes, roster,
+  // (native: the creators the keyless signals are about, as names to evaluate: talk-candidates.js nativeCandidates)
+  return { trends: talkTrendList(store), wiki, wikiTop: TS.wikiTopSpikes(wikiLists, NOW), wikiLists, crazes, roster, native,
     items: talkItems(store, all), lookups: store.lookups, now: NOW, lex, audience: TC.audienceOf(audience), ...(find && debug ? { find, debug } : {}) };
 }
 

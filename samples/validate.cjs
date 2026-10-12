@@ -24,7 +24,9 @@ const START_PRECISIONS = ['hour', 'day', 'month'];
 const PEAKING_MIN_SHARE = 40;
 const PEAKING_PEAK_BEHIND_HOURS = 24;
 // (demand is how much something is wanted or watched: never a count of the videos that already exist, IDEAS-FEED D3)
-const DEMAND_KINDS = ['search', 'reads', 'outlets', 'views', 'listed'];
+// (players: how many are in a game right now, as its platform counts them: M10)
+const DEMAND_KINDS = ['search', 'reads', 'outlets', 'views', 'listed', 'players'];
+const SUBS = ['drama', 'story', 'show', 'music', 'sports', 'game', 'word', 'phrase', 'meme', 'craze', 'format', 'challenge', 'hashtag', 'sound', 'filter', 'ai', 'product', 'clip', 'gaming'];
 const TOPICS = ['celebs', 'memes', 'music', 'screen', 'sports', 'beauty', 'food', 'lifeHacks', 'lifestyle', 'shopping'];
 const IDEA_KINDS = ['word', 'trend', 'story'];
 const TIMELINE_KINDS = ['start', 'chapter', 'reply', 'measure', 'latest'];
@@ -78,6 +80,9 @@ function validateItem(item, index, pageSize, say, now = NaN) {
   need(Array.isArray(item.people) && item.people.length <= 4 &&
     item.people.every((p) => p && isText(p.name, 80) && typeof p.key === 'string' && p.key && p.key === keyOf(p.key)), 'people: 0-4 of { key (normalised), name }');
   need(Array.isArray(item.topics) && item.topics.length >= 1 && item.topics.length <= 4 && item.topics.every((t) => TOPICS.includes(t)), 'topics: 1-4 ContentTopic raw values');
+  // (the topics For you may rank by, K1: each a ContentTopic, none twice)
+  const sure = item.topicsSure;
+  need(sure === undefined || (Array.isArray(sure) && sure.length <= 4 && sure.every((t) => TOPICS.includes(t)) && new Set(sure).size === sure.length), 'topicsSure: 0-4 ContentTopic raw values, none twice, when present');
   need(Array.isArray(item.tags) && item.tags.length <= 12 && item.tags.every((t) => typeof t === 'string' && t && t === keyOf(t)), 'tags: 0-12 normalised keys');
   need(item.examples && isText(item.examples.tiktok, LIMITS.query) && isText(item.examples.youtube, LIMITS.query), 'examples: { tiktok, youtube } search queries');
   const idea = item.idea;
@@ -88,6 +93,18 @@ function validateItem(item, index, pageSize, say, now = NaN) {
   const topic = item.topic;
   need(topic === undefined || (topic && isText(topic.name, 80) && typeof topic.key === 'string' && topic.key && topic.key === keyOf(topic.key) &&
     Array.isArray(item.tags) && item.tags.includes(topic.key)), 'topic: { key (normalised, one of tags), name } when present');
+
+  need(item.sub === undefined || SUBS.includes(item.sub), `sub must be one of ${SUBS.join(', ')} when present`);
+  // (a sound's count as a chart gives it, K7: on a sound row only, each part of the right shape, and the day's change never without the total)
+  const snd = item.sound;
+  need(snd === undefined || (item.kind === 'sound' && snd && typeof snd === 'object' && Object.keys(snd).length > 0), 'sound: an object with at least one part, on a sound row only');
+  if (snd && typeof snd === 'object') {
+    need(snd.id === undefined || (typeof snd.id === 'string' && /^\d{5,25}$/.test(snd.id)), 'sound.id: 5 to 25 digits');
+    need(snd.slug === undefined || (typeof snd.slug === 'string' && /^[A-Za-z0-9-]{1,80}$/.test(snd.slug)), 'sound.slug: 1 to 80 letters, digits and hyphens');
+    need(snd.videos === undefined || (isInt(snd.videos) && snd.videos >= 0), 'sound.videos: a whole number');
+    need(snd.videosToday === undefined || (isInt(snd.videosToday) && snd.videos !== undefined), 'sound.videosToday: a whole number, beside sound.videos');
+    need(snd.asOf === undefined || (isInstant(snd.asOf) && (!Number.isFinite(now) || Date.parse(snd.asOf) <= now)), 'sound.asOf: an instant, never after the list was built');
+  }
 
   // ---------- section C: a status a row cannot honestly carry ----------
   const started = isInstant(item.startedAt) ? Date.parse(item.startedAt) : null;

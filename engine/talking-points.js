@@ -928,7 +928,10 @@ function pointOf(c, ctx) {
   // allegations" the day his ex's claims land, not the tour its week's hundred results are about)
   // (a name with a big search of its own is told by what its searches and its week say: "Ken Urker death", 2M searches, never the
   // day's aside)
-  const wave0 = c.drama && !c.parent && !c.trends.some((t) => t.volume >= WAVE_SEARCH_MAX) ? TN.nounOf(ev.rows.filter((r) => now - r.t < WAVE_DAYS * DAY).map((r) => r.title), { related: c.related, fresh, rest: c.rests.join(' '), name: near, only: TN.DRAMA_FAMS, nearWords: WAVE_NEAR, pool: TN.SAID_FAMS, thin: true }) : null;
+  // (and a creator's name the searches brought is told the same way: "Jack Doherty fight", the week's noun, stood over three days
+  // of headlines about a posting ban, because the name came from a 10K search and not from the drama feeds. Judges, 2026-10-12)
+  const creatorName = !!c.creator || (!!ctx.roster && ctx.roster.has(c.key)) || ev.rows.filter((r) => TC.calledCreator(r.title, near)).length >= CREATOR_CALLED_MIN;
+  const wave0 = (c.drama || creatorName) && !c.parent && !c.trends.some((t) => t.volume >= WAVE_SEARCH_MAX) ? TN.nounOf(ev.rows.filter((r) => now - r.t < WAVE_DAYS * DAY).map((r) => r.title), { related: c.related, fresh, rest: c.rests.join(' '), name: near, only: TN.DRAMA_FAMS, nearWords: WAVE_NEAR, pool: TN.SAID_FAMS, thin: true }) : null;
   const wave = wave0 && wave0.f && wave0.count >= WAVE_MIN ? wave0 : null;
   const found0 = recalled ? { f: TN.RECALL, noun: 'recall', count: recalled, share: recalled / Math.max(1, titles.length), explained: 0 } :
     wave || TN.nounOf(titles, { related: c.related, fresh, rest: c.rests.join(' '), name: near });
