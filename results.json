@@ -1,0 +1,768 @@
+[
+ {
+  "name": "hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
+  "exit": "0",
+  "seconds": 874,
+  "loadSeconds": 197,
+  "rows": 80,
+  "modelLines": 22,
+  "asked": 55,
+  "calls": 22,
+  "passed": 18,
+  "mended": 0,
+  "reworded": 6,
+  "shortened": 6,
+  "refused": 2,
+  "unreadable": 0,
+  "unanswered": 35,
+  "titled": 5,
+  "waiting": 35,
+  "off": null,
+  "cardSeconds": {
+   "median": 28.7,
+   "slowest": 63.8,
+   "all": 608
+  },
+  "refusedBy": {
+   "denial": 1,
+   "part 1": 1,
+   "surer": 1
+  },
+  "pairs": [
+   {
+    "rank": 1,
+    "tries": 1,
+    "seconds": 30.5,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Kai Cenat allegations",
+     "line": "Reggie doubles down on Kai Cenat allegations and claims he’s saving evidence for court."
+    },
+    "model": {
+     "title": "Kai Cenat allegations",
+     "line": "Kai Cenat pushes back on Reggie’s allegations and says a lawsuit is coming; RaKai threatens possible defamation lawsuit against Reggie after serious allegations."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": true,
+     "began": null
+    }
+   },
+   {
+    "rank": 2,
+    "tries": 1,
+    "seconds": 22.9,
+    "by": "shortened",
+    "rule": {
+     "title": "OhnePixel tears",
+     "line": "OhnePixel breaks down in tears after viewers accuse him of clip farming."
+    },
+    "model": {
+     "title": "OhnePixel tears",
+     "line": "OhnePixel breaks down in tears after viewers accuse him of clip farming."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": false,
+     "began": null
+    }
+   },
+   {
+    "rank": 3,
+    "tries": 1,
+    "seconds": 25.3,
+    "by": "shortened",
+    "rule": {
+     "title": "Nicole Kidman by ADÉLA",
+     "line": "Creators lip-sync the confident hook and time a dramatic outfit flip, typically loungewear to going-out look, to land on the beat drop."
+    },
+    "model": {
+     "title": "Nicole Kidman by ADÉLA",
+     "line": "Creators lip-sync the confident hook and time a dramatic outfit flip, typically loungewear to going-out look, to land on the beat drop."
+    },
+    "advice": {
+     "kind": "sound",
+     "more": null,
+     "fresh": null,
+     "began": "2026-10-12"
+    }
+   },
+   {
+    "rank": 5,
+    "tries": 1,
+    "seconds": 40.9,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Shane Gillis SNL apology",
+     "line": "Comedian Shane Gillis apologizes after accidentally cursing during ‘SNL’ hosting duties."
+    },
+    "model": {
+     "title": "Shane Gillis apology",
+     "line": "Dan Levy slams Shane Gillis’ SNL monologue: ‘more men’ should stand up; Gillis’s SNL monologue draws backlash; comedian Gillis apologizes after accidentally cursing during ‘SNL’ hosting duties."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-09"
+    }
+   },
+   {
+    "rank": 6,
+    "tries": 1,
+    "seconds": 33.8,
+    "by": "shortened",
+    "rule": {
+     "title": "Susan Dell memes",
+     "line": "Susan Dell’s appearance goes viral after her visit to the White House: a striking physical transformation."
+    },
+    "model": {
+     "title": "Susan Dell memes",
+     "line": "Susan Dell’s appearance goes viral after her visit to the White House: a striking physical transformation."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": false,
+     "began": "2026-10-07"
+    }
+   },
+   {
+    "rank": 7,
+    "tries": 1,
+    "seconds": 29.2,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Jack Doherty social media ban",
+     "line": "YouTuber Jack Doherty was ‘banned’ from the internet after signing contract with crypto casino."
+    },
+    "model": {
+     "title": "Jack Doherty ban",
+     "line": "YouTuber Jack Doherty ‘reportedly banned’ from the internet after signing contract with crypto casino; Doherty reportedly faces 6-month social media ban after signing gambling contract."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-10"
+    }
+   },
+   {
+    "rank": 8,
+    "tries": 1,
+    "seconds": 29.5,
+    "by": "as written",
+    "rule": {
+     "title": "Russell Brand court case",
+     "line": "Russell Brand’s criminal trial begins in London as he faces rape and sexual assault charges."
+    },
+    "model": {
+     "title": "Russell Brand trial",
+     "line": "Jury selected for actor Russell Brand’s UK trial over sex crimes allegations."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": "2026-09-29"
+    }
+   },
+   {
+    "rank": 9,
+    "tries": 1,
+    "seconds": 32.8,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Cyberleek GTA 6 leak",
+     "line": "Cyberleek reportedly threatens a GTA 6 build leak over discs and an apology."
+    },
+    "model": {
+     "title": "Cyberleek GTA 6 leak",
+     "line": "Cyberleek reportedly threatens a GTA 6 build leak over discs and an apology."
+    },
+    "advice": {
+     "kind": "news",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-05"
+    }
+   },
+   {
+    "rank": 10,
+    "tries": 1,
+    "seconds": 39.4,
+    "by": "shortened",
+    "rule": {
+     "title": "Danny Trejo ICE backlash",
+     "line": "Danny Trejo denies supporting ICE amid backlash over Daily Wire movie."
+    },
+    "model": {
+     "title": "Danny Trejo ICE backlash",
+     "line": "Danny Trejo breaks silence after reportedly fans turn on him over pro-ICE film; Trejo reportedly denies being ‘pro ICE’."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-04"
+    }
+   },
+   {
+    "rank": 11,
+    "tries": 1,
+    "seconds": 28.7,
+    "by": "as written",
+    "rule": {
+     "title": "KSI retirement",
+     "line": "KSI confirms retirement as Misfits announce ‘venom’ signing."
+    },
+    "model": {
+     "title": "KSI retirement",
+     "line": "KSI confirms retirement as Misfits announce ‘venom’ signing; KSI announces retirement from influencer boxing and takes a jab at Jake Paul."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": null,
+     "began": null
+    }
+   },
+   {
+    "rank": 12,
+    "tries": 1,
+    "seconds": 18.2,
+    "by": "as written",
+    "rule": {
+     "title": "Malfoid trend",
+     "line": "A nickname for a gender-swapped version of Draco Malfoy from the Harry Potter series."
+    },
+    "model": {
+     "title": "Malfoid trend",
+     "line": "A nickname for a gender-swapped version of Draco Malfoy from the Harry Potter series."
+    },
+    "advice": {
+     "kind": "meme",
+     "more": null,
+     "fresh": false,
+     "began": null
+    }
+   },
+   {
+    "rank": 12,
+    "tries": 1,
+    "seconds": 22.8,
+    "by": "as written",
+    "rule": {
+     "title": "Stop the wedding trend",
+     "line": "Creators post photos from the day with text that starts “Stop the wedding, but” and finishes the thought."
+    },
+    "model": {
+     "title": "Stop the wedding trend",
+     "line": "Creators post photos from the day with text that starts “Stop the wedding, but”."
+    },
+    "advice": {
+     "kind": null,
+     "more": null,
+     "fresh": false,
+     "began": "2026-10-05"
+    }
+   },
+   {
+    "rank": 14,
+    "tries": 1,
+    "seconds": 24.3,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Brandon Rogers heckler",
+     "line": "Actor Brandon Rogers blasts heckler during NY Comic Con."
+    },
+    "model": {
+     "title": "Brandon Rogers heckler",
+     "line": "Actor Brandon Rogers blasts heckler during NY Comic Con."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": null
+    }
+   },
+   {
+    "rank": 15,
+    "tries": 1,
+    "seconds": 23.6,
+    "by": "as written",
+    "rule": {
+     "title": "Patient Zero by Taylor Swift",
+     "line": "Creators use this dramatic, cinematic new Swift single for moody before-and-after reveals, wedding footage victory laps, and dark fall lookbook walk-throughs."
+    },
+    "model": {
+     "title": "Patient Zero by Taylor Swift",
+     "line": "Creators use this dramatic, cinematic new Swift single for moody before-and-after reveals; The track is popular for wedding footage victory laps and dark fall lookbook walk-throughs."
+    },
+    "advice": {
+     "kind": "sound",
+     "more": null,
+     "fresh": null,
+     "began": "2026-10-12"
+    }
+   },
+   {
+    "rank": 20,
+    "tries": 1,
+    "seconds": 22.4,
+    "by": "shortened",
+    "rule": {
+     "title": "Sydney Sweeney backlash",
+     "line": "Sydney Sweeney ditches top in new Novig sports betting ad after backlash."
+    },
+    "model": {
+     "title": "Sydney Sweeney backlash",
+     "line": "Sydney Sweeney ditches top in new Novig sports betting ad after backlash."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": false,
+     "began": "2026-10-11"
+    }
+   },
+   {
+    "rank": 28,
+    "tries": 1,
+    "seconds": 25.3,
+    "by": "as written",
+    "rule": {
+     "title": "Jen Hamilton split",
+     "line": "Jen Hamilton feels ‘liberated’ after losing ‘200 Lb. of Man’ following split."
+    },
+    "model": {
+     "title": "Jen Hamilton split",
+     "line": "Influencer Jen Hamilton says ‘life has opened up’ after split from husband; author Hamilton reveals how she found out about her husband’s affair."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": false,
+     "began": "2026-10-08"
+    }
+   },
+   {
+    "rank": 30,
+    "tries": 1,
+    "seconds": 23,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "NoArmWhatley allegations",
+     "line": "NoArmWhatley addresses allegations over his behavior toward women."
+    },
+    "model": {
+     "title": "NoArmWhatley allegations",
+     "line": "NoArmWhatley addresses allegations over his behavior toward women."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": false,
+     "began": null
+    }
+   },
+   {
+    "rank": 31,
+    "tries": 1,
+    "seconds": 25.9,
+    "by": "shortened",
+    "rule": {
+     "title": "Myron Gaines backlash",
+     "line": "Manosphere influencer Myron Gaines defends seven accused in Cornell University sexual assault case at University of Texas event; faces severe backlash."
+    },
+    "model": {
+     "title": "Myron Gaines backlash",
+     "line": "Manosphere influencer Myron Gaines defends seven accused in Cornell University sexual assault case at University of Texas event; faces severe backlash."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": true,
+     "began": null
+    }
+   }
+  ]
+ },
+ {
+  "name": "hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+  "exit": "0",
+  "seconds": 1137,
+  "loadSeconds": 120,
+  "rows": 80,
+  "modelLines": 24,
+  "asked": 55,
+  "calls": 24,
+  "passed": 17,
+  "mended": 1,
+  "reworded": 7,
+  "shortened": 6,
+  "refused": 3,
+  "unreadable": 0,
+  "unanswered": 35,
+  "titled": 4,
+  "waiting": 35,
+  "off": null,
+  "cardSeconds": {
+   "median": 36.3,
+   "slowest": 114.8,
+   "all": 947
+  },
+  "refusedBy": {
+   "part 2": 1,
+   "denial": 1,
+   "words, not": 1,
+   "numbered sentences": 1,
+   "other": 1
+  },
+  "pairs": [
+   {
+    "rank": 1,
+    "tries": 1,
+    "seconds": 50.5,
+    "by": "shortened",
+    "rule": {
+     "title": "Kai Cenat allegations",
+     "line": "Reggie doubles down on Kai Cenat allegations and claims he’s saving evidence for court."
+    },
+    "model": {
+     "title": "Kai Cenat allegations",
+     "line": "Kai Cenat pushes back on Reggie’s allegations and says a lawsuit is coming; RaKai threatens possible defamation lawsuit against Reggie after serious allegations."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": true,
+     "began": "2026-09-28"
+    }
+   },
+   {
+    "rank": 3,
+    "tries": 1,
+    "seconds": 36,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Nicole Kidman by ADÉLA",
+     "line": "Creators lip-sync the confident hook and time a dramatic outfit flip, typically loungewear to going-out look, to land on the beat drop."
+    },
+    "model": {
+     "title": "Nicole Kidman by ADÉLA",
+     "line": "Creators lip-sync the confident hook and time a dramatic outfit flip, typically loungewear to going-out look, to land on the beat drop."
+    },
+    "advice": {
+     "kind": "meme",
+     "more": null,
+     "fresh": null,
+     "began": "2026-10-12"
+    }
+   },
+   {
+    "rank": 4,
+    "tries": 1,
+    "seconds": 48.3,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Shane Gillis SNL apology",
+     "line": "Comedian Shane Gillis apologizes after accidentally cursing during ‘SNL’ hosting duties."
+    },
+    "model": {
+     "title": "Shane Gillis apology",
+     "line": "Dan Levy criticizes Shane Gillis’ SNL monologue: ‘More Men’ should stand up; Gillis apologizes after accidentally cursing during ‘SNL’ hosting duties."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-09"
+    }
+   },
+   {
+    "rank": 5,
+    "tries": 1,
+    "seconds": 29.6,
+    "by": "shortened",
+    "rule": {
+     "title": "OhnePixel tears",
+     "line": "OhnePixel breaks down in tears after viewers accuse him of clip farming."
+    },
+    "model": {
+     "title": "OhnePixel tears",
+     "line": "OhnePixel cries on stream after reading a Reddit post about clip farming that had 40 upvotes."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": false,
+     "began": null
+    }
+   },
+   {
+    "rank": 6,
+    "tries": 1,
+    "seconds": 45.1,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Susan Dell memes",
+     "line": "Susan Dell’s appearance goes viral after her visit to the White House: a striking physical transformation."
+    },
+    "model": {
+     "title": "Susan Dell memes",
+     "line": "Susan Dell’s appearance goes viral after her visit to the White House: a striking physical transformation; Dell critics joke ‘imagine leaving the house like this’ after makeover."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-08"
+    }
+   },
+   {
+    "rank": 7,
+    "tries": 2,
+    "seconds": 89.3,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Jack Doherty social media ban",
+     "line": "YouTuber Jack Doherty was ‘banned’ from the internet after signing contract with crypto casino."
+    },
+    "model": {
+     "title": "Jack Doherty ban",
+     "line": "YouTuber Jack Doherty ‘reportedly banned’ from the internet after signing contract with crypto casino; Doherty reportedly faces 6-month social media ban after signing gambling contract."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-10"
+    }
+   },
+   {
+    "rank": 8,
+    "tries": 1,
+    "seconds": 36.3,
+    "by": "as written",
+    "rule": {
+     "title": "Geordie Greep allegations",
+     "line": "Geordie Greep denies sexual harassment allegations made towards him during concert."
+    },
+    "model": {
+     "title": "Geordie Greep allegations",
+     "line": "Geordie Greep’s US shows cancelled amid sexual misconduct allegation, which he denies; Greep denies rape allegation during Vancouver concert."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-09"
+    }
+   },
+   {
+    "rank": 8,
+    "tries": 1,
+    "seconds": 43.1,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Russell Brand court case",
+     "line": "Russell Brand’s criminal trial begins in London as he faces rape and sexual assault charges."
+    },
+    "model": {
+     "title": "Russell Brand trial",
+     "line": "Jury selected for actor Russell Brand’s UK trial over sex crimes allegations; Brand reportedly arrives at court for first day of his sexual assault trial."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": "2026-09-29"
+    }
+   },
+   {
+    "rank": 10,
+    "tries": 1,
+    "seconds": 46.2,
+    "by": "shortened",
+    "rule": {
+     "title": "Danny Trejo ICE backlash",
+     "line": "Danny Trejo denies supporting ICE amid backlash over Daily Wire movie."
+    },
+    "model": {
+     "title": "Danny Trejo ICE backlash",
+     "line": "Danny Trejo breaks silence after reportedly fans turn on him over pro-ICE film; Trejo denies being ‘pro ICE’."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-04"
+    }
+   },
+   {
+    "rank": 11,
+    "tries": 1,
+    "seconds": 35.9,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "KSI retirement",
+     "line": "KSI confirms retirement as Misfits announce ‘venom’ signing."
+    },
+    "model": {
+     "title": "KSI retirement",
+     "line": "KSI confirms retirement as Misfits announce ‘venom’ signing; KSI announces RETIREMENT from boxing during Joey Essex Misfits card."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": null,
+     "began": "2026-10-09"
+    }
+   },
+   {
+    "rank": 12,
+    "tries": 1,
+    "seconds": 22.5,
+    "by": "as written",
+    "rule": {
+     "title": "Malfoid trend",
+     "line": "A nickname for a gender-swapped version of Draco Malfoy from the Harry Potter series."
+    },
+    "model": {
+     "title": "Malfoid trend",
+     "line": "A nickname for a gender-swapped version of Draco Malfoy from the Harry Potter series."
+    },
+    "advice": {
+     "kind": "meme",
+     "more": null,
+     "fresh": false,
+     "began": "2026-10-09"
+    }
+   },
+   {
+    "rank": 12,
+    "tries": 1,
+    "seconds": 29.9,
+    "by": "as written",
+    "rule": {
+     "title": "Stop the wedding trend",
+     "line": "Creators post photos from the day with text that starts “Stop the wedding, but” and finishes the thought."
+    },
+    "model": {
+     "title": "Stop the wedding trend",
+     "line": "The trending TikTok audio turning wedding regrets into carousels; creators post photos from the day with text that starts Stop the wedding but and finishes the thought."
+    },
+    "advice": {
+     "kind": "meme",
+     "more": null,
+     "fresh": false,
+     "began": "2026-10-05"
+    }
+   },
+   {
+    "rank": 14,
+    "tries": 1,
+    "seconds": 32,
+    "by": "reworded from its sentences",
+    "rule": {
+     "title": "Brandon Rogers heckler",
+     "line": "Actor Brandon Rogers blasts heckler during NY Comic Con."
+    },
+    "model": {
+     "title": "Brandon Rogers heckler",
+     "line": "Actor Brandon Rogers blasts heckler during NY Comic Con."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-09"
+    }
+   },
+   {
+    "rank": 15,
+    "tries": 1,
+    "seconds": 31.3,
+    "by": "shortened",
+    "rule": {
+     "title": "Patient Zero by Taylor Swift",
+     "line": "Creators use this dramatic, cinematic new Swift single for moody before-and-after reveals, wedding footage victory laps, and dark fall lookbook walk-throughs."
+    },
+    "model": {
+     "title": "Patient Zero by Taylor Swift",
+     "line": "Creators use this dramatic, cinematic new Swift single for moody before-and-after reveals, wedding footage victory laps, and dark fall lookbook walk-throughs."
+    },
+    "advice": {
+     "kind": "sound",
+     "more": null,
+     "fresh": null,
+     "began": "2026-10-12"
+    }
+   },
+   {
+    "rank": 20,
+    "tries": 1,
+    "seconds": 27.2,
+    "by": "shortened",
+    "rule": {
+     "title": "Sydney Sweeney backlash",
+     "line": "Sydney Sweeney ditches top in new Novig sports betting ad after backlash."
+    },
+    "model": {
+     "title": "Sydney Sweeney backlash",
+     "line": "Sydney Sweeney ditches top in new Novig sports betting ad after backlash."
+    },
+    "advice": {
+     "kind": "celebrity",
+     "more": null,
+     "fresh": true,
+     "began": "2026-10-11"
+    }
+   },
+   {
+    "rank": 28,
+    "tries": 1,
+    "seconds": 28.9,
+    "by": "as written",
+    "rule": {
+     "title": "Jen Hamilton split",
+     "line": "Jen Hamilton feels ‘liberated’ after losing ‘200 Lb. of Man’ following split."
+    },
+    "model": {
+     "title": "Jen Hamilton split",
+     "line": "Jen Hamilton reveals how she discovered husband’s ‘double life’; Hamilton says ‘life Has Opened Up’ after split from husband."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": false,
+     "began": "2026-10-08"
+    }
+   },
+   {
+    "rank": 31,
+    "tries": 1,
+    "seconds": 34.8,
+    "by": "shortened",
+    "rule": {
+     "title": "Myron Gaines backlash",
+     "line": "Manosphere influencer Myron Gaines defends seven accused in Cornell University sexual assault case at University of Texas event; faces severe backlash."
+    },
+    "model": {
+     "title": "Myron Gaines backlash",
+     "line": "Manosphere influencer Myron Gaines defends seven accused in Cornell University sexual assault case at University of Texas event; faces severe backlash."
+    },
+    "advice": {
+     "kind": "creator",
+     "more": null,
+     "fresh": true,
+     "began": null
+    }
+   }
+  ]
+ }
+]
