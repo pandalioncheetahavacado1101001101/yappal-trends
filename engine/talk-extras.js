@@ -205,6 +205,8 @@ const CRAZE_UNVERIFIED = 0.65; // one blog's word: below every craze a headline 
 const CRAZE_NEWS_W = 0.5;
 const CRAZE_NEWS_MAX = 2;
 const CRAZE_STALE_DAYS = 7;
+const CRAZE_ORIGIN_DAYS = 45;
+const CRAZE_COINED_MIN = 6;
 const CRAZE_KIND = /\b(?:trend|challenge|meme|dance|sound|audio|filter|illusion|walk|prank|edit|reveal|roast|transition|lip ?sync)s?$/i;
 const CRAZE_CONTEXT = /\b(?:trend\w*|tiktok|viral|meme|challenge|audio|sound|filter|edit)\b/i;
 const CRAZE_GENERIC = new Set(['trend', 'challenge', 'meme', 'dance', 'sound', 'audio', 'filter', 'illusion', 'walk', 'edit', 'day', 'the', 'a', 'an', 'tiktok']);
@@ -280,15 +282,32 @@ const crazeLookupNames = (crazes) => (crazes || []).filter((c) => c.name && c.na
 const CRAZE_LOOKUP_MAX = 6;
 
 function crazePoints(crazes, { items, lookups, now }) {
-  const rows = [...(items || []).filter((i) => i.fam !== 'reddit').map((i) => ({ title: i.title, t: i.t, outlet: i.outlet })),
+  const held = [...(items || []).filter((i) => i.fam !== 'reddit').map((i) => ({ title: i.title, t: i.t, outlet: i.outlet })),
     ...[...(lookups ? lookups.values() : [])].flatMap((l) => [...((l.tpnews && l.tpnews.rows) || []).map((r) => ({ title: r.title, t: r.t, outlet: r.publisher })),
       ...((l.deep && l.deep.rows) || []).map((r) => ({ title: r.title, t: r.t, outlet: r.publisher })),
-      ...(l.since ? [...(l.since.recent || []), ...(l.since.titles || [])].map((r) => ({ title: r.title, t: r.t, outlet: r.label })) : [])])]
-    .filter((r) => r.t >= now - WINDOW_DAYS * DAY && r.t <= now + DAY);
+      ...(l.since ? [...(l.since.recent || []), ...(l.since.titles || [])].map((r) => ({ title: r.title, t: r.t, outlet: r.label })) : [])])];
+  const rows = held.filter((r) => r.t >= now - WINDOW_DAYS * DAY && r.t <= now + DAY);
+  // (when the press first named a format: looked for further back than the week it is weighed by, since a format on this month's
+  // page began last month at the earliest and its first explainer is often its oldest headline in hand)
+  const earlier = held.filter((r) => r.t >= now - CRAZE_ORIGIN_DAYS * DAY && r.t <= now + DAY);
   return (crazes || []).filter((c) => c.name && c.name.split(/\s+/).length <= 5).map((c) => {
     const core = words(c.name).filter((w) => !CRAZE_GENERIC.has(w));
-    const re = core.length ? new RegExp(`\\b${core.join('\\W+')}\\b`, 'i') : null;
+    // (a coined word in a format's name names it on its own: "What Is the 'Ramalama' TikTok Song?" is about the "Ramalama Costume
+    // Walk", where a name of plain words needs all of them, "Stop the Wedding". Collector only, 2026-10-12: the page's second format
+    // counted as one blog's word, under the cut, while an explainer and its searches were in hand)
+    const coined = core.filter((w) => w.length >= CRAZE_COINED_MIN && !W.inDict(w) && !W.isFirstName(w));
+    const re = core.length ? new RegExp(`\\b(?:${[core.join('\\W+'), ...(coined.length && core.length > 1 ? [coined[0]] : [])].join('|')})\\b`, 'i') : null;
+    // (when the press first named it, read by the name as the page prints it, the small words inside it too: "Stop the Wedding" is
+    // named by "‘Stop the Wedding’ trend has ...", where its two own words side by side, "stop wedding", are in no headline.
+    // Collector only, 2026-10-12. For the start alone: what a format is WEIGHED by is still `re`, because a format's heat is its
+    // share of the hottest format's, and one more verified format re-ranks every other; that is a change to make on a second day)
+    const printed = words(c.name);
+    while (printed.length > 1 && CRAZE_GENERIC.has(printed[0])) printed.shift();
+    while (printed.length > 1 && CRAZE_GENERIC.has(printed[printed.length - 1])) printed.pop();
+    const whole = printed.filter((w) => !CRAZE_GENERIC.has(w)).length === core.length && printed.length > core.length ? printed.join('\\W+') : null;
+    const reDated = whole ? new RegExp(`\\b(?:${whole})\\b`, 'i') : null;
     const named = re ? [...new Map(rows.filter((r) => re.test(r.title) && CRAZE_CONTEXT.test(r.title)).map((r) => [keyOf(r.title), r])).values()] : [];
+    const namedT = re ? Math.min(Infinity, ...earlier.filter((r) => (re.test(r.title) || (reDated && reDated.test(r.title))) && CRAZE_CONTEXT.test(r.title)).map((r) => r.t)) : Infinity;
     const age = Math.max(0, (now - (c.updated || now)) / DAY);
     // its own name search: outlets, creators' uploads, what people type after its name
     // (a row about it as a trend: "be ok" is in every other headline)
@@ -308,7 +327,7 @@ function crazePoints(crazes, { items, lookups, now }) {
       // (the collector's timed evidence: the headlines that name it as a trend, the page that lists it)
       // (Collector: the page's own paragraph, for the line writer; when the format was first listed, for its start)
       meta: { own: named.map((r) => ({ t: r.t, title: r.title, outlet: r.outlet || null, fam: 'gnews' })), listedBy: 'crazes', pageT: c.updated || null, newOnPage: !!c.fresh, about: c.about || null,
-        listedT: Number.isFinite(c.listedT) ? c.listedT : null } } };
+        listedT: Number.isFinite(c.listedT) ? c.listedT : null, namedT: Number.isFinite(namedT) ? namedT : null } } };
   }).sort((a, b) => b.score - a.score || a.title.localeCompare(b.title)).slice(0, CRAZE_MAX);
 }
 

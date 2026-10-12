@@ -515,6 +515,65 @@ const YOUTUBE_OUTLET = /^(?:youtube|youtu\.be|(?:www\.|m\.)?youtube\.com|twitch|
  *   politics   a politics search that is no entertainment search, or headlines that give the name an office
  *   celebrity  any other person: a given name first, a role word before the name in two headlines ("rapper Lucki"), a performer's page
  */
+/**
+ * The things people look for under a name, by what they type after it: each { key, noun, asked (what a search says), told (what a
+ * headline about it says) }. A meme is typed as memes or a parody and told as going viral, the internet's joke or a roast.
+ */
+const TYPED_THINGS = [
+  { key: 'memes', noun: 'memes', asked: /\b(?:memes?|parody|parodies)\b/i, told: /\b(?:memes?|parod\w+|(?:goes|went|going|gone) viral|viral|the internet|internet|roast\w*|troll(?:s|ed|ing)?|mock\w*)\b/i },
+  { key: 'ad', noun: 'ad', asked: /\b(?:ads?|commercials?|advert)\b/i, told: /\b(?:ads?|commercials?|advert)\b/i },
+  { key: 'face', noun: 'face', asked: /\bface\b/i, told: /\bface\b/i },
+  { key: 'photo', noun: 'photo', asked: /\b(?:photos?|pictures?|pics?)\b/i, told: /\b(?:photos?|pictures?|pics?)\b/i },
+];
+const TYPED_ASKED_MIN = 2;
+const TYPED_TOLD_MIN = 2;
+/**
+ * The thing a noun-less name is searched for, as a card's noun, or null: the one most of its searches (related queries, fresh
+ * completions) name, at least TYPED_ASKED_MIN of them, that TYPED_TOLD_MIN of the headlines naming it tell. Its family is its own
+ * ("typed": no claim, nothing a person is accused of), with the telling words as its pattern, so the line is a headline that says it.
+ */
+function typedThing(subject, phrases, titles) {
+  const last = subject.split(' ').slice(-1)[0];
+  const asked = [...new Set(phrases.filter((q) => q !== subject && mentions(` ${q} `, last)))];
+  const told = titles.filter((t) => mentions(hay(t), last));
+  const best = TYPED_THINGS.map((x) => ({ x, a: asked.filter((q) => x.asked.test(q)).length, n: told.filter((t) => x.told.test(t)).length }))
+    .filter((y) => y.a >= TYPED_ASKED_MIN && y.n >= TYPED_TOLD_MIN).sort((p, q) => q.a - p.a || q.n - p.n)[0];
+  if (!best) return null;
+  const f = { key: 'typed', w: 0.7, re: best.x.told, noun: () => best.x.noun, typed: best.x.key };
+  return { f, noun: best.x.noun, count: best.n, share: best.n / Math.max(1, titles.length), explained: 0, typed: true };
+}
+
+/**
+ * Whether a name's last word is a common noun in its own headlines: a dictionary's word that sentence-case headlines print in lower
+ * case right after the rest of the name, more often than they capitalise it ("Yorkshire tiger attack", "Texas flood"). A person's
+ * surname is always capitalised, whatever dictionary spells it ("Mia Goth", "Megan Fox").
+ */
+function commonTail(subject, rows) {
+  const ws = subject.split(' ');
+  if (ws.length < 2 || W.isFirstName(ws[0]) || !W.inDict(ws[ws.length - 1])) return false;
+  const lead = ws.slice(0, -1).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s-]+');
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])${lead}[\\s-]+(${ws[ws.length - 1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![\\p{L}\\p{N}])`, 'iu');
+  let lower = 0;
+  let upper = 0;
+  for (const r of rows) {
+    const title = String(r.title || '');
+    if (W.isTitleCase(title.split(/\s+/))) continue;
+    const m = title.match(re);
+    if (!m) continue;
+    if (/^\p{Ll}/u.test(m[1])) lower += 1; else upper += 1;
+  }
+  return lower >= COMMON_TAIL_MIN && lower > upper;
+}
+const COMMON_TAIL_MIN = 2;
+/** Whether a name of two words or more is a work's title in its own headlines: QUOTED_WORK_MIN of them print it whole inside quotation marks. */
+function quotedWork(subject, rows) {
+  if (!subject.includes(' ')) return false;
+  const body = subject.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s-]+');
+  const re = new RegExp(`[‘'“"]${body}[’'”"]`, 'iu');
+  return rows.filter((r) => re.test(String(r.title || ''))).length >= QUOTED_WORK_MIN;
+}
+const QUOTED_WORK_MIN = 2;
+
 function whoOf(c, ev, subject, kind, lex, roster = null) {
   const last = subject.split(' ').slice(-1)[0];
   const own = ev.rows.filter((r) => mentions(hay(r.title), last));
@@ -534,7 +593,12 @@ function whoOf(c, ev, subject, kind, lex, roster = null) {
   const roleLed = own.filter((r) => { const ws = words(r.title); const at = ws.indexOf(first); return at > 0 && TN.ROLE.has(ws[at - 1]); }).length >= ROLE_LED_MIN;
   // (a person, never an institution or a case the lexicon lists like a name: "Cornell 7", "Madonna University", "RAF Fairford incident")
   // (nor a search that ends with what was done: "asos hacked" is no name)
-  const person = !corporate && !NOT_A_PERSON.test(subject) && !R.isPlaceOrTeam(subject) && !(subject.includes(' ') && TC.PERSON_VERB.test(last)) && (TN.personLike(subject, lex) || roleLed || (subject.includes(' ') && TC.HONORIFIC.has(first)) ||
+  // (nor a place and what happened there, read as a first name and a surname: "Yorkshire tiger". Collector only, 2026-10-12: a
+  // death at a wildlife park led the page as a celebrity's drama)
+  // (nor a show or a film its own headlines put in quotes, "‘Helluva Boss’ actor ...": a work is nobody, whatever given name it
+  // opens with, and the story is its actor's. A given name that is also a city's is a person's: talk-candidates.js placeGiven)
+  const person = !corporate && !NOT_A_PERSON.test(subject) && !R.isPlaceOrTeam(subject) && !(subject.includes(' ') && TC.PERSON_VERB.test(last)) && !commonTail(subject, own) && !quotedWork(subject, own) &&
+    (TN.personLike(subject, lex) || TC.placeGiven(subject, lex) || roleLed || (subject.includes(' ') && TC.HONORIFIC.has(first)) ||
     c.wiki.some((w) => PERFORMER.test(w.desc || '') || R.ATHLETE.test(w.desc || '')) || (creator && !TC.CREATOR_ROLE.test(subject)));
   const cats = c.trends.map((t) => t.cats || []).sort((a, b) => b.length - a.length)[0] || [];
   const sporty = own.filter((r) => SPORTS_WORDS.test(r.title) || SPORT_TIER.test(r.title) || R.TEAM_RE.test(r.title) || R.GAME_RE.test(r.title)).length;
@@ -1029,6 +1093,10 @@ function pointOf(c, ctx) {
   let f = noun && noun.f;
   const subject = f ? subject0 : c.key;
   const phrases = [...c.related, ...fresh.map(keyOf), ...c.trends.map((t) => keyOf(t.keyword))];
+  // (a name its headlines give no noun is titled by the thing people type after it, worded like their search, when two of its new
+  // searches end in the same thing and two of its headlines tell it: "Susan Dell memes", "Novig ad". Collector only, 2026-10-12: a
+  // name a million people searched, with its memes in the completions and "the internet" in nine headlines, was a bare name and no row)
+  if (!f && !c.generic) { const typed = typedThing(subject, phrases, titles); if (typed) { noun = typed; f = typed.f; } }
   // the words people search with the name: its related queries, fresh completions and trend keywords
   const searched = new Set([...phrases, ...(c.parentRelated || [])].flatMap((q) => q.split(' ')));
   let { ws: tw, how } = TN.titleWords(subject, noun ? noun.noun || '' : '', f, phrases, titles, names, searched);
@@ -1977,6 +2045,13 @@ function build(ctx) {
     // "Lala Baptiste split", the same breakup told by the name nobody is called a creator for)
     else if (p.out.drama && !kept[at].out.drama && p.noun && p.noun.f && kept[at].noun && kept[at].noun.f && p.noun.f.key === kept[at].noun.f.key) {
       kept[at] = { ...p, score: kept[at].score, out: { ...p.out, heat: kept[at].out.heat } };
+    }
+    // (and a thing's card, a brand's, a shop's, an app's, with the card of the person people argue about in it: the story is searched
+    // by the person, so the person's card stands, at the pair's heat and with the bigger search shown. "Sydney Sweeney backlash"
+    // over "Novig ad", when her line names the brand. Collector only, 2026-10-12)
+    else if (p.out.drama && !kept[at].out.drama && kept[at].out.tier === 'other' && p.c && kept[at].c && kept[at].kind !== 'show' && !!p.what && contains(keyOf(p.what), kept[at].subject)) {
+      kept[at] = { ...p, score: kept[at].score, searchVolume: Math.max(kept[at].searchVolume, p.searchVolume),
+        out: { ...p.out, heat: kept[at].out.heat, signals: { ...p.out.signals, search: kept[at].out.signals.search || p.out.signals.search } } };
     }
     // (a name whose week is its memoir is one card, the memoir's, whichever of the book's old stories is searched most: "Michael
     // Douglas memoir" over an affair of 1992 its co-star trends for, at that search's heat and with that search shown)

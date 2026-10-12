@@ -1,10 +1,22 @@
 name: llm-test
 
-# An experiment, not part of the schedule: can a small open model running on the runner itself (no key, no account) write the
-# one-line summaries? Each model writes lines for one real cycle through the collector's own claim check; the results (titles and
-# lines only, as a feed carries them) go out as the single commit of the "llm-test" branch.
+# An experiment, never part of the schedule: the SAME editor pass the scheduled cycle runs (lib/editor: a card from each story's
+# dossier, held to the claim check), on this runner, against live data, once per model. One real cycle is fetched and recorded;
+# every model then writes its cards from those very replies, so the models differ and nothing else does. What comes back is the
+# single commit of the "llm-test" branch: for each model, how long a card took, how many passed the gate, and the cards that
+# passed beside the rule-built ones (titles and lines only, as a feed carries them). A card the gate refused is counted with
+# the rule that refused it and is never printed: its wording is unchecked, and this repository is public.
 on:
   workflow_dispatch:
+    inputs:
+      models:
+        description: 'Models to try, separated by spaces (as Ollama pulls them)'
+        type: string
+        default: 'hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M'
+      cards:
+        description: 'Cards asked of each model (the scheduled cycle asks at most 20)'
+        type: string
+        default: '20'
   push:
     paths:
       - '.github/llm/**'
@@ -20,10 +32,14 @@ concurrency:
 jobs:
   try:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     env:
       RESULT_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
-      MODELS: "hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M"
+      FEED_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+      MODELS: ${{ inputs.models || 'hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M' }}
+      CARDS: ${{ inputs.cards || '20' }}
+      # (the scheduled cycle's own default: its file is the one this job restores, and saves when it is missing)
+      DEFAULT_MODEL: ${{ vars.IDEAS_EDITOR_MODEL || 'hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,56 +47,87 @@ jobs:
         with:
           node-version: 26
 
-      - name: Models from the last run
-        uses: actions/cache@v4
+      - name: Names
+        run: echo "MODEL_KEY=$(printf '%s' "$DEFAULT_MODEL" | tr -c 'A-Za-z0-9._-' '-')" >> "$GITHUB_ENV"
+
+      # The state the scheduled cycles keep, read and never written back: the cards are written for the rows a real cycle lists.
+      - name: The collector's state, read only
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: state-llm-test-never-saved
+          restore-keys: state-
+
+      - name: Fetch the feed already out
+        run: bash .github/scripts/restore.sh
+
+      # Only the scheduled cycle's own model is kept in the Actions cache (a repository has 10 GB in all, and the collector's
+      # state lives there too): any other model is fetched for this job and gone with it.
+      - name: The scheduled cycle's model, from its cache
+        id: modelcache
+        continue-on-error: true
+        uses: actions/cache/restore@v4
         with:
           path: ~/.ollama/models
-          key: ollama-models-v1
+          key: editor-model-v1-${{ env.MODEL_KEY }}
 
-      - name: Install the model runner and fetch the models
+      - name: One real cycle with no model, recorded (the baseline, and the replies every model is given)
         run: |
-          curl -fsSL https://ollama.com/install.sh | sh
-          (ollama serve > ollama.log 2>&1 &)
-          for i in $(seq 1 30); do curl -sf http://127.0.0.1:11434/api/version && break; sleep 1; done
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "NOW=$NOW" >> "$GITHUB_ENV"
+          cp -R state st-start
+          cp -R out out-start
+          cp -R st-start st-base && cp -R out-start out-base
+          node collect.js --state st-base --out out-base --now="$NOW" --force --record=rec --max-requests=70 --deadline-seconds=400 > base.json 2> base.log || true
+          tail -c 400 base.json
           nproc; free -g | head -2
-          for m in $MODELS; do ollama pull "$m" || echo "could not fetch $m"; done
-          ollama list
 
-      - name: A cycle with no model (the baseline, and the state every model starts from)
-        run: |
-          node collect.js --state st-base --out out-base --max-requests=70 --deadline-seconds=400 > base.json 2> base.log || true
-          tail -c 600 base.json
-
-      - name: Which switch stops a model thinking aloud
-        run: |
-          rm -f diag.md
-          for m in $MODELS; do node .github/llm/diag.js "$m" || true; ollama stop "$m" || true; done
-          cat diag.md
-
-      - name: One cycle per model
+      - name: The same cycle once per model, through the editor pass
+        id: models
         run: |
           rm -f results.json results.md
           i=0
           for m in $MODELS; do
             i=$((i+1))
-            # each model gets its own fresh state and a whole cycle of its own (the same slot, another folder)
             start=$(date +%s)
-            IDEAS_LLM_BASE_URL=http://127.0.0.1:11434/v1 IDEAS_LLM_MODEL="$m" IDEAS_LLM_PER_CYCLE=14 IDEAS_LLM_RPM=120 \
-            IDEAS_LLM_TIMEOUT_MS=150000 IDEAS_LLM_BUDGET_MS=540000 IDEAS_LLM_DAILY=500 IDEAS_LLM_MAX_TOKENS=900 IDEAS_LLM_REASONING=none \
-              node collect.js --state "st-$i" --out "out-$i" --max-requests=70 --deadline-seconds=780 > "cycle-$i.json" 2> "cycle-$i.log"
-            code=$?
+            # (the same script the scheduled cycle starts its model with; here it may take ten minutes to fetch one)
+            MODEL_WAIT_FOR_PULL=1 GITHUB_ENV=model-$i.env GITHUB_OUTPUT=model-$i.out bash .github/scripts/model.sh "$m" "$(( start + 600 ))"
+            ready=$(grep -c '^ready=true' model-$i.out || true)
+            loaded=$(( $(date +%s) - start ))
+            cp -R st-start "st-$i" && cp -R out-start "out-$i"
+            code=none
+            if [ "$ready" = "1" ]; then
+              # the recorded replies of the baseline cycle, the same instant, the same state: only the model is new.
+              # (EVAL_LLM lets a replayed cycle call a model; its cache is a scratch folder of this job)
+              env $(grep -v '^$' model-$i.env | xargs) EVAL_LLM=1 EVAL_LLM_CACHE="$PWD/llm-cache-$i" IDEAS_EDITOR_CARDS="$CARDS" IDEAS_EDITOR_BUDGET_MS=1800000 IDEAS_EDITOR_TIMEOUT_MS=150000 \
+                IDEAS_EDITOR_TRACE="$PWD/cards-$i.jsonl" \
+                node collect.js --state "st-$i" --out "out-$i" --replay rec --now="$NOW" > "cycle-$i.json" 2> "cycle-$i.log"
+              code=$?
+            fi
             end=$(date +%s)
-            echo "exit $code after $((end-start))s"; tail -c 400 "cycle-$i.json"
-            node .github/llm/report.js "$m" out-base "out-$i" "cycle-$i.json" "$((end-start))" "cycle-$i.log" "$code"
-            ollama stop "$m" || true
+            echo "$m: ready $ready, loaded in ${loaded}s, exit $code, $((end-start))s in all"
+            node .github/llm/report.js "$m" out-base "out-$i" "cycle-$i.json" "cards-$i.jsonl" "$((end-start))" "$loaded" "$code"
+            ollama stop "$m" >/dev/null 2>&1 || true
+            # (a model that is not the scheduled cycle's own is not kept: the cache holds one)
+            if [ "$m" != "$DEFAULT_MODEL" ]; then ollama rm "$m" >/dev/null 2>&1 || true; fi
           done
           cat results.md >> "$GITHUB_STEP_SUMMARY" || true
+          # (the cache is saved only with the scheduled cycle's own model in it: an empty folder under its key would send every later cycle to fetch it)
+          if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qxF "$DEFAULT_MODEL"; then echo "keep=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Keep the scheduled cycle's model, when this job had to fetch it
+        if: always() && steps.modelcache.outputs.cache-hit != 'true' && steps.models.outputs.keep == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.ollama/models
+          key: editor-model-v1-${{ env.MODEL_KEY }}
 
       - name: Publish the results as the single commit of the llm-test branch
         run: |
           set -euo pipefail
-          [ -f results.md ] || { echo "# Local model line-writing test" > results.md; echo "No model produced a result; see the job log." >> results.md; echo "[]" > results.json; }
-          tmp="$(mktemp -d)"; cp results.md results.json "$tmp/"; [ -f diag.md ] && cp diag.md "$tmp/"; cd "$tmp"
+          [ -f results.md ] || { echo "# The editor pass on the runner" > results.md; echo "No model produced a result; see the job log." >> results.md; echo "[]" > results.json; }
+          tmp="$(mktemp -d)"; cp results.md results.json "$tmp/"; cd "$tmp"
           git init -q -b llm-test && git add -A
           git -c user.name="ideas-collector" -c user.email="ideas-collector@users.noreply.github.com" commit -q -m "llm test $(date -u +%Y-%m-%dT%H:%MZ)"
           git push -q -f "$RESULT_REMOTE" llm-test

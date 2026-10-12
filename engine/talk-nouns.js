@@ -46,9 +46,13 @@ const FAMILIES = [
   // (a slap on camera is searched as the slap: "JohnWhatsGoingOn slap")
   { key: 'fight', w: 0.95, sensitive: 'violence', re: /\b(?:fight|fights|fighting|brawl|brawls|punch|punched|punches|slap|slaps|slapped|slapping|altercation|scuffle|melee)\b/i,
     noun: (s) => (/slap/i.test(s) ? 'slap' : 'fight') },
-  { key: 'argument', w: 0.9, re: /\b(?:spat|blowup|blow-up|heated exchange|exchange|argument|shouting match|outburst|tirade|tantrum|rant|meltdown|confrontation|sideline)\b/i,
+  // (collector only, 2026-10-12: someone losing their temper at a person in the room is an outburst whatever verb the headline picks,
+  // "erupts at", "explodes on", "rages at", "loses his cool"; and one at a heckler is searched as the heckler, "<name> heckler".
+  // Six headlines of a creator shouting down a heckler at a panel had no noun, so the card was titled by the organiser's apology)
+  { key: 'argument', w: 0.9, re: /\b(?:spat|blowup|blow-up|heated exchange|exchange|argument|shouting match|outburst|tirade|tantrum|rant|meltdown|confrontation|sideline|hecklers?|heckled|heckling|(?:erupts?|erupted|explodes?|exploded|rages?|raged|snaps?|snapped) (?:at|on)|(?:loses|lost|losing) (?:his|her|their) (?:cool|temper)|(?:goes|went) off on)\b/i,
     // (a confrontation is told as one: "blowup" is the card's word only where the headlines' is a blowup or an outburst on a sideline)
-    noun: (s) => ({ spat: 'spat', rant: 'rant', tirade: 'rant', tantrum: 'tantrum', meltdown: 'meltdown', outburst: 'outburst', sideline: 'sideline blowup', confrontation: 'confrontation' }[s.toLowerCase()] || 'blowup') },
+    noun: (s) => (/^heckl/i.test(s) ? 'heckler' : /^(?:erupt|explod|rage|snap|los|goes off|went off)/i.test(s) ? 'outburst' :
+      { spat: 'spat', rant: 'rant', tirade: 'rant', tantrum: 'tantrum', meltdown: 'meltdown', outburst: 'outburst', sideline: 'sideline blowup', confrontation: 'confrontation' }[s.toLowerCase()] || 'blowup') },
   // (a claim of menace: "Chris Brown accused of death threats, stalking by ex")
   { key: 'threats', w: 0.9, sensitive: 'crime', re: /\b(?:death threats?|threats|stalking|stalked|harassment|harassing|harassed)\b/i,
     noun: (s) => (/death/i.test(s) ? 'death threats' : /stalk/i.test(s) ? 'stalking claims' : /harass/i.test(s) ? 'harassment claims' : 'threats') },
@@ -101,6 +105,9 @@ const FAMILIES = [
   // (a person cancelled, not a concert: "Ed Sheeran concerts cancelled because of bad weather" is no ban)
   { key: 'quit', w: 0.85, re: /\b(?:quits|quit|quitting|banned|ban|(?<!(?:concerts?|shows?|tour|gigs?|dates?|events?|series|season|games?|match|flights?|tickets?)\s(?:(?:gets?|got|is|was|were|are|been|being)\s)?)cancell?ed|fired|suspended|suspends|suspension|removed|dropped by|steps down|stepping down|disqualified|disqualification|defaulted|ejected)\b/i,
     noun: (s) => (/quit|step/i.test(s) ? 'exit' : /disqualif|defaulted/i.test(s) ? 'disqualification' : /ejected/i.test(s) ? 'ejection' : /fir(?:ed|ing)|removed|dropped/i.test(s) ? 'firing' : /suspen/i.test(s) ? 'suspension' : /cancel/i.test(s) ? 'cancellation' : 'ban') },
+  // (collector only, 2026-10-12: a retirement announced is what a name's week is about and had no noun: twenty headlines of a creator
+  // retiring from the ring made no card. Its own family: off the field for a creator or a celebrity, sports news for an athlete)
+  { key: 'retirement', w: 0.85, re: /\b(?:retires?|retired|retiring|retirement)\b(?! (?:home|plan|plans|fund|funds|account|accounts|savings|age|community|village|benefits?|income|party))/i, noun: () => 'retirement' },
   { key: 'knockout', w: 0.8, re: /\b(?:knockouts?|kos)\b/i, noun: () => 'knockouts' },
   { key: 'response', w: 0.35, re: /\b(?:responds?|response|reacts?|breaks? (?:his |her |their )?silence|speaks out|addresses|calls out|hits back|fires back|denies|denied)\b/i,
     noun: () => 'response' },
@@ -124,7 +131,7 @@ const SPORTS_TALK = new Set(['allegations', 'arrest', 'death', 'stabbing', 'atta
 // the nouns people argue about, the kind the list leads with when they are a person's (IDEAS-SPEC "Top 20": "Kai Cenat allegations"): a
 // claim, an arrest, a lawsuit, a feud, a backlash, an apology, a split, a leak, a fight, a blowup, a rumour, a ban or a firing
 const DRAMA_FAMS = new Set(['allegations', 'arrest', 'lawsuit', 'feud', 'backlash', 'apology', 'split', 'leak', 'fight', 'attack', 'stabbing', 'argument', 'rumors', 'quit',
-  'threats', 'scam', 'remarks', 'hoax', 'tears']);
+  'threats', 'scam', 'remarks', 'hoax', 'tears', 'retirement']);
 // families whose card adds the denial when a title carries one
 const DENIABLE = new Set(['allegations', 'rumors', 'lawsuit', 'arrest', 'attack', 'leak', 'fight', 'stabbing', 'threats']);
 // families that are claims about a person: the "what" must report them ("accused", "allegations", "claims", "reportedly")
@@ -783,6 +790,8 @@ function caseMap(titles) {
  * A name as its titles spell it ("richard e grant" -> "Richard E. Grant", "kai cenat" -> "Kai Cenat"): sentence-case titles first, an
  * initial with its full stop over one without; else a name's words capitalised ("East of Eden"), a plain phrase only at its start.
  */
+const CAPS_NAME_MAX = 5;
+const CAPS_NAME_MIN = 3;
 function nameSurface(name, titles) {
   // (a name spelt with an apostrophe inside is still the name: "Da'Vinchi" for "davinchi")
   const pat = new RegExp(`(?<![\\p{L}\\p{N}])${name.split(' ').map((w) => w.split('').map((ch) => ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[’\']?')).join('[\\s.-]+')}\\.?(?![\\p{L}\\p{N}])`, 'iu');
@@ -803,6 +812,12 @@ function nameSurface(name, titles) {
   const dotted = (f) => (/\b\p{Lu}\.\s/u.test(f) ? 1 : 0);
   const best = [...forms.entries()].map(([f, n]) => [f.replace(/\.$/, (d) => (/\b\p{L}\.$/u.test(f) ? d : '')), n])
     .sort((a, b) => dotted(b[0]) - dotted(a[0]) || b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  // (a short one-word name most headlines print in capitals, among words they do not shout, is spelt in capitals: "KSI", never
+  // the "Ksi" of one headline about something else. Collector only, 2026-10-12)
+  if (!name.includes(' ') && name.length <= CAPS_NAME_MAX && !W.inDict(name)) {
+    const shouted = titles.filter((t) => { const m = t.match(pat); return !!m && m[0] === m[0].toUpperCase() && /\p{Lu}/u.test(m[0]) && /\p{Ll}{3,}/u.test(t.replace(pat, ' ')); });
+    if (shouted.length >= CAPS_NAME_MIN && shouted.length > 2 * (best ? best[1] : 0)) return shouted[0].match(pat)[0].replace(/\.$/, '');
+  }
   if (best && best[1] >= 0.5) return best[0];
   if (plainName) return name;
   const ws = name.split(' ');

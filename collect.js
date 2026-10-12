@@ -659,7 +659,9 @@ async function runCycle(opts) {
 
     // ---- step 6, lines (G): at most 6 model calls, 60 s in all; a line is shown as the model's only when the claim check passes it ----
     // (no calls offline or in a replay, unless a test hands the model's transport in; a line written before is still read from its cache)
-    const llm = opts.offline || ((opts.replay || opts.transport) && !opts.llmCall) ? null : LLM.configOf(env);
+    // (a replayed benchmark day may call one when EVAL_LLM=1, every reply kept on disk: lib/llm.js cachedCall, eval/README.md)
+    const evalLlm = !!opts.replay && !opts.llmCall && LLM.evalOn(env);
+    const llm = opts.offline || ((opts.replay || opts.transport) && !opts.llmCall && !evalLlm) ? null : LLM.configOf(env);
     if (llm && llm.keyIgnored) log(`[lines] IDEAS_LLM_API_KEY is set and ${llm.host} takes no key: it is not sent`);
     // (the page laid out once each row's status and start are known: what is still going leads, what is fading follows. lib/desk.js `order`)
     // (a row whose "fading" is not said, a young story or one with a turn inside the last day and a half, is still going: the
@@ -681,10 +683,12 @@ async function runCycle(opts) {
     let lined = { lines: new Map(), casing: new Map(), stats: { asked: 0, calls: 0, passed: 0, failedCheck: 0, unanswered: 0, shown: 0, headlinesChanged: 0, off: null } };
     try {
       lined = await LW.writeLines({ db, meta, t, rowsByAudience: laidOut, isEarly: (row) => { const c = cycleState.trends.get(row.id); return !!c && Object.values(c.early || {}).some(Boolean); },
-        lex: built.lex, config: llm, ...(opts.llmCall ? { call: opts.llmCall } : {}), ...(opts.llmWait ? { wait: opts.llmWait } : {}), log });
+        lex: built.lex, config: llm, ...(opts.llmCall ? { call: opts.llmCall } : evalLlm ? { call: LLM.cachedCall(env) } : {}), ...(opts.llmWait ? { wait: opts.llmWait } : {}), log,
+        // (what an editor's dossier is built from, lib/editor: the store's searches, the cycle's clock, the start the series measured)
+        store, nowMs, measured: (row) => { const c = cycleState.trends.get(row.id); return c ? { startedAt: c.next.startedAt, startedPrecision: c.next.startedPrecision } : null; } });
     } catch (e) { log(`[lines] the writer failed, every line stays its headline: ${e.message}`); }
     for (const [id, w] of lined.lines) if (w.drop) log(`[lines] "${(Object.values(rowsByAudience).flat().find((r) => r.id === id) || {}).title || id}" left out: ${w.drop}`);
-    const linedRows = Object.fromEntries(Object.entries(LW.applyLines(rowsByAudience, lined.lines, lined.casing)).map(([a, rows]) => [a, orderOf(a, DESK.respellLines(rows))]));
+    const linedRows = Object.fromEntries(Object.entries(LW.applyLines(rowsByAudience, lined.lines, lined.casing)).map(([a, rows]) => [a, orderOf(a, DESK.advise(DESK.respellLines(rows)))]));
     lap('lines');
 
     // ---- step 7: the feed, validated ----

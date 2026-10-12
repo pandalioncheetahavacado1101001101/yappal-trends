@@ -32,6 +32,7 @@ const FRESH_TREND_MIN_VOLUME = 200;
 const CANDIDATE_MAX = 240; // names evaluated a run, by prior demand
 // seats a source keeps among the evaluated names, whatever the Trends names' priors (the week's biggest press, Reddit and Wikipedia
 // stories carry no search of their own: "Chris Hansen", "Candace Owens", "Ted Kaczynski")
+const CREATOR_SEATS = 120;
 const CANDIDATE_RESERVE = { drama: 80, press: 25, reddit: 30, wiki: 15, wikitop: 12, related: 10, wikiclimb: 8 };
 // and among the names searched each refresh: the strongest by prior first, then these seats, then the names with demand of their own
 // (a 20K+ search in any category, a page read 10x, a press story in 20+ outlets: "nolan wells", "shivon zilis", "avengers endgame"),
@@ -508,13 +509,26 @@ function titleCaseNames(title, lex) {
  * and a place or a two-letter word after it ("Joe Rogan US"). Never a place, a team, initials or an institution ("Arizona State",
  * "Laguna Beach", "TMZ NYP").
  */
+/**
+ * A given name that is also a city's is still a person's where the corpus prints the two words as one name and the second is nobody's
+ * place and no dictionary's word: "Sydney Sweeney", "Brooklyn Beckham", never "Sydney Harbour" or "Austin Texas" (nor, by the name
+ * alone, a surname a dictionary spells: "Austin Butler" still needs a headline that gives him a role).
+ * Collector only, 2026-10-12: three outlets' backlash headlines led with such a name and made no candidate, and no person.
+ */
+function placeGiven(name, lex) {
+  const ws = String(name || '').split(' ');
+  if (ws.length !== 2) return false;
+  const [first, last] = ws;
+  return R.PLACES.has(first) && !R.PLACES.has(last) && !W.inDict(last) && !PLACE_TAIL.has(last) && !PERSON_VERB.test(last) && !!lex && !!lex.names && lex.names.has(name);
+}
 function personName(run, lex) {
   const ws = run.split(' ');
   while (ws.length > 1 && (TN.ROLE.has(ws[0]) || CREATOR_ROLE.test(ws[0]))) ws.shift();
   while (ws.length > 2 && (R.PLACES.has(ws[ws.length - 1]) || ws[ws.length - 1].length <= 2 || PERSON_VERB.test(ws[ws.length - 1]))) ws.pop();
   const n = ws.join(' ');
   const last = ws[ws.length - 1];
-  if (ws.length < 2 || ws.length > 3 || R.isPlaceOrTeam(n) || ws.every((w) => w.length <= 3) || ws.some((w) => w.length < 2 || (R.PLACES.has(w) && !W.isFirstName(w))) ||
+  const cityGiven = placeGiven(n, lex);
+  if (ws.length < 2 || ws.length > 3 || R.isPlaceOrTeam(n) || ws.every((w) => w.length <= 3) || ws.some((w) => w.length < 2 || (R.PLACES.has(w) && !W.isFirstName(w) && !cityGiven)) ||
     ws[0].length <= 2 || PLACE_TAIL.has(last) || PERSON_VERB.test(last)) return null;
   // (the corpus's own names count when they open with a word no dictionary spells: "Dakota Harper")
   const given = W.isFirstName(ws[0]) || (HONORIFIC.has(ws[0]) && !W.inDict(last)) || (!!lex && !W.inDict(ws[0]) &&
@@ -739,6 +753,10 @@ function candidates({ trends, wiki, wikiTop, items, now, lex, lookups, audience,
   const picked = new Set();
   // (the drama names' seats are theirs whichever source named them first: a small search the drama headlines lead with is one of them)
   for (const [from, n] of Object.entries(CANDIDATE_RESERVE)) sorted.filter((c) => (from === 'drama' ? !!c.drama : c.from === from)).slice(0, n).forEach((c) => picked.add(c));
+  // (a creator the drama headlines lead with is never cut for seats: the list leads with creators, and on a busy day the eighty
+  // seats went to names with bigger searches while a charged influencer two outlets and two boards told was never weighed at all.
+  // Collector only, 2026-10-12)
+  sorted.filter((c) => !!c.drama && !!c.creator).slice(0, CREATOR_SEATS).forEach((c) => picked.add(c));
   // (and the roster's creators the creators' posts name: a few seats of their own)
   sorted.filter((c) => c.listed).slice(0, ROSTER_LOOKUPS).forEach((c) => picked.add(c));
   for (const c of sorted) { if (picked.size >= CANDIDATE_MAX) break; picked.add(c); }
@@ -813,6 +831,6 @@ const LOOKUP_DRAMA = 20;
 const LOOKUP_DRAMA_STARS = 8;
 
 
-module.exports = { candidates, lookupNames, dramaLookupNames, relatedCandidates, dramaCandidates, dramaName, dramaNames, calledCreator, rosterIn, sameHandle, PERSON_VERB, CREATOR_ROLE, CREATOR_PRESS, HONORIFIC, leadName, keyOf, hay, mentions, genericKey, catWeight, searchScore, CREATOR_REL, LEAGUE_KW,
+module.exports = { placeGiven, candidates, lookupNames, dramaLookupNames, relatedCandidates, dramaCandidates, dramaName, dramaNames, calledCreator, rosterIn, sameHandle, PERSON_VERB, CREATOR_ROLE, CREATOR_PRESS, HONORIFIC, leadName, keyOf, hay, mentions, genericKey, catWeight, searchScore, CREATOR_REL, LEAGUE_KW,
   AUDIENCE_GEO_W, audienceOf, geoWeight, homeGeos, forAudience,
   DAY, WINDOW_DAYS, WIKI_MIN_VIEWS, WIKI_SUSTAIN_VIEWS, BURST_MIN_OUTLETS, REDDIT_TOP_RANK, REDDIT_WEEK_RANK, CREATOR_SUBS };
