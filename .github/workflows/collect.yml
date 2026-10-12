@@ -22,15 +22,42 @@ concurrency:
 jobs:
   cycle:
     runs-on: ubuntu-latest
+    # Not raised for the model: a job longer than the 15 minutes between two schedules would let cycles pile up behind one
+    # another. The editor is given what is left of this job instead (EDITOR_UNTIL below), and what it has not written waits a cycle.
     timeout-minutes: 14
     env:
-      # The line writer needs no model: every line is composed from its own source sentences and held to the claim check.
-      # An OpenAI-compatible endpoint may be named in the VARIABLE IDEAS_LLM_BASE_URL (with IDEAS_LLM_MODEL); none is set by default.
-      IDEAS_LLM_BASE_URL: ${{ vars.IDEAS_LLM_BASE_URL }}
-      IDEAS_LLM_MODEL: ${{ vars.IDEAS_LLM_MODEL }}
+      # THE EDITOR MODEL: a small open model served on this runner itself (no key, no account; .github/scripts/model.sh).
+      # It writes each card from the story's own dossier and every card is held to the claim check before it is shown.
+      # Gemma 4 E4B by default. Measured on this kind of runner (4 cores) on a 100-token question: Qwen3.5-4B 6.3 s (and it
+      # worded an accusation nobody made), Gemma 9.7 s and Qwen3.5-9B 11.7 s (both right). A card is a longer question and a
+      # longer answer than that: twenty cards of the 9B do not fit what a 14-minute job has left, so the default is the faster
+      # of the two that were right, and the editor's own time budget, not a count, decides how many cards a cycle writes
+      # (the rest wait a cycle; a card is written once per change of its story). The VARIABLE IDEAS_EDITOR_MODEL names another
+      # (hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M); IDEAS_EDITOR_OFF=1 runs every cycle with no model at all.
+      EDITOR_MODEL: ${{ vars.IDEAS_EDITOR_MODEL || 'hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M' }}
+      EDITOR_OFF: ${{ vars.IDEAS_EDITOR_OFF }}
+      # An OpenAI-compatible endpoint of the owner's choosing may be named instead in the VARIABLES IDEAS_LLM_BASE_URL and
+      # IDEAS_LLM_MODEL: then no model is started here. None is set by default.
+      OWN_ENDPOINT: ${{ vars.IDEAS_LLM_BASE_URL }}
+      OWN_MODEL: ${{ vars.IDEAS_LLM_MODEL }}
+      # The editor's budget: twenty first asks and five minutes a cycle at most, a minute and a half for one card, and never
+      # past the job's own clock (IDEAS_EDITOR_UNTIL, set when the job starts).
+      IDEAS_EDITOR_CARDS: 20
+      IDEAS_EDITOR_BUDGET_MS: 300000
+      IDEAS_EDITOR_TIMEOUT_MS: 90000
+      IDEAS_EDITOR_MAX_TOKENS: 320
       FEED_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
       FRESH: ${{ inputs.cold_start && '--fresh' || '' }}
     steps:
+      # The job's clock: the model must be answering four and a half minutes in or the cycle runs without it; the editor stops
+      # asking a little over eleven minutes in; the rest is the feed's (publish, the state's health, the state's cache).
+      - name: The job's clock
+        run: |
+          now=$(date +%s)
+          echo "MODEL_BY=$((now + 270))" >> "$GITHUB_ENV"
+          echo "IDEAS_EDITOR_UNTIL=$((now + 680))" >> "$GITHUB_ENV"
+          echo "MODEL_KEY=$(printf '%s' "$EDITOR_MODEL" | tr -c 'A-Za-z0-9._-' '-')" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -50,6 +77,34 @@ jobs:
       - name: Fetch the feed already out
         run: bash .github/scripts/restore.sh
 
+      # The model file (several GB) is kept in the Actions cache under the model's own name and is restored in about a minute.
+      # A job that finds none runs its cycle with no model, fetches the file behind it and saves it at the end: one cycle
+      # later the model is there. Nothing here can fail the job: a step that does not finish in time or does not work leaves
+      # the cycle to run with no model.
+      - name: Restore the editor model
+        id: modelcache
+        if: env.EDITOR_OFF != '1' && env.OWN_ENDPOINT == ''
+        continue-on-error: true
+        timeout-minutes: 4
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.ollama/models
+          key: editor-model-v1-${{ env.MODEL_KEY }}
+
+      - name: Start the editor model
+        id: model
+        if: env.EDITOR_OFF != '1' && env.OWN_ENDPOINT == ''
+        continue-on-error: true
+        timeout-minutes: 6
+        run: bash .github/scripts/model.sh "$EDITOR_MODEL" "$MODEL_BY"
+
+      - name: An endpoint of the owner's own, when one is named
+        if: env.OWN_ENDPOINT != ''
+        run: |
+          echo "IDEAS_LLM_BASE_URL=$OWN_ENDPOINT" >> "$GITHUB_ENV"
+          echo "IDEAS_LLM_MODEL=$OWN_MODEL" >> "$GITHUB_ENV"
+          echo "IDEAS_EDITOR=1" >> "$GITHUB_ENV"
+
       - name: One cycle
         id: cycle
         run: |
@@ -58,10 +113,13 @@ jobs:
           code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
           cat cycle.json
-          grep -E '^\[(reseed|collect)\]' cycle.log || true
+          grep -E '^\[(reseed|collect|time)\]' cycle.log || true
+          # (what the editor did this cycle: counts only. A refused card's wording stays in the job's own log and is never published)
+          grep -cE '^\[editor\]' cycle.log | sed 's/^/editor log lines: /' || true
           # 0: a feed was published; 1: nothing new (the feed already out stands); 2: another cycle holds the lock;
           # 3 or more: the cycle failed (the engine, an error nobody foresaw, a clock that cannot be trusted)
-          if [ "$code" -ne 0 ]; then echo "--- cycle.log (exit $code) ---"; tail -n 40 cycle.log; fi
+          # (never the editor's or the writer's own lines: a card the gate refused is unchecked wording, and this log is public)
+          if [ "$code" -ne 0 ]; then echo "--- cycle.log (exit $code) ---"; grep -vE '^\[(editor|lines)\]' cycle.log | tail -n 40; fi
           if [ "$code" -ge 3 ]; then exit "$code"; fi
 
       - name: Publish the feed
@@ -82,3 +140,28 @@ jobs:
         with:
           path: state
           key: state-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # Once: the job that found no model in the cache fetched it behind its cycle (which ran with none) and keeps it here for
+      # every later one. After the state, so a slow upload costs no cycle; never a reason for the job to fail.
+      - name: Has the editor model arrived
+        id: fetched
+        if: always() && steps.model.outputs.pulled == 'started'
+        continue-on-error: true
+        timeout-minutes: 4
+        run: |
+          for _ in $(seq 1 100); do
+            if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qxF "$EDITOR_MODEL"; then echo "whole=true" >> "$GITHUB_OUTPUT"; echo "the model is whole"; exit 0; fi
+            pgrep -f "ollama pull" >/dev/null || break
+            sleep 2
+          done
+          tail -n 2 /tmp/ollama-pull.log || true
+          echo "the model is not whole yet: the next job fetches it again"
+
+      - name: Keep the editor model for the next cycles
+        if: always() && steps.fetched.outputs.whole == 'true'
+        continue-on-error: true
+        timeout-minutes: 4
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.ollama/models
+          key: editor-model-v1-${{ env.MODEL_KEY }}
