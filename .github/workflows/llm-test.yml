@@ -57,15 +57,15 @@ jobs:
           i=0
           for m in $MODELS; do
             i=$((i+1))
-            ollama list | grep -q "$(echo "$m" | cut -d: -f1-2 | sed 's|hf.co/||')" || { echo "skipping $m (not fetched)"; continue; }
-            cp -R st-base "st-$i"; rm -f "st-$i/lock"; cp -R out-base "out-$i"
+            # each model gets its own fresh state and a whole cycle of its own (the same slot, another folder)
             start=$(date +%s)
             IDEAS_LLM_BASE_URL=http://127.0.0.1:11434/v1 IDEAS_LLM_MODEL="$m" IDEAS_LLM_PER_CYCLE=14 IDEAS_LLM_RPM=120 \
-            IDEAS_LLM_TIMEOUT_MS=150000 IDEAS_LLM_BUDGET_MS=540000 IDEAS_LLM_DAILY=500 IDEAS_LLM_REASONING=none \
-              node collect.js --state "st-$i" --out "out-$i" --now="$(date -u -d '+16 minutes' +%Y-%m-%dT%H:%M:%SZ)" --max-requests=20 --deadline-seconds=700 > "cycle-$i.json" 2> "cycle-$i.log" || true
+            IDEAS_LLM_TIMEOUT_MS=150000 IDEAS_LLM_BUDGET_MS=540000 IDEAS_LLM_DAILY=500 \
+              node collect.js --state "st-$i" --out "out-$i" --max-requests=70 --deadline-seconds=780 > "cycle-$i.json" 2> "cycle-$i.log"
+            code=$?
             end=$(date +%s)
-            tail -c 500 "cycle-$i.json"; grep -iE "line|llm|model" "cycle-$i.log" | tail -n 12 || true
-            node .github/llm/report.js "$m" out-base "out-$i" "cycle-$i.json" "$((end-start))"
+            echo "exit $code after $((end-start))s"; tail -c 400 "cycle-$i.json"
+            node .github/llm/report.js "$m" out-base "out-$i" "cycle-$i.json" "$((end-start))" "cycle-$i.log" "$code"
             ollama stop "$m" || true
           done
           cat results.md >> "$GITHUB_STEP_SUMMARY" || true
