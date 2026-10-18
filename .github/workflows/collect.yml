@@ -1,6 +1,47 @@
 name: collect
 
-# One cycle of the collector every 15 minutes (off the hour, when GitHub's schedule is least delayed).
+# WHAT THIS WORKFLOW DOES: one cycle of the collector about every 15 minutes, on a real quarter-hour cadence.
+#
+# GitHub's cron fires only about half of its slots (the real interval was about 30 minutes), so every run dispatches the run
+# after it, and the cron stays as a watchdog. The expected behaviour, in order:
+#
+#   1. A run starts one of three ways: dispatched by the run before it (the chain: inputs.chain is true), by the cron below
+#      (the watchdog) or by hand from the Actions page (inputs.chain false).
+#   2. "gate" (seconds; no concurrency group): a WATCHDOG run that finds any other run of this workflow queued or in progress
+#      ends at once with nothing done: the chain is alive. A chained or hand-started run always goes on. So the watchdog never
+#      queues up behind a live chain, and a dispatched run waiting its turn is never cancelled by it (GitHub keeps at most
+#      one waiting run per concurrency group and cancels the older waiting one when another arrives).
+#   3. "cycle" (at most 14 minutes; concurrency group "collect", never cancelled in progress): the collector's cycle exactly as
+#      before: restore the state, start the editor model, one cycle, publish the feed, save the state. A run that arrives
+#      while another holds the group WAITS for it. Last, its ledger line (below).
+#   4. "next" (at most 16 minutes; after "cycle", and only when the cycle SUCCEEDED: a cycle that published, found nothing new
+#      or found the lock held is a success; one that failed, exit 3 or more, or hit the 14-minute cap is not): computes the
+#      next quarter-hour (:00, :15, :30, :45), sleeps until 60 seconds before it (14 minutes at most, wall time on this runner),
+#      and dispatches the next run with "gh workflow run collect.yml" and the built-in GITHUB_TOKEN (GitHub lets that token
+#      start a workflow_dispatch run; permissions "actions: write" below). Every dispatch lands a minute before a quarter-hour,
+#      so a run is always queued, running or sleeping here, every watchdog run ends at its gate, and the cron and the chain
+#      never both run a cycle. (Until 2026-10-19 "next" ran whatever came of the cycle and dispatched AT ONCE whenever the
+#      quarter-hour was over four minutes off: a failed cycle never saves its state, so its successor restored the last good
+#      state, sent the full network cycle again, failed again and dispatched again, ten or twelve times an hour, with no end
+#      until somebody set IDEAS_CHAIN to "off". Now a failed cycle ends the chain, and the cron restarts it within a slot or
+#      two, the old cadence.)
+#      It dispatches NOTHING when: the cycle did not succeed (above); this run was not started by schedule or dispatch (never
+#      from a push); the repository VARIABLE IDEAS_CHAIN is "off" (the hard stop: set it and the chain ends within one run,
+#      the cron goes on as before; unset it and the next cron run that fires starts the chain again); or another run of this
+#      workflow is already queued or in progress (that run carries the chain: never two chains). A run cancelled by hand runs
+#      no "next" (its cycle did not succeed): the next cron run that fires starts the chain again, unless IDEAS_CHAIN is "off".
+#   5. The cron stays as the watchdog. A fired slot that finds the chain alive costs one gate job of a few seconds and shows as
+#      a green run of one job. A chain broken by anything (a failed cycle, a cancelled run, an API error, GitHub's own outage)
+#      is restarted by the next cron run that does fire.
+#
+# THE LEDGER: every run that reaches its cycle appends ONE JSON line to ledger.jsonl at the root of the feed branch, beside
+# v1/ (.github/scripts/ledger.sh, ledger.js): { slot, started, published, rows, requests, modelCards, seconds, code, by, run }.
+# Lines older than 7 days are dropped. A day's lead time (published minus slot) and its real cadence can then be read from the
+# branch alone, with no server. Nothing in it is private: instants and counts only. The feed under v1/ is untouched by it.
+#
+# EXPECTED, once it runs: the cycle job starts within a minute of each quarter-hour; its publish lands 8 to 13 minutes after
+# its slot; the cycle job never runs twice at once; the Actions list shows a chained run per quarter-hour and, between them,
+# the watchdog's short runs.
 on:
   schedule:
     - cron: '7,22,37,52 * * * *'
@@ -10,20 +51,48 @@ on:
         description: 'Start from nothing on purpose: do not read the history back from the feed already out'
         type: boolean
         default: false
+      chain:
+        description: 'Set by the run before this one (the chain). Leave it off when starting a run by hand'
+        type: boolean
+        default: false
 
+# contents: the feed branch. actions: "gh workflow run" (the chain) and "gh run list" (the gate).
 permissions:
   contents: write
+  actions: write
 
-# Never two cycles at once; a late one waits its turn instead of being dropped.
-concurrency:
-  group: collect
-  cancel-in-progress: false
+env:
+  # how this run was started: the ledger records it, and the gate and the chain decide by it
+  STARTED_BY: ${{ (github.event_name == 'schedule' && 'schedule') || (inputs.chain && 'chain') || 'hand' }}
 
 jobs:
-  cycle:
+  # Seconds, outside the concurrency group: is this run needed? (.github/scripts/chain.sh gate)
+  gate:
     runs-on: ubuntu-latest
-    # Not raised for the model: a job longer than the 15 minutes between two schedules would let cycles pile up behind one
-    # another. The editor is given what is left of this job instead (EDITOR_UNTIL below), and what it has not written waits a cycle.
+    timeout-minutes: 3
+    outputs:
+      go: ${{ steps.look.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is this run needed
+        id: look
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash .github/scripts/chain.sh gate
+
+  cycle:
+    needs: gate
+    if: needs.gate.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    # Never two cycles at once; a run that arrives while another holds the group waits its turn instead of being dropped.
+    concurrency:
+      group: collect
+      cancel-in-progress: false
+    # Not raised for the model: the next run is dispatched after this job ends (the "next" job below), so a longer job would push
+    # the chain off its quarter-hour. The editor is given what is left of this job instead (EDITOR_UNTIL below), and what it has
+    # not written waits a cycle.
     timeout-minutes: 14
     env:
       # THE EDITOR MODEL: a small open model served on this runner itself (no key, no account; .github/scripts/model.sh).
@@ -54,6 +123,7 @@ jobs:
       - name: The job's clock
         run: |
           now=$(date +%s)
+          echo "STARTED=$now" >> "$GITHUB_ENV"
           echo "MODEL_BY=$((now + 270))" >> "$GITHUB_ENV"
           echo "IDEAS_EDITOR_UNTIL=$((now + 680))" >> "$GITHUB_ENV"
           # (the cycle's own deadline, thirteen minutes in: tied to the job's clock, not to when the cycle starts, so a slow model
@@ -130,6 +200,7 @@ jobs:
           if [ "$code" -ge 3 ]; then exit "$code"; fi
 
       - name: Publish the feed
+        id: publish
         if: steps.cycle.outputs.code == '0'
         run: bash .github/scripts/publish-feed.sh
 
@@ -147,6 +218,19 @@ jobs:
         with:
           path: state
           key: state-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # The run's one line on the feed branch (the ledger at the top of this file): inside the concurrency group, so it never
+      # races the next run's publish. Never a reason for the job to fail.
+      - name: The ledger line
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          # (the job's own start, from its clock above: the line's `started`, `slot` and `seconds` are all measured from it)
+          LEDGER_STARTED: ${{ env.STARTED }}
+          LEDGER_PUBLISHED: ${{ steps.publish.outcome == 'success' }}
+          LEDGER_CODE: ${{ steps.cycle.outputs.code }}
+        run: bash .github/scripts/ledger.sh
 
       # Once: the job that found no model in the cache fetched it behind its cycle (which ran with none) and keeps it here for
       # every later one. After the state, so a slow upload costs no cycle; never a reason for the job to fail.
@@ -172,3 +256,24 @@ jobs:
         with:
           path: ~/.ollama/models
           key: editor-model-v1-${{ env.MODEL_KEY }}
+
+  # The chain (.github/scripts/chain.sh next): after the cycle, and told how it went (CYCLE_RESULT: a cycle that failed or hit its
+  # cap dispatches nothing, and the cron restarts the chain). Outside the concurrency group, so the run it dispatches can start
+  # its own cycle the moment this one's is over. The sleep is wall time on this runner: until a minute before the next
+  # quarter-hour, 14 minutes at most, inside the 16 the job is given.
+  next:
+    needs: [gate, cycle]
+    if: always() && needs.gate.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dispatch the next run at the next quarter-hour
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CHAIN_REF: ${{ github.ref_name }}
+          IDEAS_CHAIN: ${{ vars.IDEAS_CHAIN }}
+          CYCLE_RESULT: ${{ needs.cycle.result }}
+        run: bash .github/scripts/chain.sh next

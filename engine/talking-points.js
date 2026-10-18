@@ -139,7 +139,7 @@ const SF = require('./story-focus');
 const { outletKey, contains } = require('./util');
 
 const { words } = W;
-const { candidates, relatedCandidates, lookupNames, leadName, keyOf, hay, mentions, catWeight, searchScore, homeGeos, audienceOf, CREATOR_REL, DAY, WINDOW_DAYS,
+const { candidates, relatedCandidates, lookupNames, leadName, keyOf, hay, mentions, namesKey, catWeight, searchScore, homeGeos, audienceOf, CREATOR_REL, DAY, WINDOW_DAYS,
   WIKI_MIN_VIEWS, WIKI_SUSTAIN_VIEWS, BURST_MIN_OUTLETS, REDDIT_TOP_RANK, REDDIT_WEEK_RANK, CREATOR_SUBS } = TC;
 const { workOf, crossoverOf } = TW;
 const { crazePoints, crazeTitle, wordPoints, momentPoints, memePoints, kymMemes, heatNumber } = TX;
@@ -269,19 +269,28 @@ function evidenceOf(c, { items, lookups, now }) {
   const gn = (r) => ({ title: TN.cleanHeadline(r.title, r.publisher), t: r.t, outlet: r.publisher || 'Google News', fam: 'gnews', url: r.url, searched: true,
     ...(TS.FAR_DOMAIN.test(r.publisherUrl || '') ? { far: true } : {}) });
   // (the week's search, and for the creators' world's biggest stories the last two days' newest-first: "Gorgeous Doll" on day five)
-  const news = [...((look.tpnews && look.tpnews.rows) || []), ...((look.tprecent && look.tprecent.rows) || [])].map(gn);
+  // (a creator known by one word a dictionary spells or a given name, "sketch", "destiny", "ninja": every headline attached to the
+  // name is held to the rule a post is held to, talk-candidates.js namesKey, the name search's own answers too (a search for
+  // "sketch" answers with every SNL sketch). Any other name is matched as before: a two-word name wherever it stands, a place or
+  // a thing searched by one word, "paris", "tiger", and a name search's answers whole, since the search matched the article if not
+  // the headline. Collector only, 2026-10-19: a streamer's row was filled with a comedian's story)
+  const strictName = (!!c.creator || !!c.native || !!c.listed) && TC.isStrictKey(c.key);
+  const named = (title, creatorText = false) => !strictName || namesKey(title, c.key, { creatorText });
+  // (a text about creators: a creators' board, a clip chart's row, an upload, the creators' beat)
+  const creatorText = (i) => i.fam === 'reddit' || i.beat === true || TC.CREATOR_PRESS.test(i.outlet || '') || YOUTUBE_OUTLET.test(i.outlet || '') || /^(?:twitch|kick)$/i.test(i.outlet || '');
+  const news = [...((look.tpnews && look.tpnews.rows) || []), ...((look.tprecent && look.tprecent.rows) || [])].map(gn).filter((r) => named(r.title));
   // (a Reddit, press or Wikipedia name the talking points have not searched yet and the store hardly names, the moments' story
   // searches for it: "Chris Hansen"; a trend's searches, or the store's own rows, already tell its story)
   const tk = TS.talkKey(c.key);
-  const ownRows = items.filter((i) => mentions(i.h, c.key)).length;
+  const ownRows = items.filter((i) => mentions(i.h, c.key) && named(i.title, creatorText(i))).length;
   const story = look.tpnews || c.trends.length || ownRows >= STORY_OWN_MAX ? [] : [...lookups.entries()].filter(([k, l]) => k.startsWith(`story-${tk}`) && l.deep && l.deep.rows)
-    .flatMap(([, l]) => l.deep.rows).map(gn).filter((r) => mentions(hay(r.title), c.key));
-  const own = items.filter((i) => mentions(i.h, c.key)).map((i) => ({ title: i.title, t: i.t, outlet: i.outlet, fam: i.fam, sub: i.sub, rankDay: i.rankDay,
+    .flatMap(([, l]) => l.deep.rows).map(gn).filter((r) => named(r.title));
+  const own = items.filter((i) => mentions(i.h, c.key) && named(i.title, creatorText(i))).map((i) => ({ title: i.title, t: i.t, outlet: i.outlet, fam: i.fam, sub: i.sub, rankDay: i.rankDay,
     rankWeek: i.rankWeek, ...(Number.isFinite(i.rankToday) ? { rankToday: i.rankToday } : {}), url: i.url, ...(i.far ? { far: true } : {}), ...(i.beat ? { beat: true } : {}) }));
   // (and what the other names' searches found about this one: a whole name of two words or more, or a handle no dictionary spells)
   // (for a name the drama headlines lead with and nobody searches by the tens of thousands: a searched name's own results tell its story)
   const whole = !!c.drama && !c.trends.some((t) => t.volume >= WAVE_SEARCH_MAX) && (c.key.split(' ').length >= OTHERS_NAME_WORDS || !W.inDict(c.key));
-  const others = whole ? newsIndexOf(lookups).filter((r) => r.k !== `talk-${tk}` && mentions(r.h, c.key)).map((r) => ({ title: r.title, t: r.t, outlet: r.outlet, fam: r.fam,
+  const others = whole ? newsIndexOf(lookups).filter((r) => r.k !== `talk-${tk}` && mentions(r.h, c.key) && named(r.title)).map((r) => ({ title: r.title, t: r.t, outlet: r.outlet, fam: r.fam,
     url: r.url, searched: true, ...(r.far ? { far: true } : {}) })) : [];
   const seen = new Set();
   const rows = [...news, ...story, ...own, ...others].filter((r) => r.t >= now - WINDOW_DAYS * DAY && r.t <= now + DAY).filter((r) => {
@@ -1662,7 +1671,7 @@ function postLine(ev, subject, f, lex) {
   // (an arrest or a charge is never told by a post alone: one outlet says so too, or there is no line)
   if (f.key === 'arrest' && !outletSays(ev, f, last)) return null;
   const posts = ev.rows.filter((r) => r.fam === 'reddit' && TS.isCreatorBoard(r.sub) && Number.isFinite(postRank(r)) &&
-    words(r.title).slice(0, POST_LEAD_WORDS).includes(last) && TN.says(r.title, f) && !POST_PLAY.test(r.title)).sort((a, b) => postRank(a) - postRank(b) || a.t - b.t);
+    words(r.title).slice(0, POST_LEAD_WORDS).includes(last) && TN.says(r.title, f) && !TN.othersSaid(r.title, f, subject) && !POST_PLAY.test(r.title)).sort((a, b) => postRank(a) - postRank(b) || a.t - b.t);
   for (const r of posts) {
     const text = r.title.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/[.…!\s]+$/, '').replace(/\s+/g, ' ').trim();
     const n = text.split(' ').length;
@@ -1682,7 +1691,9 @@ function postNoun(ev, near) {
     postRank(r) < POST_NOUN_RANK && mentions(hay(r.title), last) && !POST_PLAY.test(r.title)).sort((a, b) => postRank(a) - postRank(b) || a.t - b.t);
   for (const r of posts) {
     // (an arrest or a charge only a post tells is no card: one outlet's headline says it too)
-    const x = TN.familiesIn(r.title).filter((y) => TN.DRAMA_FAMS.has(y.f.key) && (y.f.key !== 'arrest' || outletSays(ev, y.f, last)))
+    // (nor a noun the post gives to someone else: "<name> released his findings on the allegations facing <other>" breaks no story
+    // of the name's allegations. Collector only, 2026-10-19)
+    const x = TN.familiesIn(r.title).filter((y) => TN.DRAMA_FAMS.has(y.f.key) && (y.f.key !== 'arrest' || outletSays(ev, y.f, last)) && !TN.othersNoun(r.title, y, near))
       .sort((a, b) => b.f.w - a.f.w || a.f.key.localeCompare(b.f.key))[0];
     if (x) return { f: x.f, noun: x.f.noun(x.surface), count: 1, share: 1 / Math.max(1, ev.rows.length), explained: 0, rank: postRank(r) };
   }
@@ -1871,6 +1882,10 @@ function lists(p, now, ctxLex) {
   // (a noun no headline of the name says, only its searches ("country music" searched with "trailer"), under a line that does not say
   // it either, is no card: a title is never surer than its line. Collector only)
   if (noun.count === 0 && !TN.says(p.what, noun.f)) return false;
+  // (and never a noun the line gives to someone else: the name in "<name> <noun>" is who faces the backlash or whom the allegations
+  // face, never a name the line only mentions. "Senate candidate Tobin Hale faces backlash over Mara Voss ties" is no "Mara Voss
+  // backlash"; "Coffeezilla reports on allegations facing a crypto founder" no "Coffeezilla allegations". Collector only, 2026-10-19)
+  if (p.what && TN.othersSaid(p.what, noun.f, p.subject)) return false;
   if (p.kind === 'sports' && !TN.SPORTS_TALK.has(noun.f.key)) return false;
   // an event's performances and speeches are nobody's: the talking point is who gave one ("Madonna VMAs performance", never "VMAs 2026
   // performance")
@@ -2150,7 +2165,7 @@ function lookupNamesAll(ctx) {
 const MEME_LOOKUP_AT = 20;
 const MEME_LOOKUP_MAX = 6;
 
-module.exports = { build, lists, nativePair, candidates, relatedCandidates, lookupNames: lookupNamesAll, dramaLookupNames: (ctx) => TC.dramaLookupNames({ ...ctx, items: ctx.items.map((i) => ({ ...i, h: hay(i.title) })) }), recentNames, evidenceOf, pointOf, leadName, wordPoints, momentPoints, crazePoints, crazeTitle, WINDOW_DAYS,
+module.exports = { build, lists, nativePair, postNoun, postLine, candidates, relatedCandidates, lookupNames: lookupNamesAll, dramaLookupNames: (ctx) => TC.dramaLookupNames({ ...ctx, items: ctx.items.map((i) => ({ ...i, h: hay(i.title) })) }), recentNames, evidenceOf, pointOf, leadName, wordPoints, momentPoints, crazePoints, crazeTitle, WINDOW_DAYS,
   wikiDaysIndex, wikiCurveOf, momentumOf, makesClaim, hoaxOf, POST_PLAY, POST_HEDGE,
   // (the collector's own rules, held by test/honesty.test.js)
   arrestStated, arrestGiven, arrestOf, whoseArrest, claimedOf, admissionNoun, eventText, dropKicker, ARREST_OVER };

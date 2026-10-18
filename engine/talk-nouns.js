@@ -257,8 +257,15 @@ function othersNoun(title, x, name) {
   const own = (w) => nw.includes(words(w)[0] || '');
   const after = title.slice(x.index + x.surface.length);
   const before = title.slice(0, x.index);
-  const against = after.match(/^[’'"”]?\s+[Aa]gainst\s+(?:\p{Ll}+\s+){0,2}(\p{Lu}[\p{L}\p{N}’'.-]*)/u);
+  // (the one the noun is said to face or be made against, up to two small words on: "allegations facing Tobin Hale", "backlash
+  // grows against Tobin Hale". Collector only, 2026-10-19: a roster name that only released findings on someone else's allegations
+  // took the title)
+  const against = after.match(/^[’'"”]?\s+(?:\p{Ll}+\s+){0,2}(?:[Aa]gainst|facing|faced by|aimed at|directed at|levell?ed at)\s+(?:\p{Ll}+\s+){0,2}(\p{Lu}[\p{L}\p{N}’'.-]*)/u);
   if (against && !own(against[1].replace(/[’']s$/, ''))) return true;
+  // (and whoever a headline says faces, sparks or draws the noun owns it, up to two small words on: "Senate candidate Tobin Hale
+  // faces backlash over Mara Voss ties" is Tobin Hale's backlash, and Mara Voss is only mentioned. Never a word of the name's own)
+  const faces = before.match(/(\p{Lu}[\p{L}\p{N}’'.-]*)\s+(?:faces?|facing|faced|sparks?|sparked|sparking|draws?|drew|drawing|gets?|got|getting|receives?|received|hit with|met with|under)\s+(?:[\p{Ll}-]+\s+){0,2}$/u);
+  if (faces && !own(faces[1].replace(/[’']s$/, ''))) return true;
   const owner = OWNED.has(x.f.key) ? before.match(/(\p{Lu}[\p{L}\p{N}.-]*)[’']s\s+(?:[\p{Ll}-]+\s+){0,2}$/u) : null;
   if (owner && !own(owner[1])) return true;
   // (what the name did to someone else: "Kai Cenat banned a viewer", "Sabrina Carpenter cancelled her Paris shows")
@@ -268,6 +275,17 @@ function othersNoun(title, x, name) {
 const OWNED = new Set(['arrest', 'death', 'apology', 'split', 'lawsuit', 'sentencing', 'verdict', 'injury', 'quit', 'romance']);
 const DID_TO = /^\s+(?:an?|the|his|her|their|its|him|them|two|three|several|some|all|every|\d+|\p{Lu}[\p{L}\p{N}’'.-]*)\b/u;
 const OF_THEIRS = /^\s+(?:\p{L}+[’']s\s+)?(?:friend|brother|sister|father|mother|dad|mom|son|daughter|wife|husband|cousin|uncle|aunt|ex|fan|man|woman|teen)\b/iu;
+/**
+ * Whether a text gives a family's noun to someone other than the name (othersNoun, on the family's first real match): a line that
+ * says "<Other> faces backlash over <name> ties" or "allegations facing <Other>" is no line of the name's "<name> backlash" card.
+ * False when the text does not say the noun at all.
+ */
+function othersSaid(text, f, name) {
+  if (!f || !name) return false;
+  const s = String(text || '');
+  const m = saidIn(s, f);
+  return !!m && othersNoun(s, { f, surface: m[0], index: m.index, at: words(s.slice(0, m.index)).length }, name);
+}
 
 /** Word positions where a name starts in a word list. */
 function nameAt(ws, name) {
@@ -1139,6 +1157,7 @@ function proxyLed(line, last, context) {
 }
 // a wrongdoing claim (never a rumour about who someone is)
 const WRONGDOING = /\b(?:grop\w*|groom\w*|abuse\w*|assault\w*|battery|rape\w*|harass\w*|cheat\w*|fraud|stole|theft)\b/i;
+const OTHERS_NOUN_PENALTY = 6;
 const NAMED_ASIDE = (name) => new RegExp(`\\b(?:amid|after|following|over)\\s+(?:the\\s+)?(?:\\S+\\s+){0,3}?${name.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^\\p{L}\\p{N}]+')}(?:['’]s)?\\s+(?:\\S+\\s+){0,2}?(?:controvers\\w*|uproar|backlash|drama|saga|row|scandal|feud|furore|fallout)\\b`, 'iu');
 
 function whatOf(rows, subject, family, peakT, lex, context = [], { rumor = false, debug = null, stronger = null, now = 0 } = {}) {
@@ -1167,10 +1186,14 @@ function whatOf(rows, subject, family, peakT, lex, context = [], { rumor = false
     let s = 0;
     const fams = familiesIn(line);
     const own = fams.find((x) => family && x.f.key === family.key);
-    if (own) {
+    // (the noun said of someone else is no account of the name's story, however near the name stands: "Senate candidate Tobin Hale
+    // faces backlash over Mara Voss ties" tells Tobin Hale's backlash. Collector only, 2026-10-19)
+    const theirs = !!own && othersNoun(line, own, subject);
+    if (own && !theirs) {
       s += 3;
       if (nameAt(lw, last).some((i) => Math.abs(own.at - i) <= 5)) s += 1;
     }
+    if (theirs) s -= OTHERS_NOUN_PENALTY;
     // a follow-up about something else ("... sister accuses ..." under a death) says less; a claim's two sides (the lawsuit, the
     // response) are the same story
     // (and a backlash over the noun is the noun's own story: "Eminem fans threaten boycott after Christian album collab")
@@ -1299,7 +1322,7 @@ function whatOf(rows, subject, family, peakT, lex, context = [], { rumor = false
   // (and the title's own words when a usable line has them: "lesbian" for "Candace Owens lesbian allegations")
   const ctxWords = context.filter((w) => !R.PLACES.has(w));
   const says = (x) => ctxWords.every((w) => words(x.line).some((y) => y === w || y.startsWith(w)));
-  const fits = (x) => !family || (reviews ? REVIEWS_WHOLE.test(x.line) : saysIt(x.line, family));
+  const fits = (x) => !family || (reviews ? REVIEWS_WHOLE.test(x.line) : saysIt(x.line, family) && !othersSaid(x.line, family, subject));
   const best0 = (ctxWords.length && scored.find((x) => fits(x) && says(x) && x.s >= 0)) || scored.find(fits);
   // (a show's facet no fit line tells well, "East of Eden ending" under explainers and interviews: the show's own plainest line)
   const best = best0 && best0.s >= 0 ? best0 : family && SHOW_FACETS.has(family.key) ? scored.find((x) => x.s >= SHOW_FALLBACK_MIN) || best0 : best0;
@@ -1413,11 +1436,15 @@ function recaseName(line, name, surface) {
   if (!line || !surface || !/\p{Lu}/u.test(surface)) return line;
   // (never a name a hyphen carries on: "Robert Kelker" inside "Robert Kelker-Kelly")
   const pat = new RegExp(`(?<![\\p{L}\\p{N}])${name.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s.-]+')}\\.?(?![\\p{L}\\p{N}]|-\\p{L})`, 'giu');
-  const out = line.replace(pat, (m) => (m.endsWith('.') && !surface.endsWith('.') ? `${surface}.` : surface));
+  // (a one-word name a dictionary spells is respelt only where the line prints it as a name, with its capital or opening a sentence:
+  // "during the SNL sketch" under a streamer called Sketch keeps its small word. Collector only, 2026-10-19)
+  const strict = !name.includes(' ') && (W.inDict(name) || W.isFirstName(name));
+  const opens = (at) => at === 0 || /[.!?:]['’"”]?\s+['‘"“]?$/.test(line.slice(0, at));
+  const out = line.replace(pat, (m, at) => (strict && !/^\p{Lu}/u.test(m) && !opens(at) ? m : m.endsWith('.') && !surface.endsWith('.') ? `${surface}.` : surface));
   return capLine(out, surface);
 }
 
-module.exports = { SAID_FAMS, SAID_RE, saidTopic, postTopic, RECALL, REVIEWS, MEMOIR, RELATION, OFFICIAL, FAMILIES, FAMILY, SPORTS_TALK, DRAMA_FAMS, DENIABLE, CLAIMS, FACETS, EXPLAINED, QUESTION, familiesIn, othersNoun, nameAt, nounOf, nameRuns, personLike, subjectOf, relationOf, personalNear,
+module.exports = { SAID_FAMS, SAID_RE, saidTopic, postTopic, RECALL, REVIEWS, MEMOIR, RELATION, OFFICIAL, FAMILIES, FAMILY, SPORTS_TALK, DRAMA_FAMS, DENIABLE, CLAIMS, FACETS, EXPLAINED, QUESTION, familiesIn, othersNoun, othersSaid, nameAt, nounOf, nameRuns, personLike, subjectOf, relationOf, personalNear,
   titleWords, caseTitle, caseMap, nameSurface, cleanHeadline, whatOf, recaseName, DENIAL, ROLE, WRONGDOING, MAJOR, REPORTED, reported,
   saidIn, says: saysIt, HOAX, POST_CLAIM, statesClaim, reportedClaim, denialClause, capLine, sentenceLine,
   // (collector only: whose a death or an arrest is, read from the headline itself)

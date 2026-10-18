@@ -608,7 +608,7 @@ async function runCycle(opts) {
       .map((r) => ({ t: r.t, title: r.title, outlet: r.publisher || r.label || null }));
     const isBeat = (outlet) => TC.CREATOR_PRESS.test(outlet) || TN.MAJOR.test(outlet);
     // (the desk never holds a list back: should it fail on a row nobody foresaw, that audience's rows go out as the engine made them)
-    const deskOf = (a) => { const rows = ROWS.rowsOf(a, built.byAudience[a], built); try { return DESK.edit(rows, { recent, now: nowMs, isBeat, lex: built.lex }); } catch (e) { log(`[desk] ${a}: failed, the engine's rows stand: ${e.message}`); return { rows, notes: [] }; } };
+    const deskOf = (a) => { const rows = ROWS.rowsOf(a, built.byAudience[a], built); try { return DESK.edit(rows, { recent, now: nowMs, isBeat, lex: built.lex, roster: obs.roster }); } catch (e) { log(`[desk] ${a}: failed, the engine's rows stand: ${e.message}`); return { rows, notes: [] }; } };
     const edited = Object.fromEntries(opts.audiences.map((a) => [a, deskOf(a)]));
     // the creators' side (lib/native-desk.js): attached to the rows the engine lists for the same people, and, where two kinds of
     // creator-native signal agree on a creator no row tells yet, a row of its own for the series to tag Early
@@ -699,7 +699,9 @@ async function runCycle(opts) {
     const lag = lags.length ? [...lags].sort((a, b) => a - b)[Math.floor(lags.length / 2)] : DEFAULT_LAG_SECONDS;
     const stale = [...hosts.entries()].filter(([, row]) => !B.hostOpen(row, clock())).map(([host]) => HOST_NAMES[host] || host).sort();
     const generatedAt = Math.max(clock(), t);
-    const feeds = FEED.build({ t, generatedAt, cycle: cycleState, rowsByAudience: linedRows, roster: inputs.roster, db, sourcesAt, nextExpectedAt: t + SLOT_SECONDS + lag, stale });
+    // (related: Google Trends' related queries of each entry, for the sheet, D4: the store keeps them beside the entry, the engine's rows do not carry them)
+    const related = (key) => { const tr = store.talkTrends && store.talkTrends.get(key); return tr && Array.isArray(tr.related) ? tr.related : []; };
+    const feeds = FEED.build({ t, generatedAt, cycle: cycleState, rowsByAudience: linedRows, roster: inputs.roster, db, sourcesAt, nextExpectedAt: t + SLOT_SECONDS + lag, stale, related });
     lap('feed');
     const good = opts.audiences.filter((a) => feeds.lists[a] && !feeds.problems[a].length);
     for (const a of opts.audiences) {

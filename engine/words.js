@@ -407,6 +407,14 @@ function attachMentions(groups, items, outletKeyOf, explains) {
   for (const g of groups.values()) {
     g.seqs = uniqSeqs([...g.surfaces.keys()].map(termSeq));
     const plain = g.seqs.every((s) => s.length === 1) && [...g.surfaces.keys()].every((s) => !X.isCoinage(W.words(s)[0] || '') || /^\d+$/.test(s));
+    // (a phrase of everyday words is as plain as one word: "crash out", "state property". It counts in a title about words or
+    // trends, or one that shares a word with the entry's own sources; a quote-like catchphrase of three words or more is
+    // distinctive on its own, as the term-exact search reads it (words-answers.js sinceOf). Collector only, 2026-10-19: a
+    // meme's outlets were car crashes and tax news)
+    const ordinary = !plain && [...g.surfaces.keys()].every((sf) => { const ws = W.words(sf); return ws.length >= 2 && !(ws.length >= 3 && X.QUOTE_LIKE.test(sf)) && ws.every((w) => !X.isCoinage(w) || /^\d+$/.test(w)); });
+    const vocab = ordinary ? entryVocab(g) : null;
+    // (and a headline that quotes the phrase uses it as the word: "Zelda fans obsessed with Dark Link's “aura farming” in ...")
+    const quoted = ordinary ? new RegExp(`[‘“"']\\s*(?:${[...g.surfaces.keys()].map((sf) => W.words(sf).join('\\W+')).join('|')})\\W*[’”"']`, 'i') : null;
     // "67% Indian Travellers Find European Cruising Appealing" is a figure, not the meme
     const numbers = [...g.surfaces.keys()].filter((s) => /^\d+$/.test(s));
     const figure = numbers.length ? new RegExp(numbers.map((s) => `\\$\\s?${s}\\b|\\b${s}(?:\\s*%|\\s*(?:percent|per cent|million|billion|k)\\b)`).join('|'), 'i') : null;
@@ -414,6 +422,7 @@ function attachMentions(groups, items, outletKeyOf, explains) {
       if (g.rowKeys.has(it.key) || !g.seqs.some((s) => hasSeq(seq, s))) continue;
       // a plain word ("aura", "polyester", "67") counts only where the title is about words or trends
       if (plain && !CONTEXT_FOR_PLAIN_WORD.test(it.title)) continue;
+      if (ordinary && !CONTEXT_FOR_PLAIN_WORD.test(it.title) && !quoted.test(it.title) && !W.words(it.title).some((w) => vocab.has(w))) continue;
       if (figure && figure.test(it.title)) continue;
       const surface = [...g.surfaces.keys()][0];
       // a dictionary story that names the word ("Looksmaxxing, Vibe Coding and Rickroll enter Merriam-Webster") is a dictionary addition

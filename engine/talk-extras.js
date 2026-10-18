@@ -455,6 +455,9 @@ const EXPLAINER_NAME = /^what(?:['’]s| is| are) (?:the )?['‘"“]([^'’"”
 const MEME_TAIL = /\s+(?:ai|a i|trend|trends|meme|memes|edit|edits|challenge|filter)$/;
 const ROUNDUP = /^the weekly meme roundup:\s*(.+?)(?:,?\s+and more)?$/i;
 const MEME_WORD = /\b(?:trend|meme|memes|edits?|challenge)\b/i;
+// what a headline about a meme says of it, beyond its name: it is a meme, a trend, a thing of TikTok or the internet
+const MEME_CONTEXT = /\b(?:memes?|trends?|trending|tiktok|tiktoks?|viral|challenge|edits?|slang|meaning|means|explained|internet|brainrot|know your meme|catchphrase|format|sound|audio)\b/i;
+const MEME_VOCAB_MIN = 4;
 const FILMABLE_MEME = /\b(?:trend|challenge|dance|filter|edits?|lip-?sync|format|clip|sound|audio)\b/i;
 const KYM_ENTRY_URL = /^https?:\/\/(?:www\.)?knowyourmeme\.com\/memes\/[^/?#]+\/?$/;
 const NOT_ENTRY = /\?|^the weekly meme roundup|\bexplained\b|^\d+ years\b|^why |^what /i;
@@ -528,14 +531,21 @@ function memePoints({ items, lookups, now, lex, moments }) {
   for (const m of kymMemes(items, now)) {
     const keys = [...m.keys].filter((k) => k && k.length >= 4);
     const names = (t) => { const h = ` ${words(t).join(' ')} `; return keys.some((k) => h.includes(` ${k} `)); };
+    // (a headline is about the meme when, beside its name, it says meme, trend, TikTok, viral ... or a word of the entry's own
+    // description: the words of a meme's name are everyday words, and a name search for them answers with everything that carries
+    // them. "State property" found forty outlets' tax news, "Crash out" would count car crashes. Collector only, 2026-10-19)
+    const vocab = new Set(words(String(m.desc || '')).filter((w) => w.length >= MEME_VOCAB_MIN && !W.STOP.has(w) && !W.GENERIC.has(w) && !keys.some((k) => k.split(' ').includes(w)) && !MEME_CONTEXT.test(w)));
+    const quoted = new RegExp(`[‘“"']\\s*(?:${keys.map((k) => k.split(' ').join('\\W+')).join('|')})\\W*[’”"']`, 'i');
+    const fits = (t) => MEME_CONTEXT.test(String(t || '')) || quoted.test(String(t || '')) || words(t).some((w) => vocab.has(w));
     // (and every result of its own name search, which matched the article if not the headline: "Disturbing truth behind mysterious
     // influencer" is a Jean Phil story)
     const own = lookups ? lookups.get(`talk-${keyOf(searchName(m)).replace(/[^a-z0-9]/g, '')}`) : null;
     const ownRows = ((own && own.tpnews && own.tpnews.rows) || []).map((r) => ({ title: r.title, t: r.t, outlet: r.publisher }))
-      .filter((r) => r.t >= now - MEME_SIGNAL_DAYS * DAY && r.t <= now + DAY);
-    const news = [...new Map([...ownRows, ...press.filter((r) => names(r.title))].map((r) => [keyOf(r.title), r])).values()];
+      .filter((r) => r.t >= now - MEME_SIGNAL_DAYS * DAY && r.t <= now + DAY && fits(TN.cleanHeadline(r.title, r.outlet)));
+    const news = [...new Map([...ownRows, ...press.filter((r) => names(r.title) && fits(TN.cleanHeadline(r.title, r.outlet)))].map((r) => [keyOf(r.title), r])).values()];
+    // (the outlets behind it are only those headlines: a bare phrase search never feeds the count)
     const outlets = new Set(news.map((r) => r.outlet)).size;
-    const posts = reddit.filter((r) => names(r.title)).length;
+    const posts = reddit.filter((r) => names(r.title) && fits(r.title)).length;
     const kinds = [m.entryT || m.subT, m.explainerT, m.roundupT, outlets, posts].filter(Boolean).length;
     if (kinds < MEME_MIN_KINDS) continue;
     const newest = Math.max(m.entryT, m.subT, m.explainerT, m.roundupT, ...news.map((r) => r.t));

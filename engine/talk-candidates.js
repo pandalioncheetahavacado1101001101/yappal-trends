@@ -89,6 +89,26 @@ const keyOf = (s) => {
 };
 const hay = (title) => ` ${keyOf(title)} `;
 const mentions = (h, key) => h.includes(` ${key} `);
+/** A one-word key a dictionary spells or a given name ("sketch", "destiny", "ninja"): the strict rule below holds for it. */
+const isStrictKey = (key) => !key.includes(' ') && (W.inDict(key) || W.isFirstName(key) || key.length < 3);
+const escapeRe = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`);
+/**
+ * Whether a headline names a key, as lib/native-signals.js namedIn reads a post: a name of two words or more, or a handle no dictionary
+ * spells, wherever it stands; a strict one-word name (a dictionary word, a given name) only printed with its capital, and only where
+ * the text says streamer, YouTuber, Twitch, Kick ... or, in a text about creators (`creatorText`: a creators' board, a clip, the
+ * creators' beat), opens with it. A small dictionary word mid-headline is the word, never the name: "Shane Gillis drops F-bomb during
+ * SNL sketch" names no streamer called Sketch, "Destiny 2 players ..." no streamer called Destiny. Collector only, 2026-10-19: a
+ * streamer's row was filled with a comedian's story, and a meme's with tax news.
+ */
+function namesKey(title, key, { creatorText = false } = {}) {
+  if (!key || !mentions(hay(title), key)) return false;
+  if (!isStrictKey(key)) return true;
+  const text = String(title || '');
+  const cap = key.charAt(0).toUpperCase() + key.slice(1);
+  const printed = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(cap)}(?:['’]s)?(?![\\p{L}\\p{N}])`, 'u');
+  if (!printed.test(text)) return false;
+  return CREATOR_ROLE.test(text) || (creatorText && words(text)[0] === key);
+}
 
 /**
  * A trend keyword's name: a facet search folds into its name ("aaron rodgers wife" -> "aaron rodgers"), and a long keyword keeps the
@@ -831,6 +851,6 @@ const LOOKUP_DRAMA = 20;
 const LOOKUP_DRAMA_STARS = 8;
 
 
-module.exports = { placeGiven, candidates, lookupNames, dramaLookupNames, relatedCandidates, dramaCandidates, dramaName, dramaNames, calledCreator, rosterIn, sameHandle, PERSON_VERB, CREATOR_ROLE, CREATOR_PRESS, HONORIFIC, leadName, keyOf, hay, mentions, genericKey, catWeight, searchScore, CREATOR_REL, LEAGUE_KW,
+module.exports = { placeGiven, candidates, lookupNames, dramaLookupNames, relatedCandidates, dramaCandidates, dramaName, dramaNames, calledCreator, rosterIn, sameHandle, PERSON_VERB, CREATOR_ROLE, CREATOR_PRESS, HONORIFIC, leadName, keyOf, hay, mentions, namesKey, isStrictKey, genericKey, catWeight, searchScore, CREATOR_REL, LEAGUE_KW,
   AUDIENCE_GEO_W, audienceOf, geoWeight, homeGeos, forAudience,
   DAY, WINDOW_DAYS, WIKI_MIN_VIEWS, WIKI_SUSTAIN_VIEWS, BURST_MIN_OUTLETS, REDDIT_TOP_RANK, REDDIT_WEEK_RANK, CREATOR_SUBS };

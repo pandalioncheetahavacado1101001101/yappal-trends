@@ -30,9 +30,10 @@ const SUBS = ['drama', 'story', 'show', 'music', 'sports', 'game', 'word', 'phra
 const TOPICS = ['celebs', 'memes', 'music', 'screen', 'sports', 'beauty', 'food', 'lifeHacks', 'lifestyle', 'shopping'];
 const IDEA_KINDS = ['word', 'trend', 'story'];
 const TIMELINE_KINDS = ['start', 'chapter', 'reply', 'measure', 'latest'];
+const POST_KINDS = ['video', 'clip', 'thread'];
 const GRAPH_STEPS = [15, 30, 60, 120, 360, 1440];
 const LIMITS = { rows: 80, minRows: 5, listBytes: 120000, detailBytes: 6000, bundleBytes: 150000, title: 90, line: 200, query: 60,
-  timelineText: 120, earlyOnPage: 3, earlyInList: 12, urgent: 3, namesBytes: 60000 };
+  timelineText: 120, earlyOnPage: 3, earlyInList: 12, urgent: 3, namesBytes: 60000, posts: 3, related: 5, spread: 6 };
 // Section C, as far as a row can show it: how old an Early row, an urgent row, a spike and a flare may be, and the shortest time left
 // a start known only to the day may carry.
 const HOUR = 3600e3;
@@ -227,6 +228,30 @@ function validateDetail(detail, { bytes = 0, name = 'detail' } = {}) {
   if (!Array.isArray(detail.why) || detail.why.length > 6 || !detail.why.every((w) => isText(w, 160))) say('why: 0-6 lines');
   else if (detail.why.some((w) => /\b\d+\s+(?:creator videos?|creators have)/i.test(w))) say('why: no count of creator videos');
   if (!Array.isArray(detail.sources) || detail.sources.length > 6 || !detail.sources.every((s) => isText(s, 60))) say('sources: 0-6 outlet names');
+  // (the sheet's own fields, optional, added 2026-10-18: example posts, related searches, where it was seen)
+  if (detail.posts !== undefined) {
+    const ps = detail.posts;
+    if (!Array.isArray(ps) || ps.length > LIMITS.posts) say(`posts: 0-${LIMITS.posts} entries`);
+    else {
+      ps.forEach((p, i) => {
+        const ok = p && typeof p === 'object' && POST_KINDS.includes(p.kind) && isText(p.title, LIMITS.title) && (p.who === null || isText(p.who, 80)) && isText(p.where, 40)
+          && typeof p.url === 'string' && /^https:\/\/\S{4,500}$/.test(p.url) && (p.number === null || (isInt(p.number) && p.number >= 0)) && isInstant(p.at);
+        if (!ok) say(`posts[${i}]: { kind (video, clip, thread), title (1-${LIMITS.title}), who (string or null, never a Reddit username), where, url (https), number (integer or null), at }`);
+      });
+      if (ps.some((p, i) => i > 0 && p && ps[i - 1] && (p.number ?? -1) > (ps[i - 1].number ?? -1))) say('posts: ranked by number, the biggest first');
+      if (isInstant(detail.generatedAt) && ps.some((p) => p && isInstant(p.at) && Date.parse(p.at) > Date.parse(detail.generatedAt))) say('posts: none after generatedAt');
+    }
+  }
+  if (detail.related !== undefined && (!Array.isArray(detail.related) || detail.related.length > LIMITS.related || !detail.related.every((q) => isText(q, LIMITS.query)))) say(`related: 0-${LIMITS.related} queries of up to ${LIMITS.query} characters`);
+  if (detail.spread !== undefined) {
+    const sp = detail.spread;
+    if (!Array.isArray(sp) || sp.length < 1 || sp.length > LIMITS.spread || !sp.every((e) => e && typeof e === 'object' && isText(e.where, 40) && isInstant(e.at))) say(`spread: 1-${LIMITS.spread} entries of { where, at }`);
+    else {
+      if (sp.some((e, i) => i > 0 && Date.parse(e.at) < Date.parse(sp[i - 1].at))) say('spread: oldest first');
+      if (isInstant(detail.generatedAt) && sp.some((e) => Date.parse(e.at) > Date.parse(detail.generatedAt))) say('spread: no entry after generatedAt');
+      if (new Set(sp.map((e) => e.where)).size !== sp.length) say('spread: one name once');
+    }
+  }
   return out;
 }
 
