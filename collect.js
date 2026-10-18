@@ -685,7 +685,8 @@ async function runCycle(opts) {
       lined = await LW.writeLines({ db, meta, t, rowsByAudience: laidOut, isEarly: (row) => { const c = cycleState.trends.get(row.id); return !!c && Object.values(c.early || {}).some(Boolean); },
         lex: built.lex, config: llm, ...(opts.llmCall ? { call: opts.llmCall } : evalLlm ? { call: LLM.cachedCall(env) } : {}), ...(opts.llmWait ? { wait: opts.llmWait } : {}), log,
         // (what an editor's dossier is built from, lib/editor: the store's searches, the cycle's clock, the start the series measured)
-        store, nowMs, measured: (row) => { const c = cycleState.trends.get(row.id); return c ? { startedAt: c.next.startedAt, startedPrecision: c.next.startedPrecision } : null; } });
+        // (and this cycle's own timeline events, not yet saved: a line led by the row's newest entry reads them with the saved ones)
+        store, nowMs, measured: (row) => { const c = cycleState.trends.get(row.id); return c ? { startedAt: c.next.startedAt, startedPrecision: c.next.startedPrecision, events: c.events || [] } : null; } });
     } catch (e) { log(`[lines] the writer failed, every line stays its headline: ${e.message}`); }
     for (const [id, w] of lined.lines) if (w.drop) log(`[lines] "${(Object.values(rowsByAudience).flat().find((r) => r.id === id) || {}).title || id}" left out: ${w.drop}`);
     const linedRows = Object.fromEntries(Object.entries(LW.applyLines(rowsByAudience, lined.lines, lined.casing)).map(([a, rows]) => [a, orderOf(a, DESK.advise(DESK.respellLines(rows)))]));

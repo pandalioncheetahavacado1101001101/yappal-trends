@@ -56,6 +56,9 @@ jobs:
           now=$(date +%s)
           echo "MODEL_BY=$((now + 270))" >> "$GITHUB_ENV"
           echo "IDEAS_EDITOR_UNTIL=$((now + 680))" >> "$GITHUB_ENV"
+          # (the cycle's own deadline, thirteen minutes in: tied to the job's clock, not to when the cycle starts, so a slow model
+          # restore or a slow model start can never push the cycle past the job's cap before the feed is published and the state saved)
+          echo "CYCLE_UNTIL=$((now + 780))" >> "$GITHUB_ENV"
           echo "MODEL_KEY=$(printf '%s' "$EDITOR_MODEL" | tr -c 'A-Za-z0-9._-' '-')" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v4
@@ -109,7 +112,11 @@ jobs:
         id: cycle
         run: |
           set +e
-          node collect.js --state state --out out --deadline-seconds=600 $FRESH > cycle.json 2> cycle.log
+          # (what is left of the cycle's deadline on the job's clock, two minutes at the least: a cycle is never started with no time)
+          left=$(( CYCLE_UNTIL - $(date +%s) ))
+          [ "$left" -ge 120 ] || left=120
+          echo "cycle deadline: $left s"
+          node collect.js --state state --out out --deadline-seconds=$left $FRESH > cycle.json 2> cycle.log
           code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
           cat cycle.json

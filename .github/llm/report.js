@@ -22,7 +22,8 @@ try { stats = JSON.parse(fs.readFileSync(cycleFile, 'utf8').trim().split('\n').p
 const editor = ((stats.counts && stats.counts.lines) || {}).editor || {};
 let cards = [];
 try { cards = fs.readFileSync(cardsFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { cards = []; }
-const asked = cards.filter((c) => c.outcome !== 'kept');
+// (a story still waiting its turn when the budget ran out was never asked: counted as waiting, never as asked or unanswered)
+const asked = cards.filter((c) => c.outcome !== 'kept' && c.outcome !== 'waiting');
 const ms = asked.map((c) => c.ms).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
 const median = ms.length ? ms[Math.floor(ms.length / 2)] : null;
 // (the rules that refused, by number: "rule 5 x3". The check's own words quote the line, so they stay in the job)
@@ -52,7 +53,8 @@ for (const r of all) {
   const per = r.cardSeconds || {};
   md.push(`## ${r.name}`, '',
     `loaded in ${r.loadSeconds ?? '?'} s | asked ${r.asked} cards in ${r.calls ?? '?'} calls, ${per.all ?? '?'} s in all (median ${per.median ?? '?'} s a card, slowest ${per.slowest ?? '?'} s) | **passed the gate ${r.passed}** (${r.mended ?? 0} on the second try, ${r.reworded ?? 0} in their sentences' own words, ${r.shortened ?? 0} shortened) | refused ${r.refused} | unreadable ${r.unreadable} | unanswered ${r.unanswered} | still waiting ${r.waiting ?? '?'} | titles changed ${r.titled ?? 0} | off: ${r.off} | exit ${r.exit}`,
-    '', `at this pace a 5-minute budget writes about ${per.all && r.asked ? Math.floor(300 / (per.all / r.asked)) : '?'} cards a cycle`, '');
+    // (the pace is the calls': the seconds the pass spent in all over the calls it made, second tries included)
+    '', `at this pace a 5-minute budget writes about ${per.all && r.calls ? Math.floor(300 / (per.all / r.calls)) : '?'} cards a cycle`, '');
   if (Object.keys(r.refusedBy || {}).length) md.push(`refused for: ${Object.entries(r.refusedBy).map(([k, n]) => `${k} x${n}`).join(', ')}`, '');
   for (const p of r.pairs) {
     md.push(`- #${p.rank} **${p.model.title}**${p.model.title !== p.rule.title ? ` (was: ${p.rule.title})` : ''} [${p.seconds ?? '?'} s, try ${p.tries}${p.by && p.by !== 'as written' ? `, ${p.by}` : ''}]`, `  - rule-built: ${p.rule.line}`, `  - model: ${p.model.line}`);
