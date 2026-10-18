@@ -1,0 +1,60 @@
+[
+ {
+  "name": "hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
+  "exit": "0",
+  "seconds": 314,
+  "loadSeconds": 75,
+  "rows": 80,
+  "modelLines": 15,
+  "asked": 1,
+  "calls": 2,
+  "passed": 0,
+  "mended": 0,
+  "reworded": 0,
+  "shortened": 0,
+  "refused": 1,
+  "unreadable": 0,
+  "unanswered": 0,
+  "titled": 0,
+  "waiting": 0,
+  "off": null,
+  "cardSeconds": {
+   "median": 44.5,
+   "slowest": 44.5,
+   "all": 44
+  },
+  "refusedBy": {
+   "part 2": 1
+  },
+  "pairs": []
+ },
+ {
+  "name": "hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+  "exit": "0",
+  "seconds": 351,
+  "loadSeconds": 86,
+  "rows": 80,
+  "modelLines": 15,
+  "asked": 1,
+  "calls": 2,
+  "passed": 0,
+  "mended": 0,
+  "reworded": 0,
+  "shortened": 0,
+  "refused": 1,
+  "unreadable": 0,
+  "unanswered": 0,
+  "titled": 0,
+  "waiting": 0,
+  "off": null,
+  "cardSeconds": {
+   "median": 68.5,
+   "slowest": 68.5,
+   "all": 68
+  },
+  "refusedBy": {
+   "part 2": 1
+  },
+  "pairs": []
+ }
+]
