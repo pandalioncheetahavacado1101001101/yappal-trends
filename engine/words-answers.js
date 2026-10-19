@@ -62,6 +62,17 @@ function parseWikiBatch(replies, pairs) {
 const POS = /^={3,4} (Noun|Verb|Adjective|Adverb|Interjection|Phrase|Proverb|Idiom|Prepositional phrase|Pronoun|Particle|Contraction) ={3,4}$/;
 const SLANG_LABEL = /\b(slang|internet|neologism|gen z|gen alpha|aave|african-american vernacular|youth|incel|informal|colloquial|tiktok|gaming|twitch|lgbt|ballroom)\b/i;
 const FORM_OF = /^(plural|alternative|misspelling|present participle|past participle|simple past|past tense|third-person|obsolete|archaic|abbreviation|initialism|synonym|comparative|superlative|eye dialect)\b.*\bof\b/i;
+// a sense that is a usage note, not a meaning: Wiktionary's "&lit" line ("Used other than figuratively or idiomatically: see red,
+// flag."), a "see" cross-reference, a form-of line, a label alone. Live 2026-10-19: "Red Flag meaning | Used other than
+// figuratively or idiomatically." took row 9 of the page as a word's line. Nothing a creator can say is in it.
+const USAGE_NOTE = /^(?:used other than\b|used (?:literally|attributively)\b|see\b|only used\b|chiefly (?:in|used)\b|short for\b|clipping of\b|ellipsis of\b|synonym of\b|alternative (?:form|spelling|letter-case form|case form) of\b|(?:common |deliberate )?misspelling of\b|(?:initialism|abbreviation|acronym|contraction) of\b|(?:obsolete|archaic|dated|rare|nonstandard) (?:form|spelling) of\b|(?:plural|singular) of\b|(?:past|present) (?:tense|participle) of\b|(?:simple past|past participle|present participle|gerund) (?:tense |form )?of\b|(?:comparative|superlative) (?:form|degree) of\b|a (?:common |frequent )?misspelling\b|(?:this|the) term (?:needs|is)\b|\(?(?:non-?gloss definition|rfdef|rfe|rfv)\)?$)/i;
+/** Whether a dictionary sense is a usage note or a cross-reference rather than a meaning. */
+const usageNote = (text) => USAGE_NOTE.test(String(text || '').replace(/^\s*\((?:[^)]*)\)\s*/, '').trim());
+// a label that places a sense in a trade's own vocabulary, not the internet's: a technical definition is no trend ("Chopped:
+// Having a vehicle's height reduced by horizontal trimming of the roofline." on a US list, live 2026-10-19)
+const TECHNICAL_LABEL = /\b(?:automotive|vehicles?|motor(?:ing|sport)?|finance|financial|banking|economics|law|legal|medicine|medical|pathology|anatomy|pharmacology|chemistry|physics|mathematics|geometry|statistics|computing|programming|engineering|electronics|electrical|mechanics|nautical|aviation|aeronautics|military|botany|zoology|biology|biochemistry|genetics|geology|astronomy|architecture|construction|carpentry|masonry|cooking|culinary|printing|typography|linguistics|grammar|phonetics|music theory|cricket|baseball|golf|chess|poker|card games|bridge|knitting|sewing|textiles|agriculture|forestry|mining|metallurgy|surveying|cartography|heraldry|philately|numismatics)\b/i;
+/** Whether a sense's label puts it in a trade's vocabulary and says nothing of slang. */
+const technicalLabel = (label) => TECHNICAL_LABEL.test(String(label || '')) && !SLANG_LABEL.test(String(label || ''));
 /**
  * Wiktionary plain text -> its English senses [{ pos, label, text }]. The sense to show is the first one labelled slang/internet/etc.;
  * for a pure coinage ("gyatt") the first sense of any kind. "mewing" has a slang sense after "the act of producing a mew sound".
@@ -82,7 +93,8 @@ function parseWikt(json) {
     if (head) { head = false; continue; } // "big back (plural big backs)"
     const lm = line.match(/^\(([^)]*)\)\s*(.*)$/);
     const sense = { pos, label: lm ? lm[1] : '', text: lm ? lm[2] : line };
-    if (sense.text && !FORM_OF.test(sense.text) && !/^(synonyms?|antonyms?|coordinate terms?|see also|hypernyms?|hyponyms?|derived terms?):/i.test(sense.text)) senses.push(sense);
+    // (a usage note or a cross-reference is no sense: there is no meaning in it to show)
+    if (sense.text && !FORM_OF.test(sense.text) && !usageNote(sense.text) && !/^(synonyms?|antonyms?|coordinate terms?|see also|hypernyms?|hyponyms?|derived terms?):/i.test(sense.text)) senses.push(sense);
   }
   // "larping": only "present participle of larp" -> the lemma's page is asked next
   const lemma = (en.match(/\b(?:present participle|past participle|simple past|plural|gerund)(?: and [a-z ]+)? of ([a-z][a-z -]{1,30})\b/i) || [])[1];
@@ -123,7 +135,9 @@ function wiktMeaning(lookup, term) {
   // (what people mean by it now before what the dictionary lists first: a sense labelled internet slang, then one labelled slang,
   // then any informal one. "Crash out" read "To fall asleep from exhaustion", its first informal sense, where the word that is
   // trending is the internet one, to lose control in anger. Collector only, reviewers 2026-10-12)
-  const sense = senses.find((x) => NEW_SLANG_LABEL.test(x.label)) || senses.find((x) => /\bslang\b/i.test(x.label)) || senses.find((x) => SLANG_LABEL.test(x.label)) || (plainWord ? null : senses[0]);
+  // (and a coinage's first sense only when it is no trade's technical definition: "finance", "automotive" and the like define a
+  // term of the trade, not the word people are saying)
+  const sense = senses.find((x) => NEW_SLANG_LABEL.test(x.label)) || senses.find((x) => /\bslang\b/i.test(x.label)) || senses.find((x) => SLANG_LABEL.test(x.label)) || (plainWord ? null : senses.find((x) => !technicalLabel(x.label)) || null);
   const text = sense && X.tidyMeaning(sense.text);
   return text ? { text, quality: 3, from: 'Wiktionary' } : null;
 }
@@ -219,5 +233,5 @@ function sinceOf(feedItems, term, fetchedAt = null) {
   return { term, t: Number.isFinite(t) ? t : null, n: dates.length, recent: [...recent.values()], titles, kymTitles };
 }
 
-module.exports = { CONTEXT_FOR_PLAIN_WORD, parseWikiBatch, parseWikt, okSummary, wikiMeaning, wiktMeaning, kymPageMeanings, wikiEvidence,
-  wikiDirection, sinceOf };
+module.exports = { CONTEXT_FOR_PLAIN_WORD, SLANG_LABEL, parseWikiBatch, parseWikt, okSummary, wikiMeaning, wiktMeaning, kymPageMeanings, wikiEvidence,
+  wikiDirection, sinceOf, usageNote, technicalLabel };

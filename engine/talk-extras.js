@@ -567,7 +567,10 @@ function memePoints({ items, lookups, now, lex, moments }) {
       .map((l) => (l.match(/^.*?[.!?](?=\s|$)/) || [l])[0].replace(/[.!]+$/, ''));
     const line = [...news.filter((r) => names(r.title)).map((r) => TN.cleanHeadline(r.title, r.outlet)), ...tellings.filter((l) => names(l))]
       .map((l, i) => ({ l, i })).sort((a, b) => MEME_WORD.test(b.l) - MEME_WORD.test(a.l) || EMPTY_LINE.test(a.l) - EMPTY_LINE.test(b.l) || a.l.split(/\s+/).length - b.l.split(/\s+/).length || a.i - b.i)
-      .map((x) => x.l).find((l) => !/\?/.test(l) && !W.isTitleCase(l.split(/\s+/)) && l.split(/\s+/).length >= 6);
+      // (and the headline that stands as the line says the meme or the trend beside the name: one that only quotes the name, "‘South
+      // Park’ new episode ignores Donald Trump, spoofs ‘Backrooms’", is news of the thing itself and no meme's line. With no entry
+      // sentence and no such headline the meme has no line, and is a moment or nothing. Rule 3, 2026-10-19)
+      .map((x) => x.l).find((l) => !/\?/.test(l) && !W.isTitleCase(l.split(/\s+/)) && l.split(/\s+/).length >= 6 && MEME_CONTEXT.test(l));
     const what = memeLine(m.desc, shown) || (line ? `${line.replace(/[.!]+$/, '')}.` : null);
     // (the title's kind word is its line's: a trend where the line calls it one, "Hotel Lobby AI trend")
     const sort = /\btrends?\b/i.test(what || '') && !/\bmemes?\b/i.test(what || '') ? 'trend' : 'meme';
