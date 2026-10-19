@@ -126,6 +126,7 @@
  *   8 heat no.  0-100, smooth and never clipped (100 x (1 - e^(-score/10))): the top of the list keeps its order
  * Plain string/regex/arithmetic only, so it ports 1:1 to Swift.
  */
+const MEMO = require('./memo');
 const W = require('./wording');
 const R = require('./rules');
 const TS = require('./talk-sources');
@@ -282,15 +283,16 @@ function evidenceOf(c, { items, lookups, now }) {
   // (a Reddit, press or Wikipedia name the talking points have not searched yet and the store hardly names, the moments' story
   // searches for it: "Chris Hansen"; a trend's searches, or the store's own rows, already tell its story)
   const tk = TS.talkKey(c.key);
-  const ownRows = items.filter((i) => mentions(i.h, c.key) && named(i.title, creatorText(i))).length;
+  const mine = TC.mentioning(items, c.key).filter((i) => named(i.title, creatorText(i)));
+  const ownRows = mine.length;
   const story = look.tpnews || c.trends.length || ownRows >= STORY_OWN_MAX ? [] : [...lookups.entries()].filter(([k, l]) => k.startsWith(`story-${tk}`) && l.deep && l.deep.rows)
     .flatMap(([, l]) => l.deep.rows).map(gn).filter((r) => named(r.title));
-  const own = items.filter((i) => mentions(i.h, c.key) && named(i.title, creatorText(i))).map((i) => ({ title: i.title, t: i.t, outlet: i.outlet, fam: i.fam, sub: i.sub, rankDay: i.rankDay,
+  const own = mine.map((i) => ({ title: i.title, t: i.t, outlet: i.outlet, fam: i.fam, sub: i.sub, rankDay: i.rankDay,
     rankWeek: i.rankWeek, ...(Number.isFinite(i.rankToday) ? { rankToday: i.rankToday } : {}), url: i.url, ...(i.far ? { far: true } : {}), ...(i.beat ? { beat: true } : {}) }));
   // (and what the other names' searches found about this one: a whole name of two words or more, or a handle no dictionary spells)
   // (for a name the drama headlines lead with and nobody searches by the tens of thousands: a searched name's own results tell its story)
   const whole = !!c.drama && !c.trends.some((t) => t.volume >= WAVE_SEARCH_MAX) && (c.key.split(' ').length >= OTHERS_NAME_WORDS || !W.inDict(c.key));
-  const others = whole ? newsIndexOf(lookups).filter((r) => r.k !== `talk-${tk}` && mentions(r.h, c.key) && named(r.title)).map((r) => ({ title: r.title, t: r.t, outlet: r.outlet, fam: r.fam,
+  const others = whole ? TC.mentioning(newsIndexOf(lookups), c.key).filter((r) => r.k !== `talk-${tk}` && named(r.title)).map((r) => ({ title: r.title, t: r.t, outlet: r.outlet, fam: r.fam,
     url: r.url, searched: true, ...(r.far ? { far: true } : {}) })) : [];
   const seen = new Set();
   const rows = [...news, ...story, ...own, ...others].filter((r) => r.t >= now - WINDOW_DAYS * DAY && r.t <= now + DAY).filter((r) => {
@@ -2035,12 +2037,17 @@ function filmCard(group) {
     out: { ...lead.out, heat: heatNumber(score), signals: { ...lead.out.signals, search: searched.out.signals.search || lead.out.signals.search } } };
 }
 
+// (collector only, the speed of a build and never its result: the window's items with their words, one copy a build that every
+// audience's list reads; and Know Your Meme's memes of the week, which no audience weighs, once a build. engine/memo.js)
+const hayed = MEMO.once('hayed', (items) => items.map((i) => ({ ...i, h: hay(i.title) })));
+const memesOnce = MEMO.memo('memePoints', memePoints);
+
 /**
  * The talking points, biggest first. ctx: { trends (talk-sources rows), wiki, items ([{ title, t, outlet, fam, sub, rankDay, url }]:
  * every store row in the window, dropped and talk-only rows included), lookups (store.lookups), now, lex, words (the listed words) }.
  */
 function build(ctx) {
-  const items = ctx.items.map((i) => ({ ...i, h: hay(i.title) }));
+  const items = hayed(ctx.items);
   // (every page of Wikipedia's daily top 1000 by its words: a card's days of reading)
   const full = { ...ctx, items, wikiIndex: wikiDaysIndex(ctx.wikiLists) };
   const cands = candidates(full);
@@ -2098,7 +2105,7 @@ function build(ctx) {
   for (const m of moments) if (!taken(m)) kept.push(m);
   // (the words, crazes and the month's TikTok formats rank by their own heat: no seat holds a stale one up)
   // (Know Your Meme's memes of the week: a word "Words & trends" lists for the same meme keeps its card, at the higher heat)
-  const memes0 = memePoints(full).filter((m) => !taken(m) && !m.keys.some((k) => kept.some((x) => contains(keyOf(x.title), k))));
+  const memes0 = memesOnce({ items: full.items, lookups: full.lookups, now: full.now, lex: full.lex, moments: full.moments }).filter((m) => !taken(m) && !m.keys.some((k) => kept.some((x) => contains(keyOf(x.title), k))));
   const covers = (w, m) => m.keys.some((k) => contains(w.subject, k) || contains(k, w.subject));
   const words0 = wordPoints(ctx.words, full.items).filter((w) => !taken(w)).map((w) => {
     const m = memes0.find((x) => covers(w, x));
@@ -2144,7 +2151,7 @@ const DRAMA_EXTRA_HEAT = 12; // (a small creators' story still has its row under
  * or r/youtubedrama), strongest first: each gets a newest-first search of its last two days, where a new chapter shows first.
  */
 function recentNames(ctx) {
-  const items = ctx.items.map((i) => ({ ...i, h: hay(i.title) }));
+  const items = hayed(ctx.items);
   const cands = candidates({ ...ctx, items });
   // (and a person trending for the first time today: the last two days are the whole story, "andrew mountbatten-windsor")
   return [...cands.filter((c) => c.fresh).slice(0, RECENT_FRESH),
@@ -2165,7 +2172,7 @@ function lookupNamesAll(ctx) {
 const MEME_LOOKUP_AT = 20;
 const MEME_LOOKUP_MAX = 6;
 
-module.exports = { build, lists, nativePair, postNoun, postLine, candidates, relatedCandidates, lookupNames: lookupNamesAll, dramaLookupNames: (ctx) => TC.dramaLookupNames({ ...ctx, items: ctx.items.map((i) => ({ ...i, h: hay(i.title) })) }), recentNames, evidenceOf, pointOf, leadName, wordPoints, momentPoints, crazePoints, crazeTitle, WINDOW_DAYS,
+module.exports = { build, lists, nativePair, postNoun, postLine, candidates, relatedCandidates, lookupNames: lookupNamesAll, dramaLookupNames: (ctx) => TC.dramaLookupNames({ ...ctx, items: hayed(ctx.items) }), recentNames, evidenceOf, pointOf, leadName, wordPoints, momentPoints, crazePoints, crazeTitle, WINDOW_DAYS,
   wikiDaysIndex, wikiCurveOf, momentumOf, makesClaim, hoaxOf, POST_PLAY, POST_HEDGE,
   // (the collector's own rules, held by test/honesty.test.js)
   arrestStated, arrestGiven, arrestOf, whoseArrest, claimedOf, admissionNoun, eventText, dropKicker, ARREST_OVER };

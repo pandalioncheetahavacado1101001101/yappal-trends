@@ -1,0 +1,118 @@
+name: probe-embed
+
+# WHAT THIS WORKFLOW DOES (ios/IDEAS-SUPER.md P8): measures whether story clustering's embedder fits inside the collect job (at most
+# 30 seconds a cycle) or must run in an enrich job. On a fresh runner, like every collect job: installs Ollama (its own install
+# script, as .github/scripts/model.sh does), pulls each candidate model (nomic-embed-text and all-minilm by default), embeds 2,000
+# INVENTED headlines (.github/probe-embed/headlines.js: nobody real, nothing the collector read) in batches of 16, 64 and 256, and
+# records seconds, texts a second, memory, the cycle cost and how far apart each model holds one person's two stories.
+# With "with_editor", the editor model is restored READ ONLY from its cache (never saved here) and loaded beside the embedder, to
+# measure memory with both and embedding while the editor writes.
+#
+# The results (numbers, model names, fixed labels and one instant; never a headline) pass the probe's own guard
+# (probe.js --check) and are published as the SINGLE commit of the "probe-embed" branch: results.json and results.md, read at
+# raw.githubusercontent.com/<owner>/<repo>/probe-embed/results.md. Nothing here touches the feed, the state or any cache entry.
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'Embedding models to try, separated by spaces (as Ollama pulls them)'
+        default: 'nomic-embed-text all-minilm'
+      texts:
+        description: 'How many invented headlines to embed'
+        default: '2000'
+      with_editor:
+        description: 'Also load the editor model beside the embedder (restored read only from its cache)'
+        type: boolean
+        default: false
+  push:
+    paths:
+      - '.github/probe-embed/**'
+      - '.github/workflows/probe-embed.yml'
+
+permissions:
+  contents: write
+
+# One probe at a time; a newer one replaces a waiting one. Never the collector's group.
+concurrency:
+  group: probe-embed
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MODELS: ${{ inputs.models || 'nomic-embed-text all-minilm' }}
+      TEXTS: ${{ inputs.texts || '2000' }}
+      WITH_EDITOR: ${{ inputs.with_editor && '1' || '0' }}
+      EDITOR_MODEL: ${{ vars.IDEAS_EDITOR_MODEL || 'hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M' }}
+      PROBE_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
+      - name: The probe's own tests
+        run: node --test .github/probe-embed/test/
+
+      - name: The editor model's cache key (as collect.yml computes it)
+        if: env.WITH_EDITOR == '1'
+        run: echo "MODEL_KEY=$(printf '%s' "$EDITOR_MODEL" | tr -c 'A-Za-z0-9._-' '-')" >> "$GITHUB_ENV"
+
+      # Read only: restore, never save. The collector's cycles keep the entry exactly as it was.
+      - name: The editor model (read only)
+        if: env.WITH_EDITOR == '1'
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.ollama/models
+          key: editor-model-v1-${{ env.MODEL_KEY }}
+
+      - name: Install and start Ollama
+        id: server
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          if ! command -v ollama >/dev/null 2>&1; then
+            curl -fsSL --max-time 150 https://ollama.com/install.sh -o /tmp/ollama-install.sh
+            timeout 200 sh /tmp/ollama-install.sh > /tmp/ollama-install.log 2>&1 || { tail -n 5 /tmp/ollama-install.log; exit 1; }
+          fi
+          sudo systemctl stop ollama >/dev/null 2>&1 || true
+          pkill -x ollama >/dev/null 2>&1 || true
+          mkdir -p "$HOME/.ollama/models"
+          OLLAMA_MODELS="$HOME/.ollama/models" OLLAMA_HOST=127.0.0.1:11434 OLLAMA_KEEP_ALIVE=30m OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=3 \
+            nohup ollama serve > "$HOME/ollama.log" 2>&1 &
+          for _ in $(seq 1 30); do curl -sf --max-time 2 http://127.0.0.1:11434/api/version > /dev/null && break; sleep 1; done
+          curl -sf --max-time 2 http://127.0.0.1:11434/api/version > /dev/null || { tail -n 5 "$HOME/ollama.log"; exit 1; }
+          echo "seconds=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
+          nproc; free -m | head -2
+
+      - name: Measure
+        run: |
+          editor=""
+          if [ "$WITH_EDITOR" = "1" ]; then editor="$EDITOR_MODEL"; fi
+          node .github/probe-embed/probe.js --models "$MODELS" --texts "$TEXTS" --out probe-embed-out \
+            --install-seconds "${{ steps.server.outputs.seconds }}" ${editor:+--editor "$editor"}
+
+      - name: Show the tables
+        run: cat probe-embed-out/results.md >> "$GITHUB_STEP_SUMMARY"
+
+      # The same way probe.yml publishes: a fresh repository, one commit, force-pushed with the built-in token. The guard runs first.
+      - name: Publish the results as the single commit of the probe-embed branch
+        run: |
+          set -euo pipefail
+          REMOTE="${PROBE_REMOTE:?PROBE_REMOTE is not set}"
+          [ -f probe-embed-out/results.json ] && [ -f probe-embed-out/results.md ] || { echo "no results to publish"; exit 1; }
+          node .github/probe-embed/probe.js --check probe-embed-out/results.json
+          tmp="$(mktemp -d)"
+          cp probe-embed-out/results.json probe-embed-out/results.md "$tmp/"
+          cd "$tmp"
+          git init -q -b probe-embed
+          git add results.json results.md
+          # (an identity with no address behind it: git only needs the two fields to be set)
+          git -c user.name="ideas-probe" -c user.email="ideas-probe" commit -q -m "probe-embed $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "$REMOTE" probe-embed
+          echo "published results.md and results.json to the probe-embed branch"

@@ -5,6 +5,7 @@
  * SNL cameo"), and a one-line reported "what" with the denial when the sources carry one.
  * Plain regular expressions and word lists, so they port 1:1 to Swift.
  */
+const MEMO = require('./memo');
 const W = require('./wording');
 const R = require('./rules');
 const { contains } = require('./util');
@@ -898,8 +899,27 @@ function onlyReaction(line, subject, min = SAYS_WHAT_WORDS) {
 const SAYS_WHAT_NOT = new Set(['never', 'not', 'no', 'without', 'denies', 'refuses']);
 const REACTION_ONLY_PENALTY = 1.5;
 
+// (collector only, the speed of a build and never its result: each distinct headline, under each publisher, is cleaned once a process;
+// every story, every audience and every line reads the same few thousand headlines many times over. A string in, a string out)
+const CLEANED = new Map();
+const CLEANED_MAX = 200000;
+let cleanedSize = 0;
 /** A headline as a line: no publisher suffix, no section bar, no "WATCH:" lead, no "(VIDEO)" tail, no ": TMZ" source tag. */
 function cleanHeadline(title, publisher) {
+  if (publisher && typeof publisher !== 'string') return cleanHeadlineOf(title, publisher);
+  const text = String(title || '');
+  const under = publisher || '';
+  let byTitle = CLEANED.get(under);
+  const hit = byTitle && byTitle.get(text);
+  if (hit !== undefined) return hit;
+  const out = cleanHeadlineOf(text, publisher);
+  if (cleanedSize >= CLEANED_MAX) { CLEANED.clear(); cleanedSize = 0; byTitle = null; }
+  if (!byTitle) { byTitle = new Map(); CLEANED.set(under, byTitle); }
+  byTitle.set(text, out);
+  cleanedSize++;
+  return out;
+}
+function cleanHeadlineOf(title, publisher) {
   let s = String(title || '');
   if (publisher && s.endsWith(` - ${publisher}`)) s = s.slice(0, -(publisher.length + 3));
   s = s.replace(/\s+[|–—-]\s+[^|–—-]{2,40}$/, (m) => (/\b(?:news|com|online|magazine|daily|times|post|tv|radio|weekly|media|herald|journal|report)\b/i.test(m) ? '' : m));
@@ -1444,8 +1464,11 @@ function recaseName(line, name, surface) {
   return capLine(out, surface);
 }
 
-module.exports = { SAID_FAMS, SAID_RE, saidTopic, postTopic, RECALL, REVIEWS, MEMOIR, RELATION, OFFICIAL, FAMILIES, FAMILY, SPORTS_TALK, DRAMA_FAMS, DENIABLE, CLAIMS, FACETS, EXPLAINED, QUESTION, familiesIn, othersNoun, othersSaid, nameAt, nounOf, nameRuns, personLike, subjectOf, relationOf, personalNear,
-  titleWords, caseTitle, caseMap, nameSurface, cleanHeadline, whatOf, recaseName, DENIAL, ROLE, WRONGDOING, MAJOR, REPORTED, reported,
+module.exports = { SAID_FAMS, SAID_RE, saidTopic, postTopic, RECALL, REVIEWS, MEMOIR, RELATION, OFFICIAL, FAMILIES, FAMILY, SPORTS_TALK, DRAMA_FAMS, DENIABLE, CLAIMS, FACETS, EXPLAINED, QUESTION, familiesIn, othersNoun, othersSaid, nameAt,
+  // (collector only: nounOf, caseTitle and whatOf are asked of the same headlines for every audience's list, answered once a build;
+  // nounOf's answer holds the family itself, kept, and plain values, copied. engine/memo.js)
+  nounOf: MEMO.memo('nounOf', nounOf, { copy: (r) => (r ? { ...r } : r) }), nameRuns, personLike, subjectOf, relationOf, personalNear,
+  titleWords, caseTitle: MEMO.memo('caseTitle', caseTitle), caseMap, nameSurface, cleanHeadline, whatOf: MEMO.memo('whatOf', whatOf), recaseName, DENIAL, ROLE, WRONGDOING, MAJOR, REPORTED, reported,
   saidIn, says: saysIt, HOAX, POST_CLAIM, statesClaim, reportedClaim, denialClause, capLine, sentenceLine,
   // (collector only: whose a death or an arrest is, read from the headline itself)
   whoseDeath, ownRelation, spanAfter, actsBefore, LIVING, RELATION_HER, RELATION_HIS, onlyReaction, REACTION_SAID };

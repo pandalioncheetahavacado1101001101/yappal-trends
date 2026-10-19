@@ -8,6 +8,7 @@
  *   people Wikipedia's daily top 1000 shows read 10x their week-old level. Every name with a 20K+ search of its own is evaluated.
  * Plain string/regex/arithmetic only, so it ports 1:1 to Swift.
  */
+const MEMO = require('./memo');
 const W = require('./wording');
 const R = require('./rules');
 const TS = require('./talk-sources');
@@ -89,6 +90,24 @@ const keyOf = (s) => {
 };
 const hay = (title) => ` ${keyOf(title)} `;
 const mentions = (h, key) => h.includes(` ${key} `);
+// (collector only, the speed of a build and never its result: which items name a key, read from an index of their words, one an items
+// array, instead of every headline for every name. Exactly items.filter((i) => mentions(i.h || hay(i.title), key)), in the items'
+// order; an array is indexed once, so it and its headlines are never changed after)
+const WORD_INDEX = new WeakMap();
+const hayOf = (i) => i.h || hay(i.title);
+function mentioning(items, key) {
+  const toks = String(key).split(' ');
+  if (!key || toks.some((t) => !t)) return items.filter((i) => mentions(hayOf(i), key));
+  let index = WORD_INDEX.get(items);
+  if (!index) {
+    index = new Map();
+    items.forEach((it, at) => { for (const w of new Set(hayOf(it).split(' '))) if (w) { const l = index.get(w); if (l) l.push(at); else index.set(w, [at]); } });
+    WORD_INDEX.set(items, index);
+  }
+  let fewest = null;
+  for (const t of toks) { const l = index.get(t); if (!l) return []; if (!fewest || l.length < fewest.length) fewest = l; }
+  return fewest.map((at) => items[at]).filter((i) => mentions(hayOf(i), key));
+}
 /** A one-word key a dictionary spells or a given name ("sketch", "destiny", "ninja"): the strict rule below holds for it. */
 const isStrictKey = (key) => !key.includes(' ') && (W.inDict(key) || W.isFirstName(key) || key.length < 3);
 const escapeRe = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`);
@@ -731,15 +750,23 @@ function nativeCandidates(native) {
   });
 }
 
+// (collector only, the speed of a build and never its result: every audience's list and the searches owed ask for the same names of the
+// same reading, so a build answers each reading once, and the press's and the drama headlines' names, which no audience weighs, once for
+// all. engine/memo.js)
+const candidatesOnce = MEMO.memo('candidates', candidatesOf);
+const burstOnce = MEMO.memo('burstCandidates', burstCandidates);
+const dramaOnce = MEMO.memo('dramaCandidates', dramaCandidates);
 /** Every candidate name, merged (a contained name folds into a trend's: "gypsy rose blanchard" into "gypsy rose"), by prior demand. */
-function candidates({ trends, wiki, wikiTop, items, now, lex, lookups, audience, roster, native }) {
+const candidates = ({ trends, wiki, wikiTop, items, now, lex, lookups, audience, roster, native }) =>
+  candidatesOnce({ trends, wiki, wikiTop, items, now, lex, lookups, audience, roster, native });
+function candidatesOf({ trends, wiki, wikiTop, items, now, lex, lookups, audience, roster, native }) {
   const out = trendCandidates(forAudience(trends, audience), now, lex);
   const wikiBy = wikiByKey(wiki, now);
   // (a related name already trending on its own, or already related under a bigger trend, is that candidate)
   for (const r of relatedCandidates(out, { lex, lookups, wikiBy })) if (!out.some((o) => o.key === r.key || contains(o.key, r.key) || contains(r.key, o.key))) out.push(r);
   // names the corpus prints, for a Reddit title's misspelt possessive
   const names = new Set([...out.map((c) => c.key), ...(lex && lex.names ? lex.names : [])]);
-  const known = (n) => names.has(n) || items.some((i) => i.fam !== 'reddit' && mentions(i.h || hay(i.title), n));
+  const known = (n) => names.has(n) || mentioning(items, n).some((i) => i.fam !== 'reddit');
   const consumed = new Set(out.flatMap((c) => c.consumed || []));
   const fold = (c) => {
     if (c.from === 'wiki' && consumed.has(c.key)) return;
@@ -766,8 +793,8 @@ function candidates({ trends, wiki, wikiTop, items, now, lex, lookups, audience,
     if (c.outlets) host.outlets = Math.max(host.outlets || 0, c.outlets);
     if (c.recentOutlets) host.recentOutlets = Math.max(host.recentOutlets || 0, c.recentOutlets);
   };
-  [...dramaCandidates(items, now, lex, roster), ...nativeCandidates(native), ...wikiCandidates(wiki, now), ...wikiTopCandidates((wikiTop || []).filter((w) => !w.climb), lex), ...wikiClimbCandidates(wikiTop, lex),
-    ...redditCandidates(items, now, lex, known), ...burstCandidates(items, now, lookups, lex)].forEach(fold);
+  [...dramaOnce(items, now, lex, roster), ...nativeCandidates(native), ...wikiCandidates(wiki, now), ...wikiTopCandidates((wikiTop || []).filter((w) => !w.climb), lex), ...wikiClimbCandidates(wikiTop, lex),
+    ...redditCandidates(items, now, lex, known), ...burstOnce(items, now, lookups, lex)].forEach(fold);
   const sorted = out.sort((a, b) => b.prior - a.prior || a.key.localeCompare(b.key));
   // (each source keeps its seats, then the strongest of the rest)
   const picked = new Set();
@@ -851,6 +878,6 @@ const LOOKUP_DRAMA = 20;
 const LOOKUP_DRAMA_STARS = 8;
 
 
-module.exports = { placeGiven, candidates, lookupNames, dramaLookupNames, relatedCandidates, dramaCandidates, dramaName, dramaNames, calledCreator, rosterIn, sameHandle, PERSON_VERB, CREATOR_ROLE, CREATOR_PRESS, HONORIFIC, leadName, keyOf, hay, mentions, namesKey, isStrictKey, genericKey, catWeight, searchScore, CREATOR_REL, LEAGUE_KW,
+module.exports = { placeGiven, candidates, lookupNames, dramaLookupNames, relatedCandidates, dramaCandidates, dramaName, dramaNames, calledCreator, rosterIn, sameHandle, PERSON_VERB, CREATOR_ROLE, CREATOR_PRESS, HONORIFIC, leadName, keyOf, hay, mentions, mentioning, namesKey, isStrictKey, genericKey, catWeight, searchScore, CREATOR_REL, LEAGUE_KW,
   AUDIENCE_GEO_W, audienceOf, geoWeight, homeGeos, forAudience,
   DAY, WINDOW_DAYS, WIKI_MIN_VIEWS, WIKI_SUSTAIN_VIEWS, BURST_MIN_OUTLETS, REDDIT_TOP_RANK, REDDIT_WEEK_RANK, CREATOR_SUBS };

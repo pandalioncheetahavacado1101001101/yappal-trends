@@ -9,6 +9,7 @@
  * Trends rows as the app's does; the Wikipedia lists, the crazes and the roster are handed in), "now" is an argument, and every
  * listed row carries `meta`: the timed evidence the collector measures (lib/history.js).
  */
+const MEMO = require('./memo');
 const W = require('./wording');
 const S = require('./sources');
 const ST = require('./store');
@@ -618,6 +619,10 @@ function talkContext({ store, wiki, wikiLists, crazes, roster, native = null, fi
  * with these in the same cycle the names first show (lib/budget.js).
  */
 function names(input) {
+  // (its three lists ask for the same names of the same reading: answered once. engine/memo.js)
+  return MEMO.within(() => namesOnce(input));
+}
+function namesOnce(input) {
   NOW = input.now;
   const from = utcDay(NOW) - WINDOW_DAYS * DAY;
   const inWindow = (t) => t >= from && t <= NOW + DAY;
@@ -626,7 +631,7 @@ function names(input) {
   const all = rows.map(prepare);
   const memeNames = rows.filter((r) => r.src === 'kym-memes').flatMap((r) => r.title.split(' / ').map(stripParen));
   const lex = W.buildLexicon(all.filter((i) => !i.wordsOnly).map((i) => i.title), trends.filter((t) => inWindow(t.start)), input.wiki, memeNames);
-  const ctx = talkContext(input, all, lex, 'mixed');
+  const ctx = { ...talkBase(input, all, lex), audience: TC.audienceOf('mixed') };
   return { lookup: TP.lookupNames(ctx), drama: TP.dramaLookupNames(ctx), recent: TP.recentNames(ctx) };
 }
 
@@ -641,16 +646,15 @@ function momentMeta(st, items) {
 }
 
 /**
- * One build: { words, bubbling, moments, byAudience: { [audience]: { talkingPoints, hot } }, owed }. The words and the moments once,
- * the talking points and the hot list per audience. `owed`: the lookups the lists still need, for the collector's queue (the prototype
- * fetched them inside the run; here they land over the next cycles and the next build reads them from the store).
- * input: { store, wiki (most-read rows), wikiLists (daily top lists), crazes, roster, now (ms), audiences }.
+ * The part of a build every audience shares: the words, the moments and the stories behind them. Sets the build's clock.
+ * input: { store, wiki (most-read rows), wikiLists (daily top lists), crazes, roster, now (ms), audiences, native }.
  */
-function build(input) {
+function shared(input) {
   NOW = input.now;
   const { store, wiki } = input;
-  const audiences = input.audiences && input.audiences.length ? input.audiences : ['US'];
   const { all, clusters, lex, wordGroups, trends, ctx: clusterCtx, pick } = buildList(store, wiki);
+  // (read, never written, for the rest of the build: the memos key them by identity. engine/memo.js)
+  MEMO.readOnly(store.lookups, lex);
   // a moment story that quotes a candidate catchphrase is that entry's coverage ("You see how this looks, right?" / Chris Hansen)
   const finishWords = () => {
     const once = WD.finish(wordGroups, store.lookups, NOW, lex);
@@ -697,18 +701,37 @@ function build(input) {
       meta: momentMeta(st, [...unitItems.items, ...(st.onTopic || [])]),
     };
   });
-  const byAudience = {};
-  for (const audience of audiences) {
-    const talkingPoints = TP.build({ ...talkContext(input, all, lex, audience), words: wordList.words, moments });
-    byAudience[audience] = { talkingPoints, hot: HL.hotList({ talkingPoints, words: wordList.words, moments }, { now: NOW, audience: TC.audienceOf(audience) }) };
-  }
-  const ctx = talkContext(input, all, lex, 'mixed');
+  return { all, lex, wordGroups, wordList, built, moments };
+}
+
+/** One audience's talking points and its one hot list, from the build's talking-points context (talkBase) and the shared part. */
+function rankFrom(base, { words: listedWords, moments }, audience, now) {
+  NOW = now;
+  const talkingPoints = TP.build({ ...base, audience: TC.audienceOf(audience), words: listedWords, moments });
+  return { talkingPoints, hot: HL.hotList({ talkingPoints, words: listedWords, moments }, { now: NOW, audience: TC.audienceOf(audience) }) };
+}
+
+/**
+ * What every talking-points call of one build reads, whoever the list is for (talkContext's, its audience set by each call): made
+ * once a build and read-only after, so that the steps every audience repeats are answered once (engine/memo.js).
+ */
+function talkBase(input, all, lex) {
+  const base = talkContext(input, all, lex, 'US');
+  MEMO.readOnly(base.trends, base.wiki, base.wikiTop, base.wikiLists, base.crazes, base.roster, base.native, base.items, base.lookups, base.lex);
+  return base;
+}
+
+/** The lookups the lists still need, for the collector's queue (the prototype fetched them inside the run; here they land over the next cycles). */
+function owedOf(input, { wordGroups, wordList, built }, base) {
+  NOW = input.now;
+  const { store, wiki } = input;
+  const ctx = { ...base, audience: TC.audienceOf('mixed') };
   const inWindow = [...store.rows.values()].filter((r) => r.t >= NOW - WINDOW_DAYS * DAY);
   const titles = inWindow.map((r) => ` ${words(r.title).join(' ')} `);
   const known = (key) => titles.some((t) => t.includes(` ${key} `));
   const specific = (w) => w.key.includes(' ') || (!W.isFirstName(w.key) && !W.inDict(w.key));
   const story = STY.lookupTargets(built.units, store.lookups, NOW, built.stories);
-  const owed = {
+  return {
     names: TP.lookupNames(ctx), drama: TP.dramaLookupNames(ctx), recent: TP.recentNames(ctx),
     words: WT.lookupTargets(wordGroups, store.lookups, NOW),
     since: WT.sinceTargets(wordList, store.lookups, NOW),
@@ -717,8 +740,30 @@ function build(input) {
     storyNews: story.deep, storyWiki: story.wiki,
     wikiDiscover: S.wikiDiscoverTargets(wiki.filter(specific), NOW, known),
   };
+}
+
+/**
+ * One build: { words, bubbling, moments, byAudience: { [audience]: { talkingPoints, hot } }, owed, lex }. The words and the moments
+ * once, the talking points and the hot list per audience, every step the audiences ask alike answered once (engine/memo.js: one
+ * scope a build, nothing kept after it). `owed`: the lookups the lists still need, for the collector's queue.
+ * input: { store, wiki (most-read rows), wikiLists (daily top lists), crazes, roster, now (ms), audiences, native }.
+ */
+function build(input) {
+  // (a person reading one name's reasoning, find + debug, gets every step run and printed)
+  if (input.find || input.debug) return buildOnce(input);
+  return MEMO.within(() => buildOnce(input));
+}
+function buildOnce(input) {
+  const sh = shared(input);
+  const base = talkBase(input, sh.all, sh.lex);
+  MEMO.readOnly(sh.wordList.words, sh.moments);
+  const byAudience = {};
+  for (const audience of (input.audiences && input.audiences.length ? input.audiences : ['US'])) {
+    byAudience[audience] = rankFrom(base, { words: sh.wordList.words, moments: sh.moments }, audience, input.now);
+  }
+  const owed = owedOf(input, sh, base);
   // (lex: the build's own name lexicon, for the collector's line writer, which recases a headline the way the engine does)
-  return { words: wordList.words, bubbling: wordList.bubbling, moments, byAudience, owed, lex };
+  return { words: sh.wordList.words, bubbling: sh.wordList.bubbling, moments: sh.moments, byAudience, owed, lex: sh.lex };
 }
 
 module.exports = { build, names, prepare, talkTrendList, WINDOW_DAYS };
