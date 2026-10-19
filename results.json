@@ -1,0 +1,320 @@
+{
+ "schema": 1,
+ "at": "2026-10-19T18:05:14Z",
+ "runner": {
+  "cores": 4,
+  "memoryMb": 15990
+ },
+ "install": {
+  "seconds": 57
+ },
+ "texts": 2000,
+ "perCycle": {
+  "typical": 300,
+  "peak": 1000,
+  "cold": 27000
+ },
+ "budgetSeconds": 30,
+ "assumedRestoreMBps": 100,
+ "models": [
+  {
+   "model": "nomic-embed-text",
+   "pull": {
+    "seconds": 3.87,
+    "mb": 262
+   },
+   "load": {
+    "seconds": 0.31
+   },
+   "dims": 768,
+   "batches": [
+    {
+     "batch": 16,
+     "seconds": 78.23,
+     "perSecond": 25.6,
+     "peakMb": 46,
+     "availableMinMb": 14608
+    },
+    {
+     "batch": 64,
+     "seconds": 77.99,
+     "perSecond": 25.6,
+     "peakMb": 52,
+     "availableMinMb": 14637
+    },
+    {
+     "batch": 256,
+     "seconds": 77.89,
+     "perSecond": 25.7,
+     "peakMb": 65,
+     "availableMinMb": 14594
+    }
+   ],
+   "inMemoryMb": 371,
+   "best": {
+    "batch": 256,
+    "perSecond": 25.7
+   },
+   "cycle": {
+    "typical": 14.6,
+    "peak": 41.8,
+    "cold": 1053.5
+   },
+   "verdict": "collect",
+   "separation": {
+    "pairs": {
+     "sameStory": {
+      "n": 19000,
+      "p10": 0.784,
+      "p50": 0.853,
+      "p90": 0.929
+     },
+     "samePersonOtherStory": {
+      "n": 20000,
+      "p10": 0.715,
+      "p50": 0.769,
+      "p90": 0.817
+     },
+     "sameKindOtherPerson": {
+      "n": 9149,
+      "p10": 0.685,
+      "p50": 0.742,
+      "p90": 0.808
+     },
+     "unrelated": {
+      "n": 20000,
+      "p10": 0.629,
+      "p50": 0.675,
+      "p90": 0.726
+     }
+    },
+    "auc": {
+     "storyOverPerson": 0.9,
+     "storyOverKind": 0.93,
+     "storyOverUnrelated": 0.996
+    },
+    "cut": {
+     "cut": 0.81,
+     "j": 0.641
+    },
+    "centroids": {
+     "storyHalves": {
+      "n": 100,
+      "p10": 0.965,
+      "p50": 0.978,
+      "p90": 0.984
+     },
+     "personTwoStories": {
+      "n": 50,
+      "p10": 0.87,
+      "p50": 0.891,
+      "p90": 0.912,
+      "max": 0.927
+     }
+    }
+   },
+   "separation256": {
+    "pairs": {
+     "sameStory": {
+      "n": 19000,
+      "p10": 0.799,
+      "p50": 0.864,
+      "p90": 0.935
+     },
+     "samePersonOtherStory": {
+      "n": 20000,
+      "p10": 0.729,
+      "p50": 0.785,
+      "p90": 0.834
+     },
+     "sameKindOtherPerson": {
+      "n": 9149,
+      "p10": 0.7,
+      "p50": 0.761,
+      "p90": 0.824
+     },
+     "unrelated": {
+      "n": 20000,
+      "p10": 0.647,
+      "p50": 0.697,
+      "p90": 0.752
+     }
+    },
+    "auc": {
+     "storyOverPerson": 0.895,
+     "storyOverKind": 0.924,
+     "storyOverUnrelated": 0.994
+    },
+    "cut": {
+     "cut": 0.83,
+     "j": 0.624
+    },
+    "centroids": {
+     "storyHalves": {
+      "n": 100,
+      "p10": 0.969,
+      "p50": 0.98,
+      "p90": 0.985
+     },
+     "personTwoStories": {
+      "n": 50,
+      "p10": 0.874,
+      "p50": 0.898,
+      "p90": 0.923,
+      "max": 0.939
+     }
+    }
+   }
+  },
+  {
+   "model": "all-minilm",
+   "pull": {
+    "seconds": 2.66,
+    "mb": 44
+   },
+   "load": {
+    "seconds": 0.27
+   },
+   "dims": 384,
+   "batches": [
+    {
+     "batch": 16,
+     "seconds": 12.87,
+     "perSecond": 155.4,
+     "peakMb": 59,
+     "availableMinMb": 14805
+    },
+    {
+     "batch": 64,
+     "seconds": 12.97,
+     "perSecond": 154.2,
+     "peakMb": 62,
+     "availableMinMb": 14812
+    },
+    {
+     "batch": 256,
+     "seconds": 12.58,
+     "perSecond": 159,
+     "peakMb": 65,
+     "availableMinMb": 14799
+    }
+   ],
+   "inMemoryMb": 47,
+   "best": {
+    "batch": 256,
+    "perSecond": 159
+   },
+   "cycle": {
+    "typical": 2.6,
+    "peak": 7,
+    "cold": 170.5
+   },
+   "verdict": "collect",
+   "separation": {
+    "pairs": {
+     "sameStory": {
+      "n": 19000,
+      "p10": 0.462,
+      "p50": 0.635,
+      "p90": 0.819
+     },
+     "samePersonOtherStory": {
+      "n": 20000,
+      "p10": 0.314,
+      "p50": 0.444,
+      "p90": 0.574
+     },
+     "sameKindOtherPerson": {
+      "n": 9149,
+      "p10": 0.191,
+      "p50": 0.313,
+      "p90": 0.479
+     },
+     "unrelated": {
+      "n": 20000,
+      "p10": 0.064,
+      "p50": 0.175,
+      "p90": 0.303
+     }
+    },
+    "auc": {
+     "storyOverPerson": 0.872,
+     "storyOverKind": 0.955,
+     "storyOverUnrelated": 0.997
+    },
+    "cut": {
+     "cut": 0.55,
+     "j": 0.579
+    },
+    "centroids": {
+     "storyHalves": {
+      "n": 100,
+      "p10": 0.884,
+      "p50": 0.925,
+      "p90": 0.953
+     },
+     "personTwoStories": {
+      "n": 50,
+      "p10": 0.604,
+      "p50": 0.677,
+      "p90": 0.756,
+      "max": 0.789
+     }
+    }
+   },
+   "separation256": {
+    "pairs": {
+     "sameStory": {
+      "n": 19000,
+      "p10": 0.468,
+      "p50": 0.645,
+      "p90": 0.823
+     },
+     "samePersonOtherStory": {
+      "n": 20000,
+      "p10": 0.328,
+      "p50": 0.459,
+      "p90": 0.586
+     },
+     "sameKindOtherPerson": {
+      "n": 9149,
+      "p10": 0.191,
+      "p50": 0.323,
+      "p90": 0.488
+     },
+     "unrelated": {
+      "n": 20000,
+      "p10": 0.069,
+      "p50": 0.192,
+      "p90": 0.327
+     }
+    },
+    "auc": {
+     "storyOverPerson": 0.863,
+     "storyOverKind": 0.951,
+     "storyOverUnrelated": 0.995
+    },
+    "cut": {
+     "cut": 0.56,
+     "j": 0.568
+    },
+    "centroids": {
+     "storyHalves": {
+      "n": 100,
+      "p10": 0.882,
+      "p50": 0.927,
+      "p90": 0.955
+     },
+     "personTwoStories": {
+      "n": 50,
+      "p10": 0.632,
+      "p50": 0.699,
+      "p90": 0.756,
+      "max": 0.783
+     }
+    }
+   }
+  }
+ ],
+ "editor": null
+}
