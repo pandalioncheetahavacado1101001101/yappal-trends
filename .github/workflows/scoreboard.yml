@@ -1,0 +1,108 @@
+name: scoreboard
+
+# WHAT THIS WORKFLOW DOES: once a day, how the collector compares with the trend lists people already use (ios/IDEAS-SUPER.md 1),
+# as aggregate numbers on the single commit of the "scoreboard" branch: latest.json and days.jsonl, read at
+# raw.githubusercontent.com/<owner>/<repo>/scoreboard/latest.json. Everything it computes is pre-registered in
+# .github/scoreboard/scoreboard-spec.json; every published day carries one hash of that file and of the scoring code, and a change to
+# either restarts the 14-day clock.
+#
+#   1. 06:20Z (or by hand), in its own concurrency group "scoreboard": never two at once, never waiting on or holding up the collector.
+#   2. The collector's newest state is RESTORED READ ONLY: under a key no run ever saves, so the "state-" prefix finds the newest
+#      cycle's state. Nothing here saves a "state-" cache or writes into the state; the collector's own cycles are untouched.
+#   3. The scoreboard's own history is restored from "scoreboard-history-*", the newest: the comparators' entries of the last days
+#      and each scored day's name-free values for the 7-day pools (lead hours and outcomes, breadth counts). Never a matched pair or
+#      anything of ours per trend: a fork's pull request can restore this public repository's caches. The matched pairs live in
+#      the run's memory only; the history itself is never put on a branch, in an artifact or in a log line.
+#   4. Reads, keyless and spaced: Google Trends "Trending now" (US, 168 hours, the collector's own request), Know Your Meme's two
+#      RSS feeds, the Viral 50 page, getdaytrends (X; refused means X unmeasured that day, nothing else is tried): five requests.
+#      Plus three git reads: the feed branch's ledger.jsonl and v1/us.json, and the scoreboard branch's days.jsonl. About eight.
+#      A git read that fails (not a branch the remote says it does not hold) stops the run before anything is scored or published.
+#   5. Scores the UTC day two days back (every entry of it has had its 24 hours): lead (hours, median, share first, a bootstrap 95%
+#      interval over 7 pooled days once n reaches 15), coverage (first and via), breadth, precision (page one of the 09:00 and 18:00
+#      lists, checked a day later) and speed (from the ledger). Under 15 (matches, scope entries, Google Trends starts) a day reads
+#      "insufficient", never a number; lead and breadth meet their targets on 7 pooled days.
+#   6. Saves the history under a new "scoreboard-history-<run>-<attempt>" key, then deletes this workflow's older ones by exact key.
+#   7. Publishes latest.json and days.jsonl (read back, the day's line appended or replaced, 60 days kept; never fewer days than were
+#      read back) after the aggregate guard
+#      (.github/scoreboard/report.js) passes on both: a key it does not know or a string that is not a number word, an instant,
+#      a day or the spec's hash stops the publish.
+#
+# No state restored (evicted, or none yet): nothing is scored or published that day ("no data", never a guess); the history is
+# still kept. A failed read leaves that comparator out of that day; the others are scored.
+on:
+  schedule:
+    - cron: '20 6 * * *'
+  workflow_dispatch:
+
+# contents: the scoreboard branch. actions: deleting this workflow's own superseded history caches.
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: scoreboard
+  cancel-in-progress: false
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
+      # Read only: a primary key that is never saved, so only the restore-keys prefix can hit, at the newest "state-<run>-<attempt>".
+      - name: The collector's newest state (read only)
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: scoreboard-reads-state-${{ github.run_id }}
+          restore-keys: state-
+
+      - name: The scoreboard's own history
+        uses: actions/cache/restore@v4
+        with:
+          path: sbcache
+          key: scoreboard-history-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: scoreboard-history-
+
+      # (a failed read fails the job here: never scored as if the branch were new)
+      - name: The ledger, the list and the scoreboard branch as they are
+        run: bash .github/scoreboard/branches.sh fetch
+
+      # Exit 0: a day scored; 3: no state to read (nothing scored, the history kept); anything else fails the job.
+      - name: Score the day
+        id: score
+        run: |
+          set +e
+          node .github/scoreboard/run.js --state state --cache sbcache --out sbout --fetch --branch sbbranch --feed sbfeed/us.json --ledger sbfeed/ledger.jsonl
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then exit 1; fi
+
+      - name: Keep the history (cache only)
+        id: keep
+        if: steps.score.outputs.code == '0' || steps.score.outputs.code == '3'
+        uses: actions/cache/save@v4
+        with:
+          path: sbcache
+          key: scoreboard-history-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Delete the superseded history caches (this workflow's own, by exact key)
+        if: steps.keep.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          KEEP: scoreboard-history-${{ github.run_id }}-${{ github.run_attempt }}
+        run: bash .github/scoreboard/branches.sh prune-cache
+
+      - name: Publish the scoreboard branch (aggregate numbers only)
+        if: steps.score.outputs.code == '0'
+        env:
+          SCOREBOARD_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+        run: bash .github/scoreboard/branches.sh publish

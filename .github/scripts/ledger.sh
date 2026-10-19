@@ -7,7 +7,11 @@
 # appended, and the branch is published again as a single commit, the way publish-feed.sh publishes the feed. A feed branch that
 # does not exist yet, or holds no feed, gets no ledger: the ledger never makes the branch. Exits 0 whatever happens: a ledger line
 # is never a reason for a job to fail.
+# The line's `phases` are read from the marks collect.yml's steps leave (MARK_*, epoch milliseconds); this step's own start is the
+# last of them (MARK_LEDGER), taken here before the branch is fetched, so the fetch is never counted as the state's save.
 set -u
+MARK_LEDGER="${MARK_LEDGER:-$(date +%s%3N 2>/dev/null || true)}"
+export MARK_LEDGER
 REMOTE="${FEED_REMOTE:?FEED_REMOTE is not set}"
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 tmp="$(mktemp -d)"

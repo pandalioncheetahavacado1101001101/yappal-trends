@@ -18,7 +18,8 @@
  *        [--fresh]   start from nothing on purpose: a state with no history is not re-seeded from the feed already in <out>
  *        [--check-state]  no cycle: says whether <state> holds a state worth keeping ({ ok, why, cycle, trends } on stdout; exit 0
  *                    when it does, 4 when not). What the host asks before it saves the folder as the newest (A8)
- * stdout: one JSON line { cycle, slot, requests, blocked, items, modelLines, ms }; everything else goes to stderr.
+ * stdout: one JSON line { cycle, slot, requests, blocked, items, modelLines, ms, answered, seconds, ... }; everything else goes to stderr.
+ *        seconds: each step's { fetch, build, measure, lines, editor, feed, publish }, the editor model's time apart from the lines'.
  *
  * --record saves each reply under <dir>/<slot>/ with a manifest; --replay answers every request from such a folder instead of the
  * network (what test/replay.test.js runs). Zero npm dependencies; works with no environment at all (A7).
@@ -95,6 +96,7 @@ const LW = require('./lib/line-writer');
 const HY = require('./lib/hygiene');
 const RESEED = require('./lib/reseed');
 const DESK = require('./lib/desk');
+const PSINK = require('./lib/page-sink');
 const V = require('./samples/validate.cjs');
 const { AUDIENCES, slotOf, instant, HOUR, DAY, SLOT_SECONDS, localDay, keyOf } = require('./lib/util');
 
@@ -677,7 +679,16 @@ async function runCycle(opts) {
       // alerts nobody, and is still the story going on. lib/desk.js withThread)
       return Math.max(c.next.startedAt, ...[c.next.chapterAt, c.turnAt].filter((x) => Number.isFinite(x) && x <= t));
     };
-    const orderOf = (a, rows) => { try { return DESK.order(rows, { statusOf, startedOf, now: t }); } catch (e) { log(`[desk] ${a}: order failed, the engine's order stands: ${e.message}`); return rows; } };
+    // (what the measured series says of a row, for what sinks on the page (P5, lib/page-sink.js): its word where a rule of the
+    // collector's own gave it and the card says it, an Early row's "rising"; the card's own start; its newest chapter or turn)
+    const seriesOf = (row) => {
+      const c = cycleState.trends.get(row.id);
+      if (!c) return null;
+      const turns = [c.next.chapterAt, c.turnAt].filter((x) => Number.isFinite(x) && x <= t);
+      return { status: Object.values(c.early || {}).some(Boolean) ? 'rising' : c.statusOwn !== false ? c.status : null,
+        startedAt: Number.isFinite(c.next.startedAt) ? c.next.startedAt : null, newsAt: turns.length ? Math.max(...turns) : null };
+    };
+    const orderOf = (a, rows) => { try { return DESK.order(rows, { statusOf, startedOf, seriesOf, sink: PSINK.on(env), now: t }); } catch (e) { log(`[desk] ${a}: order failed, the engine's order stands: ${e.message}`); return rows; } };
     // (the writer asks for the rows a reader meets first: the page as it will be laid out, not as the engine ranked it)
     const laidOut = Object.fromEntries(Object.entries(rowsByAudience).map(([a, rows]) => [a, orderOf(a, rows)]));
     let lined = { lines: new Map(), casing: new Map(), stats: { asked: 0, calls: 0, passed: 0, failedCheck: 0, unanswered: 0, shown: 0, headlinesChanged: 0, off: null } };
@@ -708,6 +719,8 @@ async function runCycle(opts) {
       if (feeds.lists[a] && feeds.problems[a].length) log(`[feed] ${a}: not published: ${feeds.problems[a].slice(0, 4).join('; ')}`);
       for (const d of (feeds.dropped[a] || []).slice(0, 5)) log(`[feed] ${a}: row left out "${d.title}": ${d.problems[0]}`);
     }
+    // (what page one carries of what sinks, P5: counts alone, never a row's name or times)
+    for (const a of good) { const p = PSINK.pageTally(feeds.lists[a]); log(`[desk] ${a} page one: ${p.fading} Fading (${p.fadingMeasured} measured), ${p.old} over ${PSINK.OLD_DAYS} days old and not rising, of ${p.rows}`); }
 
     // ---- step 5 (written once the ranks are final): history, in one transaction ----
     // (fenced: the lock is still this run's and nothing newer was published while it worked. A cycle that slept through its turn,
@@ -826,9 +839,13 @@ async function runCycle(opts) {
     STATE.backupDaily(state, localDay(t, 'UTC'));
     meta.set('cycle', cycle);
     lap('publish');
-    log(`[time] fetch ${timing.fetch}s, build ${timing.build}s, identity + history ${timing.measure}s, lines ${timing.lines}s, feed ${timing.feed}s, write + publish ${timing.publish}s`);
+    // (the editor model's own time is inside the lines step: told apart, so the steps add up to the cycle and the cycle less the editor
+    // reads straight off the summary, which the host's ledger copies. Seconds only)
+    const editorS = Math.round((lined.stats.editor && Number.isFinite(lined.stats.editor.ms) ? lined.stats.editor.ms : 0) / 100) / 10;
+    const seconds = { fetch: timing.fetch, build: timing.build, measure: timing.measure, lines: Math.max(0, Math.round((timing.lines - editorS) * 10) / 10), editor: editorS, feed: timing.feed, publish: timing.publish };
+    log(`[time] fetch ${seconds.fetch}s, build ${seconds.build}s, identity + history ${seconds.measure}s, lines ${seconds.lines}s, editor ${seconds.editor}s, feed ${seconds.feed}s, write + publish ${seconds.publish}s`);
     const summary = { cycle, slot: instant(t), requests: outcome.sent, blocked: stale, items: Object.fromEntries(good.map((a) => [a, feeds.lists[a].items.length])), modelLines, ms: Date.now() - started,
-      answered: outcome.ok, seconds: timing, byHost: status.requests.byHost, bytes: Object.fromEntries(good.map((a) => [a, written.bytes[`${PUB.fileOf(a)}.json`]])), counts };
+      answered: outcome.ok, seconds, byHost: status.requests.byHost, bytes: Object.fromEntries(good.map((a) => [a, written.bytes[`${PUB.fileOf(a)}.json`]])), counts };
     return { code: 0, summary };
   } finally {
     if (state) state.close();

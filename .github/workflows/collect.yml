@@ -12,8 +12,8 @@ name: collect
 #      queues up behind a live chain, and a dispatched run waiting its turn is never cancelled by it (GitHub keeps at most
 #      one waiting run per concurrency group and cancels the older waiting one when another arrives).
 #   3. "cycle" (at most 14 minutes; concurrency group "collect", never cancelled in progress): the collector's cycle exactly as
-#      before: restore the state, start the editor model, one cycle, publish the feed, save the state. A run that arrives
-#      while another holds the group WAITS for it. Last, its ledger line (below).
+#      before: restore the state, start the editor model, one cycle, publish the feed, save the state, delete the state's
+#      superseded cache entries. A run that arrives while another holds the group WAITS for it. Last, its ledger line (below).
 #   4. "next" (at most 16 minutes; after "cycle", and only when the cycle SUCCEEDED: a cycle that published, found nothing new
 #      or found the lock held is a success; one that failed, exit 3 or more, or hit the 14-minute cap is not): computes the
 #      next quarter-hour (:00, :15, :30, :45), sleeps until 60 seconds before it (14 minutes at most, wall time on this runner),
@@ -35,9 +35,25 @@ name: collect
 #      is restarted by the next cron run that does fire.
 #
 # THE LEDGER: every run that reaches its cycle appends ONE JSON line to ledger.jsonl at the root of the feed branch, beside
-# v1/ (.github/scripts/ledger.sh, ledger.js): { slot, started, published, rows, requests, modelCards, seconds, code, by, run }.
-# Lines older than 7 days are dropped. A day's lead time (published minus slot) and its real cadence can then be read from the
-# branch alone, with no server. Nothing in it is private: instants and counts only. The feed under v1/ is untouched by it.
+# v1/ (.github/scripts/ledger.sh, ledger.js): { slot, started, published, rows, requests, answered, modelCards, seconds, code, by,
+# run, phases, cache }. Lines older than 7 days are dropped. A day's lead time (published minus slot), its real cadence and where
+# each job's time went can then be read from the branch alone, with no server and no sign-in. Nothing in it is private: instants,
+# counts and seconds only, never a name, a cache key or a per-trend number. The feed under v1/ is untouched by it.
+#
+# CHANGED 2026-10-19 (the cache, and the ledger's timings; nothing else in the cycle moved: no deadline, budget or order):
+#   - THE STATE'S OLD CACHE ENTRIES ARE DELETED. Each cycle saved a new "state-<run>-<attempt>" entry and none was ever deleted:
+#     79 of them (5.5 GB) beside the editor model (5.2 GB) took the repository's Actions cache over its 10 GB cap, where GitHub
+#     evicts the least recently used and the model or the state could go at any time. Now, after a state save that succeeded,
+#     "Delete the superseded state caches" (.github/scripts/cache-prune.js) keeps the newest 3 state entries of this branch and
+#     deletes every older one by its exact key, scoped to this branch. It never touches "editor-model-*" or any key that is not
+#     exactly state-<digits>-<digits>, deletes nothing unless this run's own save is listed, deletes at most 40 a run (the first
+#     two runs clear the 76 or so; then one a run), stops at 13 min 20 s on the job's clock, and never fails the job.
+#   - THE LEDGER TIMES EACH PHASE. Steps leave marks on the job's clock (MARK_*: epoch milliseconds, in $GITHUB_ENV; the job's
+#     clock leaves the first, one new step, "The clock, before the state's restore", ends the set-up, and the existing steps mark
+#     where they start or end), and each ledger line's `phases` gives the seconds of:
+#     setup, stateRestore, feedRead, modelRestore, modelStart, cycle (collect.js as a process) and, from the collector's own
+#     summary, its fetch, build, measure, lines, editor, feed and publish; then push, stateSave and cachePrune. `cache` gives the
+#     cache's GB and entries after the prune and whether the editor model is in it. `answered`: the requests that got an answer.
 #
 # EXPECTED, once it runs: the cycle job starts within a minute of each quarter-hour; its publish lands 8 to 13 minutes after
 # its slot; the cycle job never runs twice at once; the Actions list shows a chained run per quarter-hour and, between them,
@@ -124,6 +140,8 @@ jobs:
         run: |
           now=$(date +%s)
           echo "STARTED=$now" >> "$GITHUB_ENV"
+          # (the marks: epoch milliseconds where each phase ends, for the ledger line's `phases`; times only, never a reason to stop)
+          echo "MARK_BEGIN=$(date +%s%3N)" >> "$GITHUB_ENV"
           echo "MODEL_BY=$((now + 270))" >> "$GITHUB_ENV"
           echo "IDEAS_EDITOR_UNTIL=$((now + 680))" >> "$GITHUB_ENV"
           # (the cycle's own deadline, thirteen minutes in: tied to the job's clock, not to when the cycle starts, so a slow model
@@ -137,6 +155,10 @@ jobs:
         with:
           node-version: 26
 
+      # (a mark on the job's clock: the set-up ends here and the state's restore begins)
+      - name: The clock, before the state's restore
+        run: echo "MARK_SETUP=$(date +%s%3N)" >> "$GITHUB_ENV"
+
       # The history lives only in the Actions cache: it is never committed or published. The cache is not storage (GitHub evicts
       # it at will), so a run that finds none does not start cold: the collector reads its history back from the feed that is
       # already out, which is public anyway (every listed id, start, status and graph), and marks what it read back as such.
@@ -148,7 +170,10 @@ jobs:
           restore-keys: state-
 
       - name: Fetch the feed already out
-        run: bash .github/scripts/restore.sh
+        run: |
+          echo "MARK_STATE=$(date +%s%3N)" >> "$GITHUB_ENV"
+          bash .github/scripts/restore.sh
+          echo "MARK_FEED=$(date +%s%3N)" >> "$GITHUB_ENV"
 
       # The model file (several GB) is kept in the Actions cache under the model's own name and is restored in about a minute.
       # A job that finds none runs its cycle with no model, fetches the file behind it and saves it at the end: one cycle
@@ -169,7 +194,9 @@ jobs:
         if: env.EDITOR_OFF != '1' && env.OWN_ENDPOINT == ''
         continue-on-error: true
         timeout-minutes: 6
-        run: bash .github/scripts/model.sh "$EDITOR_MODEL" "$MODEL_BY"
+        run: |
+          echo "MARK_MODEL=$(date +%s%3N)" >> "$GITHUB_ENV"
+          bash .github/scripts/model.sh "$EDITOR_MODEL" "$MODEL_BY"
 
       - name: An endpoint of the owner's own, when one is named
         if: env.OWN_ENDPOINT != ''
@@ -182,12 +209,14 @@ jobs:
         id: cycle
         run: |
           set +e
+          echo "MARK_CYCLE=$(date +%s%3N)" >> "$GITHUB_ENV"
           # (what is left of the cycle's deadline on the job's clock, two minutes at the least: a cycle is never started with no time)
           left=$(( CYCLE_UNTIL - $(date +%s) ))
           [ "$left" -ge 120 ] || left=120
           echo "cycle deadline: $left s"
           node collect.js --state state --out out --deadline-seconds=$left $FRESH > cycle.json 2> cycle.log
           code=$?
+          echo "MARK_CYCLE_END=$(date +%s%3N)" >> "$GITHUB_ENV"
           echo "code=$code" >> "$GITHUB_OUTPUT"
           cat cycle.json
           grep -E '^\[(reseed|collect|time)\]' cycle.log || true
@@ -210,14 +239,36 @@ jobs:
       - name: Is the state worth saving
         id: health
         if: always()
-        run: bash .github/scripts/state-health.sh "${{ steps.cycle.outputs.code }}"
+        run: |
+          echo "MARK_PUSHED=$(date +%s%3N)" >> "$GITHUB_ENV"
+          bash .github/scripts/state-health.sh "${{ steps.cycle.outputs.code }}"
 
       - name: Save state for the next cycle
+        id: save
         if: always() && steps.health.outputs.ok == 'true'
         uses: actions/cache/save@v4
         with:
           path: state
           key: state-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # The state's superseded cache entries (the header's CHANGED 2026-10-19; .github/scripts/cache-prune.js): only after a save
+      # that succeeded, and never in a run that was cancelled or hit its cap. Keeps the newest 3 state entries of this branch, this
+      # run's own among them, and deletes every older one by its exact key; never "editor-model-*". Before the ledger line, which
+      # carries its counts. Its deadline is 13 min 20 s on the job's clock or 100 s from now, whichever is sooner, so the job never
+      # meets its cap here; never a reason for the job to fail.
+      - name: Delete the superseded state caches
+        if: ${{ !cancelled() && steps.save.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRUNE_SAVED_KEY: state-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          echo "MARK_SAVED=$(date +%s%3N)" >> "$GITHUB_ENV"
+          deadline=$(( STARTED + 800 )); soonest=$(( $(date +%s) + 100 ))
+          [ "$deadline" -le "$soonest" ] || deadline=$soonest
+          PRUNE_UNTIL=$deadline node .github/scripts/cache-prune.js
 
       # The run's one line on the feed branch (the ledger at the top of this file): inside the concurrency group, so it never
       # races the next run's publish. Never a reason for the job to fail.

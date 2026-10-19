@@ -1,0 +1,385 @@
+{
+  "name": "yappal-ideas-scoreboard",
+  "version": 2,
+  "registered": "2026-10-19",
+  "rule": "Pre-registered (ios/IDEAS-SUPER.md 1). Every number on the scoreboard branch is computed by .github/scoreboard/*.js from the values in this file. Each published day carries one hash of this file and of the scoring code (comparators.js, history.js, match.js, metrics.js, ours.js, report.js, stats.js); a change to any value or any of those files changes the hash and restarts the 14-day clock.",
+  "audience": "US",
+  "minN": 15,
+  "insufficient": "insufficient",
+  "scoredDay": {
+    "lagDays": 2,
+    "why": "The run at 06:20Z scores the UTC day two days before it: an entry that surfaced at 23:59 that day has had its 24 hours to be listed, and the 18:00 list of that day its 24 hours to be checked."
+  },
+  "matcher": {
+    "version": 2,
+    "order": [
+      "alias",
+      "person",
+      "jaccard",
+      "bareName check",
+      "longLead check"
+    ],
+    "jaccardMin": 0.6,
+    "minTokenChars": 2,
+    "singularise": {
+      "minChars": 5,
+      "keepEndings": [
+        "ss",
+        "us",
+        "is"
+      ]
+    },
+    "stopwords": [
+      "a",
+      "an",
+      "the",
+      "of",
+      "and",
+      "or",
+      "in",
+      "on",
+      "at",
+      "to",
+      "for",
+      "with",
+      "from",
+      "by",
+      "vs",
+      "versus",
+      "is",
+      "are",
+      "was",
+      "were",
+      "be",
+      "been",
+      "it",
+      "its",
+      "as",
+      "after",
+      "over",
+      "into",
+      "about",
+      "this",
+      "that",
+      "my",
+      "your",
+      "his",
+      "her",
+      "their",
+      "our",
+      "we",
+      "you",
+      "me",
+      "he",
+      "she",
+      "they",
+      "them",
+      "who",
+      "what",
+      "why",
+      "how",
+      "when",
+      "de",
+      "la",
+      "el",
+      "where",
+      "which",
+      "did",
+      "does",
+      "do",
+      "has",
+      "have",
+      "had",
+      "will",
+      "can",
+      "now"
+    ],
+    "framing": [
+      "trend",
+      "trending",
+      "viral",
+      "meme",
+      "tiktok",
+      "news",
+      "update",
+      "explained",
+      "controversy",
+      "drama",
+      "backlash",
+      "discourse",
+      "reaction",
+      "today",
+      "latest",
+      "official"
+    ],
+    "aliasPrefixes": [
+      "talk|",
+      "point:",
+      "story:",
+      "moment|",
+      "word|",
+      "word:",
+      "sound|",
+      "sound:"
+    ],
+    "person": {
+      "kinds": [
+        "talk",
+        "moment"
+      ],
+      "minTokens": 2,
+      "handle": {
+        "minChars": 6,
+        "needs": "a digit or a capital inside the word"
+      },
+      "maxExtraWords": 2,
+      "rule": "only for person trends: the comparator's whole title is the name of a person the row names; the row's own title is that name and at most 2 more title-core words; the name has two words or more or is a handle (one word of 6+ characters with a digit or a capital inside it)"
+    },
+    "sound": {
+      "split": " by ",
+      "artistMustOverlap": true
+    },
+    "kinds": {
+      "gt": {
+        "not": [
+          "sound"
+        ]
+      },
+      "kym": {
+        "not": [
+          "sound"
+        ]
+      },
+      "x": {
+        "not": [
+          "sound"
+        ]
+      },
+      "viral50": {
+        "only": [
+          "sound"
+        ]
+      }
+    },
+    "audit": {
+      "pairs": 36,
+      "falseMax": 3
+    },
+    "bareName": {
+      "rule": "a join whose comparator entry is, by its title core, only the name of a person the row names (or the row's subject) holds only when corroborated: the entry's related searches share a title-core word, tag or other person with the row beyond the entry's own words, or the entry surfaced between 24 h before and 48 h after our first listing of the row. Compared as title cores, so stopwords and framing words around a name ('X now', 'where is X from', 'X news') leave it a bare name",
+      "relatedCorroborates": true,
+      "hoursBeforeListing": 24,
+      "hoursAfterListing": 48,
+      "longLead": {
+        "comparators": [
+          "gt"
+        ],
+        "rule": "any join whose entry surfaced more than hoursAfterListing (48 h) after our first listing of the row, on a comparator that gives related searches, holds only when those related searches corroborate it as above (a time near our listing cannot corroborate a lead that long). Know Your Meme, the Viral 50 and X give none and are not held to it"
+      }
+    }
+  },
+  "ours": {
+    "listDepth": 80,
+    "page": 20,
+    "archives": [
+      "0900",
+      "1800"
+    ],
+    "coldStartHours": 3,
+    "listed": "our first listing of a trend: the first sample of the collector's own read (neither backfilled nor reseeded) that ranks it 1 to listDepth in the US list; a compacted hour or day counts from its start, never before the collector's first_listed_at",
+    "firstPage": "when a trend first reached page one: the first such sample that ranks it 1 to page; a compacted bucket counts from its start, never before first_page_at",
+    "excluded": "from lead: trends met in the state's first 3 hours (its first cycle or a reseed) and trends read back from the feed (reseeded); from lead and coverage: entries that surfaced before the cold start ended or less than 24 h before the state's newest sample",
+    "sighting": {
+      "gt": "the first sample of the trend with sv_us > 0 (the collector's own Google Trends read showing it)",
+      "kym": "seenFirst of the entry's address in the state's store rows",
+      "viral50": "first_seen of the sound in platform_items (source tts, viral chart), or the scoreboard's own first read",
+      "x": "the scoreboard's own first read"
+    }
+  },
+  "comparators": {
+    "gt": {
+      "name": "Google Trends Trending now, US",
+      "read": "POST trends.google.com batchexecute i0OFE [null,null,US,0,en-US,168,1]",
+      "depth": "the whole 168-hour list as served",
+      "scope": {
+        "categories": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "minVolume": 20000
+      },
+      "own": "the entry's start",
+      "lead": true,
+      "coverage": true
+    },
+    "kym": {
+      "name": "Know Your Meme, confirmed and submitted entries",
+      "read": [
+        "https://knowyourmeme.com/memes.rss",
+        "https://knowyourmeme.com/memes/submissions.rss"
+      ],
+      "depth": "16 a feed as served, both feeds, one entry per address",
+      "scope": "every entry",
+      "own": "pubDate",
+      "lead": true,
+      "coverage": true
+    },
+    "viral50": {
+      "name": "Trending TikTok Songs, US Viral 50",
+      "read": "https://trendingtiktoksongs.com/charts/us/viral",
+      "depth": 50,
+      "scope": {
+        "top": 10,
+        "chart": "the chart dated the scored day, else the next day's, else the day before's"
+      },
+      "own": "00:00Z of the first chart day the sound was seen on (not known for sounds on the scoreboard's first read: left out of lead)",
+      "lead": true,
+      "coverage": true
+    },
+    "x": {
+      "name": "X trends, US, via getdaytrends",
+      "read": "https://getdaytrends.com/united-states/",
+      "depth": 50,
+      "scope": {
+        "top": 20
+      },
+      "own": null,
+      "lead": false,
+      "coverage": true,
+      "refused": "a refused or unreadable reply leaves X unmeasured that day; nothing else is tried"
+    }
+  },
+  "reads": {
+    "comparators": 5,
+    "ours": [
+      "feed v1/us.json",
+      "feed ledger.jsonl",
+      "scoreboard days.jsonl"
+    ],
+    "gapMs": 2500,
+    "timeoutMs": 30000
+  },
+  "lead": {
+    "definition": "per shared trend (one of our trends matched to an entry that surfaced in the day): surface minus our first listing, hours; surface = the earlier of the entry's own time and our own first read showing it",
+    "tie": "listed at or after our own read of that comparator showed it: lead 0",
+    "window": {
+      "days": 7,
+      "rule": "a matched pair counts when our first listing falls within 7 days either side of its surface, and every such pair is in n: first when listed before the surface, tie when listed at or after our own read of that comparator showed it, else late with its real hours"
+    },
+    "onePerTrend": "a trend matched to several entries counts once, at the earliest surface",
+    "poolDays": 7,
+    "bootstrap": {
+      "resamples": 2000,
+      "level": 0.95,
+      "seed": "fnv1a32 of the scored day"
+    },
+    "listedLate": {
+      "hours": 24,
+      "rule": "a sub-count of the late pairs: listed more than 24 h after the surface. They stay in n"
+    }
+  },
+  "coverage": {
+    "definition": "share of the comparator's scope entries of the day which we listed between 7 days before and 24 h after the entry's anchor",
+    "withinHours": 24,
+    "anchor": "Google Trends and Know Your Meme: the entry's own time (its start, its pubDate); the Viral 50: the scored day's start (that day's chart); X: the snapshot's time",
+    "split": {
+      "first": "listed before the surface: the earlier of the entry's own time and our own read of that comparator showing it (the anchor when neither is known), the rule lead uses",
+      "via": "listed at or after it"
+    },
+    "insufficient": "under minN scope entries, a day (or the rolling window) reads insufficient: no share"
+  },
+  "breadth": {
+    "definition": "new stories over new Google Trends scope entries, flow over flow: distinct stories that first reached page one that day (shared, or only here and confirmed), over the Google Trends scope entries that started that day",
+    "stories": "the page-one rows of the day's archived lists (09:00 and 18:00 US time), joined into one story when the matcher joins their titles; a story's first page one is the earliest of its rows' (ours.firstPage), and it counts on that day only",
+    "shared": "matched to any comparator entry that surfaced within 7 days either side of the story's first page one",
+    "sharedDays": 7,
+    "onlyHere": {
+      "confirm": {
+        "outletsMin": 2,
+        "hoursBefore": 48,
+        "hoursAfter": 24
+      },
+      "source": "the collector's own outlets column (its count of independent outlets) in the 48 h before to 24 h after the story's first page one: the collector's count, not an item the scoreboard checks itself, so a change to the collector's clustering or outlet counting moves it without a spec change"
+    },
+    "pooled": "pooled over lead.poolDays days under one spec hash before it counts toward the target and the claim; under minN Google Trends starts (a day, the pool or the rolling window), insufficient: no ratio",
+    "coldStart": "both halves count from the end of the state's cold start (ours.coldStartHours after its first cycle or a reseed): a story on page one in those hours is not known to be new, and Google Trends starts in those hours are not counted either"
+  },
+  "precision": {
+    "definition": "page one of each archived list of the day (09:00 and 18:00 US time), checked 24 hours later",
+    "live": {
+      "notEndedHours": 24,
+      "fromHours": 20,
+      "toHours": 28,
+      "n24Min": 1,
+      "interestShare": 0.5
+    },
+    "fading": "status fading on a measured series in the archived row",
+    "duplicate": "a page-one row the matcher joins to a row ranked above it",
+    "oldDays": 7,
+    "gate": {
+      "liveMin": 18,
+      "duplicatesMax": 0,
+      "fadingMax": 3
+    }
+  },
+  "speed": {
+    "definition": "from the ledger lines whose slot falls in the day: publish lag (published minus slot) median and p90, and the mean age of the feed at a random moment (minutes since the slot of the newest published feed, integrated over the day)",
+    "probeFields": [
+      "probeAgeSeconds",
+      "feedAgeSeconds",
+      "ageSeconds"
+    ]
+  },
+  "targets": {
+    "lead": {
+      "gt": {
+        "shareFirst": 0.75,
+        "medianHours": 6,
+        "ciLowAbove": 0
+      },
+      "kym": {
+        "shareFirst": 0.75,
+        "medianHours": 24,
+        "ciLowAbove": 0
+      }
+    },
+    "coverage": {
+      "gt": 0.6,
+      "kym": 0.8,
+      "viral50": 0.8,
+      "firstShare": 0.5
+    },
+    "breadth": 3,
+    "precision": {
+      "liveMin": 18,
+      "duplicatesMax": 0,
+      "fadingMax": 3
+    },
+    "speedMeanAgeMinutes": 15,
+    "claim": {
+      "days": 14,
+      "needs": [
+        "lead",
+        "breadth",
+        "precision"
+      ],
+      "rule": "3x is claimed only when lead (pooled 7 days) and breadth (pooled 7 days) meet target with the precision gate holding, 14 consecutive published days under one spec hash"
+    }
+  },
+  "publish": {
+    "branch": "scoreboard",
+    "latest": "latest.json",
+    "days": "days.jsonl",
+    "daysKept": 60,
+    "rollingDays": 14
+  },
+  "cache": {
+    "keyPrefix": "scoreboard-history-",
+    "entriesKeptDays": 10,
+    "scoredDaysKeptDays": 14,
+    "kept": 1,
+    "holds": "the comparators' entries and read statuses of the last days, and each scored day's lead values (hours and outcome: no name, id or instant) and breadth counts. Never a matched pair or anything of ours per trend: a fork's pull request can restore this repository's caches"
+  }
+}
