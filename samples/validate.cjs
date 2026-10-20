@@ -31,9 +31,11 @@ const TOPICS = ['celebs', 'memes', 'music', 'screen', 'sports', 'beauty', 'food'
 const IDEA_KINDS = ['word', 'trend', 'story'];
 const TIMELINE_KINDS = ['start', 'chapter', 'reply', 'measure', 'latest'];
 const POST_KINDS = ['video', 'clip', 'thread'];
+// (what a creator could film, D4 `angles`: lib/editor/prompt.js ANGLE_KINDS)
+const ANGLE_KINDS = ['explain', 'react', 'take', 'ask', 'timeline', 'try'];
 const GRAPH_STEPS = [15, 30, 60, 120, 360, 1440];
 const LIMITS = { rows: 80, minRows: 5, listBytes: 120000, detailBytes: 6000, bundleBytes: 150000, title: 90, line: 200, query: 60,
-  timelineText: 120, earlyOnPage: 3, earlyInList: 12, urgent: 3, namesBytes: 60000, posts: 3, related: 5, spread: 6 };
+  timelineText: 120, earlyOnPage: 3, earlyInList: 12, urgent: 3, namesBytes: 60000, posts: 3, related: 5, spread: 6, why: 6, whyText: 160, angles: 3, angleText: 160 };
 // Section C, as far as a row can show it: how old an Early row, an urgent row, a spike and a flare may be, and the shortest time left
 // a start known only to the day may carry.
 const HOUR = 3600e3;
@@ -225,7 +227,7 @@ function validateDetail(detail, { bytes = 0, name = 'detail' } = {}) {
       if (tl.some((e) => e && e.kind === 'measure' && isInstant(e.at) && Date.parse(e.at) < observed)) say('timeline: a measure entry is dated before the graph was observed');
     }
   }
-  if (!Array.isArray(detail.why) || detail.why.length > 6 || !detail.why.every((w) => isText(w, 160))) say('why: 0-6 lines');
+  if (!Array.isArray(detail.why) || detail.why.length > LIMITS.why || !detail.why.every((w) => isText(w, LIMITS.whyText))) say(`why: 0-${LIMITS.why} lines`);
   else if (detail.why.some((w) => /\b\d+\s+(?:creator videos?|creators have)/i.test(w))) say('why: no count of creator videos');
   if (!Array.isArray(detail.sources) || detail.sources.length > 6 || !detail.sources.every((s) => isText(s, 60))) say('sources: 0-6 outlet names');
   // (the sheet's own fields, optional, added 2026-10-18: example posts, related searches, where it was seen)
@@ -243,6 +245,12 @@ function validateDetail(detail, { bytes = 0, name = 'detail' } = {}) {
     }
   }
   if (detail.related !== undefined && (!Array.isArray(detail.related) || detail.related.length > LIMITS.related || !detail.related.every((q) => isText(q, LIMITS.query)))) say(`related: 0-${LIMITS.related} queries of up to ${LIMITS.query} characters`);
+  // (added 2026-10-20: what a creator could film, each held to the claim check by the collector, lib/editor/ideas.js)
+  if (detail.angles !== undefined) {
+    const an = detail.angles;
+    if (!Array.isArray(an) || an.length < 1 || an.length > LIMITS.angles || !an.every((a) => a && typeof a === 'object' && isText(a.text, LIMITS.angleText) && ANGLE_KINDS.includes(a.kind))) say(`angles: 1-${LIMITS.angles} entries of { text (1-${LIMITS.angleText}), kind (${ANGLE_KINDS.join(', ')}) }`);
+    else if (new Set(an.map((a) => a.kind)).size !== an.length) say('angles: one kind once');
+  }
   if (detail.spread !== undefined) {
     const sp = detail.spread;
     if (!Array.isArray(sp) || sp.length < 1 || sp.length > LIMITS.spread || !sp.every((e) => e && typeof e === 'object' && isText(e.where, 40) && isInstant(e.at))) say(`spread: 1-${LIMITS.spread} entries of { where, at }`);
@@ -349,7 +357,7 @@ function validateFolder(dir) {
   return { problems, files };
 }
 
-module.exports = { validateRow, validateList, validateDetail, validateBundle, validateNames, validateFolder, statusAgainstGraph, keyOf, LIMITS, RULES, SCHEMA_VERSION };
+module.exports = { validateRow, validateList, validateDetail, validateBundle, validateNames, validateFolder, statusAgainstGraph, keyOf, LIMITS, RULES, SCHEMA_VERSION, ANGLE_KINDS };
 
 if (require.main === module) {
   const dir = process.argv[2];

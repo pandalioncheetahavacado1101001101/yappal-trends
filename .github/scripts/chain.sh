@@ -19,11 +19,24 @@
 #       carries the chain). The dispatch itself failing fails this job, so it shows: the next cron run that fires starts the
 #       chain again.
 #
+#   .github/scripts/chain.sh align   (the cycle job, after its restores and just before the collector runs; at most 2 minutes)
+#       The collector's slot is the quarter-hour its clock is in (lib/util.js slotOf). With no model to start (ios/IDEAS-SUPER.md
+#       P11) a chained run is ready about 35 s BEFORE the quarter-hour it was dispatched for: run then, it would take the slot before
+#       (already out) and publish it a quarter-hour late. So when the next quarter-hour is ALIGN_MAX_SECONDS (120) away or less,
+#       this sleeps until ALIGN_MARGIN_SECONDS (2) past it; any other run (the cron's watchdog at :07, a run by hand) starts at once.
+#
+#   .github/scripts/chain.sh enrich  (the cycle job, after a feed was published and the state saved; seconds)
+#       Dispatches the enrich pass (enrich.yml: the model's cards, written from the plan this cycle left in its state, for the next
+#       cycle to import), handing it the state's key (ENRICH_STATE_KEY). Its own workflow and concurrency group: it never holds this
+#       job or the chain up, and a failure to dispatch is a warning, never a failed job. Nothing when the repository variable
+#       IDEAS_ENRICH is "off" or IDEAS_EDITOR_OFF is "1" (EDITOR_OFF): the feed goes on with the cards it holds.
+#
 # Environment: GH_TOKEN, GH_REPO (the gh CLI); GITHUB_RUN_ID, GITHUB_EVENT_NAME, GITHUB_OUTPUT (the runner); STARTED_BY
 # (schedule | chain | hand, from the workflow); CHAIN_REF (the branch to dispatch on); IDEAS_CHAIN (the variable); CYCLE_RESULT
 # (the cycle job's result, from the workflow: success | failure | cancelled | skipped; unset reads as success).
 # GH_BIN names another gh (a fake, to try the arithmetic on a machine with no token); WORKFLOW another workflow file;
 # CHAIN_NOW pins "now" (epoch seconds) and SLEEP_BIN names another sleep, so the timing can be tried without waiting.
+# enrich: ENRICH_WORKFLOW (enrich.yml), ENRICH_STATE_KEY, IDEAS_ENRICH, EDITOR_OFF.
 set -u
 MODE="${1:-}"
 GH="${GH_BIN:-gh}"
@@ -34,6 +47,9 @@ SLOT_SECONDS=900          # a quarter-hour
 LEAD_SECONDS=60           # dispatch this long before the quarter-hour: the run is queued and on a runner by it
 SLEEP_MAX_SECONDS=840     # never sleep longer than this (wall time on the runner): a whole slot less the lead, inside the job's cap
 SLEEP="${SLEEP_BIN:-sleep}"
+ALIGN_MAX_SECONDS=120     # align: wait for a quarter-hour this near, no further
+ALIGN_MARGIN_SECONDS=2    # align: and start this long after it, so the collector's clock is surely in the new slot
+ENRICH_WORKFLOW="${ENRICH_WORKFLOW:-enrich.yml}"
 
 # The other runs of this workflow that are queued or in progress, one per line ("<id> <event> <status>"); empty when none.
 # A failure to ask prints nothing on stdout and "?" on stderr-side via the return code.
@@ -109,8 +125,35 @@ next() {
   return 0
 }
 
+align() {
+  now="${CHAIN_NOW:-$(date +%s)}"
+  slot=$(( (now / SLOT_SECONDS + 1) * SLOT_SECONDS ))
+  away=$(( slot - now ))
+  slot_at="$(date -u -d "@$slot" +%H:%MZ 2>/dev/null || date -u -r "$slot" +%H:%MZ)"
+  if [ "$away" -gt "$ALIGN_MAX_SECONDS" ]; then
+    echo "the quarter-hour began $(( now % SLOT_SECONDS )) s ago: the cycle starts now"
+    return 0
+  fi
+  echo "the next quarter-hour is $slot_at, $away s away: the cycle starts $ALIGN_MARGIN_SECONDS s after it"
+  "$SLEEP" "$(( away + ALIGN_MARGIN_SECONDS ))"
+  return 0
+}
+
+enrich() {
+  if [ "${IDEAS_ENRICH:-}" = "off" ]; then echo "the repository variable IDEAS_ENRICH is off: no enrich pass"; return 0; fi
+  if [ "${EDITOR_OFF:-}" = "1" ]; then echo "the repository variable IDEAS_EDITOR_OFF is 1: no enrich pass"; return 0; fi
+  if ! "$GH" workflow run "$ENRICH_WORKFLOW" --ref "${CHAIN_REF:-main}" -f state_key="${ENRICH_STATE_KEY:-}"; then
+    echo "::warning::the enrich pass was not dispatched (gh workflow run failed): the feed keeps the cards it holds"
+    return 0
+  fi
+  echo "dispatched the enrich pass ($ENRICH_WORKFLOW on ${CHAIN_REF:-main}) for this cycle's plan"
+  return 0
+}
+
 case "$MODE" in
   gate) gate ;;
   next) next ;;
-  *) echo "usage: chain.sh gate | next" >&2; exit 2 ;;
+  align) align ;;
+  enrich) enrich ;;
+  *) echo "usage: chain.sh gate | next | align | enrich" >&2; exit 2 ;;
 esac

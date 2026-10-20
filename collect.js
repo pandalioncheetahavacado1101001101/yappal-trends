@@ -16,6 +16,15 @@
  *        [--force]   run although the last network cycle began under ten minutes ago, or --now is given on a state a real cycle
  *                    published to inside the last two hours
  *        [--fresh]   start from nothing on purpose: a state with no history is not re-seeded from the feed already in <out>
+ *        [--cards=<file>]  the host's collect, with no model of its own (ios/IDEAS-SUPER.md P11): the cards the enrich pass wrote are
+ *                    imported from <file> wherever a card was written from the row's dossier as it is this cycle (a card for a story
+ *                    that has moved since is dropped), kept cards are shown, nothing is asked, and the rows still owed are left in
+ *                    <state>/enrich/plan.json for the next pass (lib/editor/cards.js). A file that is not there imports nothing.
+ *                    Ignored when a model is named (IDEAS_LLM_BASE_URL): that cycle writes its own cards as before
+ *        [--stories=<file>]  the enrich pass's stories by meaning (ios/IDEAS-SUPER.md P8, lib/cluster/stories.js): two rows they put
+ *                    in one story, whose headlines name each other, are one row at the desk; and the rows of this cycle are left
+ *                    in <state>/enrich/stories.json for the next pass. A file that is not there, too old or of an untuned model
+ *                    changes nothing: the desk's own rules decide
  *        [--check-state]  no cycle: says whether <state> holds a state worth keeping ({ ok, why, cycle, trends } on stdout; exit 0
  *                    when it does, 4 when not). What the host asks before it saves the folder as the newest (A8)
  * stdout: one JSON line { cycle, slot, requests, blocked, items, modelLines, ms, answered, seconds, ... }; everything else goes to stderr.
@@ -77,6 +86,7 @@ const REELS = require('./lib/sources/reels');
 const SHAZAM = require('./lib/sources/shazam');
 const KWORB = require('./lib/sources/kworb');
 const WIKIH = require('./lib/sources/wiki-hourly');
+const SIZE = require('./lib/size/cycle');
 const GDELT = require('./lib/sources/gdelt');
 const WIKT = require('./lib/sources/wikt-slang');
 const TYPED = require('./lib/sources/typed');
@@ -93,6 +103,8 @@ const M = require('./lib/measure');
 const NM = require('./lib/names');
 const LLM = require('./lib/llm');
 const LW = require('./lib/line-writer');
+const XC = require('./lib/editor/cards');
+const CS = require('./lib/cluster/stories');
 const HY = require('./lib/hygiene');
 const RESEED = require('./lib/reseed');
 const DESK = require('./lib/desk');
@@ -161,6 +173,8 @@ function parseArgs(argv) {
     else if (flag === '--deadline-seconds') out.deadlineSeconds = Math.max(30, Number(value()) || 420);
     else if (flag === '--record') out.record = value();
     else if (flag === '--replay') out.replay = value();
+    else if (flag === '--cards') out.cards = value();
+    else if (flag === '--stories') out.stories = value();
     else throw new Error(`unknown argument ${a}`);
   }
   if (out.checkState && out.state) return out;
@@ -168,6 +182,18 @@ function parseArgs(argv) {
   if (out.now !== undefined && !Number.isFinite(out.now)) throw new Error('--now must be an ISO instant');
   if (!out.audiences.length) throw new Error('--audiences names none of US, GB, AU, CA, mixed');
   return out;
+}
+
+/**
+ * The stories by meaning this cycle read, for the ledger (P8): counts and minutes only, never a row. { slot, age, size, joined,
+ * planned, model, texts, vectors, seconds, why }: joined, the rows the desk folded by meaning in the main list.
+ */
+function storiesSummary(index, why, edited, nowMs) {
+  const joined = ((edited && edited.notes) || []).filter((n) => /\(by meaning\)$/.test(n.did || '')).length;
+  if (!index) return { slot: null, age: null, size: 0, joined: 0, planned: null, model: null, texts: null, vectors: null, seconds: null, why: why || null };
+  const st = index.stats || {};
+  return { slot: index.slot, age: Number.isFinite(index.made) ? Math.max(0, Math.round((nowMs / 1000 - index.made) / 60)) : null, size: index.size, joined, planned: null,
+    model: index.model || null, texts: Number.isFinite(st.texts) ? st.texts : null, vectors: Number.isFinite(st.vectors) ? st.vectors : null, seconds: Number.isFinite(st.seconds) ? st.seconds : null, why: null };
 }
 
 /** A transport that answers from a recorded cycle folder: <dir>/<slot>/<request id>, with manifest.json naming each reply's status. */
@@ -309,7 +335,10 @@ async function runCycle(opts) {
     const off = new Set((env.IDEAS_SOURCES_OFF || '').split(',').map((x) => x.trim()).filter(Boolean));
     // (a few Google News requests are kept back for the third round: the name a roster flare or a new game on the chart wants
     // searched in the same cycle. The second round spent the whole cap on 35 of 39 recorded cycles. Reviewers, 2026-10-12)
-    const budget = B.createBudget({ cap: opts.offline ? 0 : opts.maxRequests, hosts, now: nowS, off, reserve: { 'news.google.com': THIRD_ROUND_NEWS } });
+    // (and the size step's share of the Wikimedia Action API, freed just before it: the dictionary lookups fill the group's cap)
+    let sizeHold = 0;
+    try { sizeHold = real ? SIZE.actionShare({ db, now: nowS, agent: B.userAgent(env) }) : 0; } catch (e) { log(`[size] its share was not kept back: ${e.message}`); }
+    const budget = B.createBudget({ cap: opts.offline ? 0 : opts.maxRequests, hosts, now: nowS, off, reserve: { 'news.google.com': THIRD_ROUND_NEWS, ...(sizeHold ? { wikimedia: sizeHold } : {}) } });
     const skews = [];
     const transport = opts.offline ? null : opts.transport || (opts.replay ? replayTransport(opts.replay, t) : F.netTransport(env));
     const fetchDeadline = started + Math.min(B.FETCH_DEADLINE_SECONDS, opts.deadlineSeconds) * 1000;
@@ -569,6 +598,14 @@ async function runCycle(opts) {
       const gamesSent = !games || games.fresh.every((g) => sent.has(TS.talkKey(g.name)) || lately(g.name) || picked.now.includes(TS.talkKey(g.name)));
       if (games && gamesSent) meta.set('twitchGames', games.state);
       meta.set('rosterWatch', { cursor: watch.cursor, carried });
+      // the trends' size over their lives (D4 `size`): its share kept back from the rounds before, by rank, kept in the state (lib/size/cycle.js)
+      budget.release('wikimedia');
+      if (real) {
+        try {
+          await SIZE.step({ db, now: nowS, agent: B.userAgent(env), log, send: (requests) => F.send(requests, { budget, hosts, clock, deadlineMs: fetchDeadline, transport }),
+            booked: (r) => { outcome.sent += r.tried; outcome.byHost[r.request.host] = (outcome.byHost[r.request.host] || 0) + r.tried; if (r.status === 200) outcome.ok += 1; putFetch.run(cycle, r.request.id, r.request.host, t, r.status, r.bytes, r.ms); saveHost(r.request.host); } });
+        } catch (e) { log(`[size] the step failed, the details keep what the state held: ${e.message}`); }
+      }
       // (the first plan ever was made on tier 0 alone: the names the rest of this cycle's replies brought are already waiting, they
       // are not "new" to the next cycle, which reads the list's own rows first)
       if (!Array.isArray(wantedBefore)) {
@@ -610,8 +647,21 @@ async function runCycle(opts) {
       .map((r) => ({ t: r.t, title: r.title, outlet: r.publisher || r.label || null }));
     const isBeat = (outlet) => TC.CREATOR_PRESS.test(outlet) || TN.MAJOR.test(outlet);
     // (the desk never holds a list back: should it fail on a row nobody foresaw, that audience's rows go out as the engine made them)
-    const deskOf = (a) => { const rows = ROWS.rowsOf(a, built.byAudience[a], built); try { return DESK.edit(rows, { recent, now: nowMs, isBeat, lex: built.lex, roster: obs.roster }); } catch (e) { log(`[desk] ${a}: failed, the engine's rows stand: ${e.message}`); return { rows, notes: [] }; } };
+    // (the enrich pass's stories by meaning, P8: one slot late, imported here; none and the desk's own rules decide alone)
+    const storiesRead = opts.stories ? CS.indexOf(opts.stories, { nowS: Math.floor(nowMs / 1000) }) : { index: null, why: null };
+    const stories = storiesRead.index;
+    const deskOf = (a) => { const rows = ROWS.rowsOf(a, built.byAudience[a], built); try { return DESK.edit(rows, { recent, now: nowMs, isBeat, lex: built.lex, roster: obs.roster, stories }); } catch (e) { log(`[desk] ${a}: failed, the engine's rows stand: ${e.message}`); return { rows, notes: [] }; } };
     const edited = Object.fromEntries(opts.audiences.map((a) => [a, deskOf(a)]));
+    // (and this cycle's rows, as the engine made them, for the next pass to make its stories from: the state's, never published)
+    const mainAudience = opts.audiences.includes('US') ? 'US' : opts.audiences[0];
+    const storiesOut = opts.stories ? storiesSummary(stories, storiesRead.why, edited[mainAudience], nowMs) : null;
+    if (storiesOut) {
+      try {
+        storiesOut.planned = CS.writePlan(path.join(opts.state, 'enrich', 'stories.json'), CS.planOf(ROWS.rowsOf(mainAudience, built.byAudience[mainAudience], built), { t, nowMs }));
+      } catch (e) { log(`[stories] the plan was not written: ${e.message}`); }
+      // (counts only: this line reaches the job's public log)
+      log(`[stories] ${stories ? `${storiesOut.size} sentences in the stories of slot ${storiesOut.slot ? instant(storiesOut.slot) : '?'} (${storiesOut.age} min old): ${storiesOut.joined} rows joined by meaning` : `none: ${storiesRead.why}`}; ${storiesOut.planned ?? '?'} rows planned for the next pass`);
+    }
     // the creators' side (lib/native-desk.js): attached to the rows the engine lists for the same people, and, where two kinds of
     // creator-native signal agree on a creator no row tells yet, a row of its own for the series to tag Early
     // (read again with the list's own subjects known by name: what the boards, the roster and the questions say of a celebrity the
@@ -647,6 +697,8 @@ async function runCycle(opts) {
     for (const r of nativeRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || []) log(`[native] "${r.title}": ${Object.keys(r.meta.native.kinds).join(' + ')} | ${r.line}`);
     const deskNotes = (edited[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || { notes: [] }).notes;
     for (const n of deskNotes.slice(0, 40)) log(`[desk] "${n.title}": ${n.did}`);
+    // (every row folded by meaning, P8, past the forty too: what the stories changed is always in the cycle's own log)
+    for (const n of deskNotes.slice(40).filter((x) => /\(by meaning\)$/.test(x.did || ''))) log(`[desk] "${n.title}": ${n.did}`);
     lap('build');
 
     // ---- steps 4-6: identity, this slot's samples, measured status ----
@@ -665,6 +717,9 @@ async function runCycle(opts) {
     const evalLlm = !!opts.replay && !opts.llmCall && LLM.evalOn(env);
     const llm = opts.offline || ((opts.replay || opts.transport) && !opts.llmCall && !evalLlm) ? null : LLM.configOf(env);
     if (llm && llm.keyIgnored) log(`[lines] IDEAS_LLM_API_KEY is set and ${llm.host} takes no key: it is not sent`);
+    // (no model here and the enrich pass's cards named: cards only, P11. lib/editor/cards.js; the plan goes in the state, never out)
+    let cardsOnly = null;
+    if (!llm && opts.cards) { try { cardsOnly = XC.cardsOnlyConfig({ env, file: opts.cards, plan: path.join(opts.state, 'enrich', 'plan.json') }); } catch (e) { log(`[enrich] the cards did not read, none imported: ${e.message}`); } }
     // (the page laid out once each row's status and start are known: what is still going leads, what is fading follows. lib/desk.js `order`)
     // (a row whose "fading" is not said, a young story or one with a turn inside the last day and a half, is still going: the
     // page places it among what is, as its card words it. lib/measure.js heatWordSaid)
@@ -694,13 +749,17 @@ async function runCycle(opts) {
     let lined = { lines: new Map(), casing: new Map(), stats: { asked: 0, calls: 0, passed: 0, failedCheck: 0, unanswered: 0, shown: 0, headlinesChanged: 0, off: null } };
     try {
       lined = await LW.writeLines({ db, meta, t, rowsByAudience: laidOut, isEarly: (row) => { const c = cycleState.trends.get(row.id); return !!c && Object.values(c.early || {}).some(Boolean); },
-        lex: built.lex, config: llm, ...(opts.llmCall ? { call: opts.llmCall } : evalLlm ? { call: LLM.cachedCall(env) } : {}), ...(opts.llmWait ? { wait: opts.llmWait } : {}), log,
+        lex: built.lex, config: llm || cardsOnly, ...(opts.llmCall ? { call: opts.llmCall } : evalLlm ? { call: LLM.cachedCall(env) } : {}), ...(opts.llmWait ? { wait: opts.llmWait } : {}), log,
         // (what an editor's dossier is built from, lib/editor: the store's searches, the cycle's clock, the start the series measured)
         // (and this cycle's own timeline events, not yet saved: a line led by the row's newest entry reads them with the saved ones)
         store, nowMs, measured: (row) => { const c = cycleState.trends.get(row.id); return c ? { startedAt: c.next.startedAt, startedPrecision: c.next.startedPrecision, events: c.events || [] } : null; } });
     } catch (e) { log(`[lines] the writer failed, every line stays its headline: ${e.message}`); }
     for (const [id, w] of lined.lines) if (w.drop) log(`[lines] "${(Object.values(rowsByAudience).flat().find((r) => r.id === id) || {}).title || id}" left out: ${w.drop}`);
-    const linedRows = Object.fromEntries(Object.entries(LW.applyLines(rowsByAudience, lined.lines, lined.casing)).map(([a, rows]) => [a, orderOf(a, DESK.advise(DESK.respellLines(rows)))]));
+    // (and a card's why and angles on its row, for the detail: lib/editor/ideas.js, D4)
+    const linedRows = Object.fromEntries(Object.entries(LW.applyLines(rowsByAudience, lined.lines, lined.casing, lined.ideas)).map(([a, rows]) => [a, orderOf(a, DESK.advise(DESK.respellLines(rows)))]));
+    // (the enrich pass whose cards this cycle imported, for the ledger: counts and seconds only, never a row)
+    const enrich = cardsOnly ? XC.enrichOf(cardsOnly.enrichHeader, lined.stats.editor, { nowS: clock(), seenRun: meta.get('enrichSeen', null) }) : null;
+    if (enrich) log(`[enrich] cards of pass ${enrich.run ?? 'none'}${enrich.age !== undefined && enrich.age !== null ? ` (${enrich.age} min old)` : ''}: ${enrich.imported} imported, ${enrich.held} held already, ${enrich.stale} dropped for a story that moved; ${enrich.planned ?? '?'} rows planned for the next pass`);
     lap('lines');
 
     // ---- step 7: the feed, validated ----
@@ -791,7 +850,7 @@ async function runCycle(opts) {
       // (this cycle began with no state and read its history back from the feed already out: how much. N)
       ...(reseeded ? { reseeded: { trends: reseeded.trends, from: instant(reseeded.from) } } : {}),
       // (the line writer this cycle: calls made, lines the check passed and refused, headline lines the no-model path bettered. G)
-      lines: { model: llm ? llm.model : null, ...lined.stats } };
+      lines: { model: llm ? llm.model : cardsOnly ? cardsOnly.model : null, ...lined.stats } };
     // model lines on the lists as published: distinct trends, whichever audience lists them
     const modelLines = new Set(good.flatMap((a) => feeds.lists[a].items.filter((x) => x.lineWrittenBy === 'model').map((x) => x.id))).size;
     const status = { schemaVersion: FEED.SCHEMA_VERSION, generatedAt: instant(generatedAt), cycle, slot: instant(t), sourcesAt: Number.isFinite(sourcesAt) ? instant(sourcesAt) : null,
@@ -820,6 +879,7 @@ async function runCycle(opts) {
     if (lost) { log(`[collect] ${lost}: nothing published`); return { code: 2, summary: null }; }
     const written = PUB.publish(opts.out, { cycle, feeds, audiences: good, status, names });
     if (names) meta.set('namesDay', today);
+    if (enrich && enrich.run !== null) meta.set('enrichSeen', enrich.run);
     // (by what the state knows: every trend seen inside the last 48 hours keeps its detail, any other file goes)
     PUB.pruneDetails(opts.out, Date.now() / 1000, { keep: new Set([...db.prepare('SELECT id FROM trends WHERE last_seen >= ?').all(t - PUB.DETAIL_KEPT_SECONDS).map((r) => r.id), ...feeds.details.keys()]) });
     PUB.archive(paths.archive, Object.fromEntries(good.map((a) => [a, feeds.lists[a]])), t);
@@ -845,7 +905,8 @@ async function runCycle(opts) {
     const seconds = { fetch: timing.fetch, build: timing.build, measure: timing.measure, lines: Math.max(0, Math.round((timing.lines - editorS) * 10) / 10), editor: editorS, feed: timing.feed, publish: timing.publish };
     log(`[time] fetch ${seconds.fetch}s, build ${seconds.build}s, identity + history ${seconds.measure}s, lines ${seconds.lines}s, editor ${seconds.editor}s, feed ${seconds.feed}s, write + publish ${seconds.publish}s`);
     const summary = { cycle, slot: instant(t), requests: outcome.sent, blocked: stale, items: Object.fromEntries(good.map((a) => [a, feeds.lists[a].items.length])), modelLines, ms: Date.now() - started,
-      answered: outcome.ok, seconds, byHost: status.requests.byHost, bytes: Object.fromEntries(good.map((a) => [a, written.bytes[`${PUB.fileOf(a)}.json`]])), counts };
+      answered: outcome.ok, seconds, byHost: status.requests.byHost, bytes: Object.fromEntries(good.map((a) => [a, written.bytes[`${PUB.fileOf(a)}.json`]])), counts, ...(enrich ? { enrich } : {}),
+      ...(storiesOut ? { stories: storiesOut } : {}) };
     return { code: 0, summary };
   } finally {
     if (state) state.close();

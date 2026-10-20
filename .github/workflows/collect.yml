@@ -11,9 +11,11 @@ name: collect
 #      ends at once with nothing done: the chain is alive. A chained or hand-started run always goes on. So the watchdog never
 #      queues up behind a live chain, and a dispatched run waiting its turn is never cancelled by it (GitHub keeps at most
 #      one waiting run per concurrency group and cancels the older waiting one when another arrives).
-#   3. "cycle" (at most 14 minutes; concurrency group "collect", never cancelled in progress): the collector's cycle exactly as
-#      before: restore the state, start the editor model, one cycle, publish the feed, save the state, delete the state's
-#      superseded cache entries. A run that arrives while another holds the group WAITS for it. Last, its ledger line (below).
+#   3. "cycle" (at most 14 minutes; concurrency group "collect", never cancelled in progress): the collector's cycle: restore the
+#      state, wait for the quarter-hour, restore the enrich pass's newest cards, one cycle WITH NO MODEL (it imports the cards that
+#      still match their rows' stories and leaves a plan of the cards still owed), publish the feed, save the state, delete the
+#      state's superseded cache entries, dispatch the enrich pass (enrich.yml, below). A run that arrives while another holds the group
+#      WAITS for it. Last, its ledger line (below).
 #   4. "next" (at most 16 minutes; after "cycle", and only when the cycle SUCCEEDED: a cycle that published, found nothing new
 #      or found the lock held is a success; one that failed, exit 3 or more, or hit the 14-minute cap is not): computes the
 #      next quarter-hour (:00, :15, :30, :45), sleeps until 60 seconds before it (14 minutes at most, wall time on this runner),
@@ -36,7 +38,7 @@ name: collect
 #
 # THE LEDGER: every run that reaches its cycle appends ONE JSON line to ledger.jsonl at the root of the feed branch, beside
 # v1/ (.github/scripts/ledger.sh, ledger.js): { slot, started, published, rows, requests, answered, modelCards, seconds, code, by,
-# run, phases, cache }. Lines older than 7 days are dropped. A day's lead time (published minus slot), its real cadence and where
+# run, phases, cache, enrich }. Lines older than 7 days are dropped. A day's lead time (published minus slot), its real cadence and where
 # each job's time went can then be read from the branch alone, with no server and no sign-in. Nothing in it is private: instants,
 # counts and seconds only, never a name, a cache key or a per-trend number. The feed under v1/ is untouched by it.
 #
@@ -55,9 +57,39 @@ name: collect
 #     summary, its fetch, build, measure, lines, editor, feed and publish; then push, stateSave and cachePrune. `cache` gives the
 #     cache's GB and entries after the prune and whether the editor model is in it. `answered`: the requests that got an answer.
 #
-# EXPECTED, once it runs: the cycle job starts within a minute of each quarter-hour; its publish lands 8 to 13 minutes after
-# its slot; the cycle job never runs twice at once; the Actions list shows a chained run per quarter-hour and, between them,
-# the watchdog's short runs.
+# CHANGED 2026-10-20 (ios/IDEAS-SUPER.md P11: collect without the model, the cards from a pass of their own):
+#   - NO MODEL HERE. The editor model's restore (about 47 s) and start (about 135 s) and its cards (about 130 s, 7 to 10 first asks
+#     a cycle, for the first 40 rows only) made a cycle about 10.5 minutes and its publish about 10 minutes late. The cycle now
+#     restores the newest "cards-*" cache entry (the enrich pass's merged cards: a few hundred KB) and runs
+#     "collect.js --cards cards/cards.jsonl": a card is imported only for the very dossier it was written from (a card for a story
+#     that has moved since is dropped), cards already held are shown as ever, and the rows of the first 80 still owed a card are left
+#     with their dossiers in state/enrich/plan.json (lib/editor/cards.js).
+#   - THE WAIT FOR THE QUARTER-HOUR ("chain.sh align"). With no model to start, a chained run is ready about 35 s before the
+#     quarter-hour "next" dispatched it for, and a cycle run then takes the slot before. It waits until 2 s past the quarter-hour
+#     when that is 2 minutes away or less (any other run starts at once). LEAD_SECONDS stays 60: the dispatch lands a minute early
+#     and the runner is up when the quarter-hour comes. The cards are restored AFTER the wait: the pass for the slot before is
+#     merged by then.
+#   - THE ENRICH PASS (enrich.yml, its own concurrency group "enrich"): dispatched after a feed was published and the state saved
+#     ("chain.sh enrich", handed the state's key). It restores that state READ-ONLY and the model, writes the planned cards on as
+#     many parallel shards as it takes to write every owed card in time (at the measured seconds a card), merges them into
+#     "cards-<run>-<attempt>" and never writes the feed or the state. Its shards stop in time for the merge to land before the next
+#     quarter-hour, so the next cycle imports them: one slot late (a pass that starts too late for that, after a cycle of the cron's
+#     or a slow one, lands for the cycle after next). A pass that fails, is slow or never starts costs this job nothing: the cards restore
+#     cannot fail the job, the dispatch is a warning at worst, and the feed keeps the cards the state holds. IDEAS_ENRICH "off" (or
+#     IDEAS_EDITOR_OFF "1") stops the passes; IDEAS_CHAIN is the chain's switch as before.
+#   - THE LEDGER: `phases` gains wait and cardsRestore (modelRestore and modelStart are null), and each line an `enrich` field:
+#     the pass whose cards the cycle imported (cards asked, passed, seconds, shards; imported, held, stale; planned).
+#   The model's file is kept in the cache by the enrich pass now (its first shard), under the same key.
+# CHANGED 2026-10-20 (ios/IDEAS-SUPER.md P8: stories by meaning). The cycle also reads "cards/stories.json" (--stories): the
+#   enrich pass's stories, made by a small embedding model (all-minilm) from the rows this cycle's predecessor planned and the
+#   store's sentences of the last 72 hours, one slot late like the cards. Two rows they put in one story, whose headlines name
+#   each other, are one row at the desk (lib/desk.js; the lower goes). The cycle leaves its own rows in state/enrich/stories.json
+#   for the next pass. No stories (none yet, over 6 hours old, an untuned model, IDEAS_STORIES "off") and the desk decides by its
+#   own rules exactly as before. The `[stories]` log line and the ledger's `stories` field are counts only.
+#
+# EXPECTED, once it runs: the cycle job starts within a minute before each quarter-hour and its cycle a few seconds after it; its
+# publish lands about 4 to 6 minutes after its slot; the cycle job never runs twice at once; the Actions list shows a chained run
+# per quarter-hour, an enrich run after each, and between them the watchdog's short runs.
 on:
   schedule:
     - cron: '7,22,37,52 * * * *'
@@ -106,48 +138,26 @@ jobs:
     concurrency:
       group: collect
       cancel-in-progress: false
-    # Not raised for the model: the next run is dispatched after this job ends (the "next" job below), so a longer job would push
-    # the chain off its quarter-hour. The editor is given what is left of this job instead (EDITOR_UNTIL below), and what it has
-    # not written waits a cycle.
+    # The next run is dispatched after this job ends (the "next" job below), so a longer job would push the chain off its quarter-hour.
     timeout-minutes: 14
     env:
-      # THE EDITOR MODEL: a small open model served on this runner itself (no key, no account; .github/scripts/model.sh).
-      # It writes each card from the story's own dossier and every card is held to the claim check before it is shown.
-      # Gemma 4 E4B by default. Measured on this kind of runner (4 cores) on a 100-token question: Qwen3.5-4B 6.3 s (and it
-      # worded an accusation nobody made), Gemma 9.7 s and Qwen3.5-9B 11.7 s (both right). A card is a longer question and a
-      # longer answer than that: twenty cards of the 9B do not fit what a 14-minute job has left, so the default is the faster
-      # of the two that were right, and the editor's own time budget, not a count, decides how many cards a cycle writes
-      # (the rest wait a cycle; a card is written once per change of its story). The VARIABLE IDEAS_EDITOR_MODEL names another
-      # (hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M); IDEAS_EDITOR_OFF=1 runs every cycle with no model at all.
-      EDITOR_MODEL: ${{ vars.IDEAS_EDITOR_MODEL || 'hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M' }}
+      # (no model here since P11: the cards are the enrich pass's. These switches only decide whether it is dispatched: chain.sh enrich)
       EDITOR_OFF: ${{ vars.IDEAS_EDITOR_OFF }}
-      # An OpenAI-compatible endpoint of the owner's choosing may be named instead in the VARIABLES IDEAS_LLM_BASE_URL and
-      # IDEAS_LLM_MODEL: then no model is started here. None is set by default.
-      OWN_ENDPOINT: ${{ vars.IDEAS_LLM_BASE_URL }}
-      OWN_MODEL: ${{ vars.IDEAS_LLM_MODEL }}
-      # The editor's budget: twenty first asks and five minutes a cycle at most, a minute and a half for one card, and never
-      # past the job's own clock (IDEAS_EDITOR_UNTIL, set when the job starts).
-      IDEAS_EDITOR_CARDS: 20
-      IDEAS_EDITOR_BUDGET_MS: 300000
-      IDEAS_EDITOR_TIMEOUT_MS: 90000
-      IDEAS_EDITOR_MAX_TOKENS: 320
+      # (the enrich pass's stories by meaning, P8: read beside the cards; "off" and the desk decides by its own rules alone)
+      STORIES_OFF: ${{ vars.IDEAS_STORIES }}
       FEED_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
       FRESH: ${{ inputs.cold_start && '--fresh' || '' }}
     steps:
-      # The job's clock: the model must be answering four and a half minutes in or the cycle runs without it; the editor stops
-      # asking a little over eleven minutes in; the rest is the feed's (publish, the state's health, the state's cache).
+      # The job's clock: the cycle's own deadline is thirteen minutes in; the rest is the feed's (publish, the state's health and cache).
       - name: The job's clock
         run: |
           now=$(date +%s)
           echo "STARTED=$now" >> "$GITHUB_ENV"
           # (the marks: epoch milliseconds where each phase ends, for the ledger line's `phases`; times only, never a reason to stop)
           echo "MARK_BEGIN=$(date +%s%3N)" >> "$GITHUB_ENV"
-          echo "MODEL_BY=$((now + 270))" >> "$GITHUB_ENV"
-          echo "IDEAS_EDITOR_UNTIL=$((now + 680))" >> "$GITHUB_ENV"
-          # (the cycle's own deadline, thirteen minutes in: tied to the job's clock, not to when the cycle starts, so a slow model
-          # restore or a slow model start can never push the cycle past the job's cap before the feed is published and the state saved)
+          # (the cycle's own deadline, thirteen minutes in: tied to the job's clock, not to when the cycle starts, so a slow restore or
+          # the wait for the quarter-hour can never push the cycle past the job's cap before the feed is published and the state saved)
           echo "CYCLE_UNTIL=$((now + 780))" >> "$GITHUB_ENV"
-          echo "MODEL_KEY=$(printf '%s' "$EDITOR_MODEL" | tr -c 'A-Za-z0-9._-' '-')" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v4
 
@@ -175,35 +185,26 @@ jobs:
           bash .github/scripts/restore.sh
           echo "MARK_FEED=$(date +%s%3N)" >> "$GITHUB_ENV"
 
-      # The model file (several GB) is kept in the Actions cache under the model's own name and is restored in about a minute.
-      # A job that finds none runs its cycle with no model, fetches the file behind it and saves it at the end: one cycle
-      # later the model is there. Nothing here can fail the job: a step that does not finish in time or does not work leaves
-      # the cycle to run with no model.
-      - name: Restore the editor model
-        id: modelcache
-        if: env.EDITOR_OFF != '1' && env.OWN_ENDPOINT == ''
+      # (chain.sh align: a chained run is ready before the quarter-hour it was dispatched for, and the collector's slot is the
+      # quarter-hour its clock is in. Waits until 2 s past it when it is 2 minutes away or less; any other run starts at once)
+      - name: Wait for the quarter-hour
+        run: |
+          bash .github/scripts/chain.sh align
+          echo "MARK_WAITED=$(date +%s%3N)" >> "$GITHUB_ENV"
+
+      # The enrich pass's newest cards (enrich.yml, P11): a few hundred KB, the model's cards for the plans of the cycles before, for
+      # this cycle to import where they still match their rows' stories. AFTER the wait: the pass for the slot before merges its cards
+      # by this quarter-hour (lib/editor/cards.js shardsFor), so they are shown one slot late. None (a first run, a pass that has not
+      # merged yet, a restore that fails or is slow) and the cycle goes on with the cards its state already holds: never a reason for
+      # the job to fail, and a minute at the most.
+      - name: Restore the newest model cards
         continue-on-error: true
-        timeout-minutes: 4
+        timeout-minutes: 1
         uses: actions/cache/restore@v4
         with:
-          path: ~/.ollama/models
-          key: editor-model-v1-${{ env.MODEL_KEY }}
-
-      - name: Start the editor model
-        id: model
-        if: env.EDITOR_OFF != '1' && env.OWN_ENDPOINT == ''
-        continue-on-error: true
-        timeout-minutes: 6
-        run: |
-          echo "MARK_MODEL=$(date +%s%3N)" >> "$GITHUB_ENV"
-          bash .github/scripts/model.sh "$EDITOR_MODEL" "$MODEL_BY"
-
-      - name: An endpoint of the owner's own, when one is named
-        if: env.OWN_ENDPOINT != ''
-        run: |
-          echo "IDEAS_LLM_BASE_URL=$OWN_ENDPOINT" >> "$GITHUB_ENV"
-          echo "IDEAS_LLM_MODEL=$OWN_MODEL" >> "$GITHUB_ENV"
-          echo "IDEAS_EDITOR=1" >> "$GITHUB_ENV"
+          path: cards
+          key: cards-none-${{ github.run_id }}
+          restore-keys: cards-
 
       - name: One cycle
         id: cycle
@@ -214,12 +215,17 @@ jobs:
           left=$(( CYCLE_UNTIL - $(date +%s) ))
           [ "$left" -ge 120 ] || left=120
           echo "cycle deadline: $left s"
-          node collect.js --state state --out out --deadline-seconds=$left $FRESH > cycle.json 2> cycle.log
+          # (the enrich pass's cards, imported where they still match: lib/editor/cards.js. IDEAS_EDITOR_OFF "1": no model card at all,
+          # every card rule-built, as the switch has always meant)
+          cards="--cards=cards/cards.jsonl"; [ "$EDITOR_OFF" != "1" ] || cards=""
+          # (and its stories by meaning, P8: the desk folds two rows they put in one story; IDEAS_STORIES "off": none read or planned)
+          stories="--stories=cards/stories.json"; [ "$STORIES_OFF" != "off" ] || stories=""
+          node collect.js --state state --out out $cards $stories --deadline-seconds=$left $FRESH > cycle.json 2> cycle.log
           code=$?
           echo "MARK_CYCLE_END=$(date +%s%3N)" >> "$GITHUB_ENV"
           echo "code=$code" >> "$GITHUB_OUTPUT"
           cat cycle.json
-          grep -E '^\[(reseed|collect|time)\]' cycle.log || true
+          grep -E '^\[(reseed|collect|time|enrich|stories)\]' cycle.log || true
           # (what the editor did this cycle: counts only. A refused card's wording stays in the job's own log and is never published)
           grep -cE '^\[editor\]' cycle.log | sed 's/^/editor log lines: /' || true
           # 0: a feed was published; 1: nothing new (the feed already out stands); 2: another cycle holds the lock;
@@ -270,6 +276,20 @@ jobs:
           [ "$deadline" -le "$soonest" ] || deadline=$soonest
           PRUNE_UNTIL=$deadline node .github/scripts/cache-prune.js
 
+      # The enrich pass (enrich.yml, the header's CHANGED 2026-10-20): after a feed was published and the state saved, handed that
+      # state's key. Seconds; its own workflow and group, so nothing it does or fails to do reaches this job. Never a reason to fail.
+      - name: Start the enrich pass
+        if: ${{ !cancelled() && steps.publish.outcome == 'success' && steps.save.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CHAIN_REF: ${{ github.ref_name }}
+          IDEAS_ENRICH: ${{ vars.IDEAS_ENRICH }}
+          ENRICH_STATE_KEY: state-${{ github.run_id }}-${{ github.run_attempt }}
+        run: bash .github/scripts/chain.sh enrich
+
       # The run's one line on the feed branch (the ledger at the top of this file): inside the concurrency group, so it never
       # races the next run's publish. Never a reason for the job to fail.
       - name: The ledger line
@@ -282,31 +302,6 @@ jobs:
           LEDGER_PUBLISHED: ${{ steps.publish.outcome == 'success' }}
           LEDGER_CODE: ${{ steps.cycle.outputs.code }}
         run: bash .github/scripts/ledger.sh
-
-      # Once: the job that found no model in the cache fetched it behind its cycle (which ran with none) and keeps it here for
-      # every later one. After the state, so a slow upload costs no cycle; never a reason for the job to fail.
-      - name: Has the editor model arrived
-        id: fetched
-        if: always() && steps.model.outputs.pulled == 'started'
-        continue-on-error: true
-        timeout-minutes: 4
-        run: |
-          for _ in $(seq 1 100); do
-            if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qxF "$EDITOR_MODEL"; then echo "whole=true" >> "$GITHUB_OUTPUT"; echo "the model is whole"; exit 0; fi
-            pgrep -f "ollama pull" >/dev/null || break
-            sleep 2
-          done
-          tail -n 2 /tmp/ollama-pull.log || true
-          echo "the model is not whole yet: the next job fetches it again"
-
-      - name: Keep the editor model for the next cycles
-        if: always() && steps.fetched.outputs.whole == 'true'
-        continue-on-error: true
-        timeout-minutes: 4
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.ollama/models
-          key: editor-model-v1-${{ env.MODEL_KEY }}
 
   # The chain (.github/scripts/chain.sh next): after the cycle, and told how it went (CYCLE_RESULT: a cycle that failed or hit its
   # cap dispatches nothing, and the cron restarts the chain). Outside the concurrency group, so the run it dispatches can start

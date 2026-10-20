@@ -21,12 +21,26 @@
  *   deleted       state entries deleted (freedGb: their size); kept: state entries of this ref left; failed: deletes refused;
  *                 left: superseded entries not reached before the deadline; why: what stopped the step early, else null
  * Environment: GH_TOKEN (the built-in token; the job's "actions: write"), GH_REPO (owner/name), GITHUB_REF (refs/heads/main),
- * PRUNE_SAVED_KEY, PRUNE_UNTIL, PRUNE_OUT; GITHUB_API_URL (the runner's). Zero dependencies.
+ * PRUNE_SAVED_KEY, PRUNE_UNTIL, PRUNE_OUT; GITHUB_API_URL (the runner's); PRUNE_KIND. Zero dependencies.
+ *
+ * PRUNE_KIND=cards (enrich.yml's merge, ios/IDEAS-SUPER.md P11): the same for the merged model cards, "cards-<run>-<attempt>" (the
+ * newest KEEP of this ref kept, this run's among them), and every shard's part, "cardpart-<run>-<attempt>-<shard>", of this run or an
+ * older one: merged now, or left by a pass whose merge never ran. Never a state key, never "editor-model-*". The counts' "kept" is
+ * then the cards entries kept. The stories job's part, "storypart-<run>-<attempt>" (P8), goes with the shards' parts.
+ * PRUNE_KIND=vectors (enrich.yml's stories job, P8): the superseded vector caches, "storyvec-<run>-<attempt>", the newest KEEP of
+ * this ref kept. PRUNE_KIND unset or "state": the state, as above.
  */
 const fs = require('node:fs');
 
 const KEEP = 3;
 const STATE_KEY = /^state-\d+-\d+$/;
+const CARDS_KEY = /^cards-\d+-\d+$/;
+// (a shard's cards, or the stories job's stories: both merged into the cards, ios/IDEAS-SUPER.md P8)
+const PART_KEY = /^(?:cardpart-\d+-\d+-\d+|storypart-\d+-\d+)$/;
+const VECTORS_KEY = /^storyvec-\d+-\d+$/;
+// (what each kind deletes: its own superseded entries, and for the cards the shards' parts they were merged from)
+const KINDS = { state: { key: STATE_KEY, parts: null, name: 'state' }, cards: { key: CARDS_KEY, parts: PART_KEY, name: 'cards' },
+  vectors: { key: VECTORS_KEY, parts: null, name: 'story vector' } };
 const PAGE_SIZE = 100;
 const PAGES_MAX = 20;
 const REQUEST_TIMEOUT_MS = 15000;
@@ -48,9 +62,9 @@ const gbOf = (bytes) => Math.round((bytes / GB) * 100) / 100;
  * entry is superseded. An entry whose created_at does not read is never deleted and does not count among the kept.
  * Pure: entries as the REST API lists them ({ key, ref, created_at, ... }).
  */
-function superseded(entries, { ref, savedKey, keep = KEEP } = {}) {
-  if (!Array.isArray(entries) || typeof ref !== 'string' || !ref || typeof savedKey !== 'string' || !STATE_KEY.test(savedKey)) return [];
-  const mine = entries.filter((e) => e && e.ref === ref && typeof e.key === 'string' && STATE_KEY.test(e.key));
+function superseded(entries, { ref, savedKey, keep = KEEP, key: pattern = STATE_KEY } = {}) {
+  if (!Array.isArray(entries) || typeof ref !== 'string' || !ref || typeof savedKey !== 'string' || !pattern.test(savedKey)) return [];
+  const mine = entries.filter((e) => e && e.ref === ref && typeof e.key === 'string' && pattern.test(e.key));
   if (!mine.some((e) => e.key === savedKey)) return [];
   // (each key at its newest entry; a key with an entry whose time does not read is left alone)
   const newest = new Map();
@@ -63,6 +77,18 @@ function superseded(entries, { ref, savedKey, keep = KEEP } = {}) {
   const ranked = [...newest.entries()].filter(([key]) => !unread.has(key)).sort((a, b) => b[1] - a[1] || runOf(b[0]) - runOf(a[0]));
   const kept = new Set([savedKey, ...ranked.slice(0, Math.max(1, Math.floor(Number(keep) || KEEP))).map(([key]) => key)]);
   return ranked.filter(([key]) => !kept.has(key)).map(([key]) => key).reverse();
+}
+
+/**
+ * The shards' parts done with: every "cardpart-<run>-<attempt>-<shard>" key of `ref` whose run is this merge's run (`savedKey`
+ * "cards-<run>-<attempt>") or older, oldest first; nothing unless `savedKey` is listed on `ref` (the merge's own save landed).
+ */
+function partsDone(entries, { ref, savedKey } = {}) {
+  if (!Array.isArray(entries) || typeof ref !== 'string' || !ref || typeof savedKey !== 'string' || !CARDS_KEY.test(savedKey)) return [];
+  if (!entries.some((e) => e && e.ref === ref && e.key === savedKey)) return [];
+  const run = runOf(savedKey);
+  const keys = new Set(entries.filter((e) => e && e.ref === ref && typeof e.key === 'string' && PART_KEY.test(e.key) && runOf(e.key) <= run).map((e) => e.key));
+  return [...keys].sort((a, b) => runOf(a) - runOf(b) || (a < b ? -1 : 1));
 }
 
 /** The repository's cache entries, every page (newest first). Throws when GitHub cannot be asked. */
@@ -102,11 +128,13 @@ async function prune(env = process.env, { fetchImpl = globalThis.fetch, now = Da
   const report = { seconds: 0, entries: null, gb: null, model: null, deleted: 0, freedGb: 0, kept: null, failed: 0, left: 0, why: null };
   const ref = env.GITHUB_REF || '';
   const savedKey = env.PRUNE_SAVED_KEY || '';
+  const kind = KINDS[env.PRUNE_KIND || 'state'] || null;
   try {
     if (!env.GH_TOKEN) throw new Error('no token');
     if (!/^[\w.-]+\/[\w.-]+$/.test(env.GH_REPO || '')) throw new Error('no repository named');
     if (!/^refs\/[\w./-]+$/.test(ref)) throw new Error('no ref named');
-    if (!STATE_KEY.test(savedKey)) throw new Error('no saved state key named');
+    if (!kind) throw new Error('no such kind');
+    if (!kind.key.test(savedKey)) throw new Error(`no saved ${kind.name} key named`);
     if (now() >= deadlineMs) throw new Error('no time left');
     const api = apiOf(env, fetchImpl, deadlineMs, now);
     let entries = await listAll(api);
@@ -115,8 +143,8 @@ async function prune(env = process.env, { fetchImpl = globalThis.fetch, now = Da
       await sleep(SAVED_WAIT_MS);
       entries = await listAll(api);
     }
-    const doomed = superseded(entries, { ref, savedKey, keep: KEEP });
-    if (!entries.some((e) => e && e.key === savedKey && e.ref === ref)) report.why = 'the saved state is not listed yet: nothing deleted';
+    const doomed = [...superseded(entries, { ref, savedKey, keep: KEEP, key: kind.key }), ...(kind.parts ? partsDone(entries, { ref, savedKey }) : [])];
+    if (!entries.some((e) => e && e.key === savedKey && e.ref === ref)) report.why = `the saved ${kind.name} is not listed yet: nothing deleted`;
     const gone = new Set();
     for (const key of doomed.slice(0, DELETES_PER_RUN)) {
       if (now() >= deadlineMs) { report.why = 'deadline'; break; }
@@ -137,13 +165,13 @@ async function prune(env = process.env, { fetchImpl = globalThis.fetch, now = Da
     report.entries = after.length;
     report.gb = gbOf(after.reduce((n, e) => n + (Number(e.size_in_bytes) || 0), 0));
     report.model = after.some((e) => typeof e.key === 'string' && e.key.startsWith('editor-model-'));
-    report.kept = new Set(after.filter((e) => e.ref === ref && typeof e.key === 'string' && STATE_KEY.test(e.key)).map((e) => e.key)).size;
+    report.kept = new Set(after.filter((e) => e.ref === ref && typeof e.key === 'string' && kind.key.test(e.key)).map((e) => e.key)).size;
   } catch (e) {
     report.why = report.why || (e && e.name === 'TimeoutError' ? 'GitHub did not answer in time' : (e && e.message) || 'failed');
   }
   report.seconds = Math.round((now() - started) / 100) / 10;
   log(`cache: ${report.entries ?? '?'} entries, ${report.gb ?? '?'} GB${report.model === null ? '' : report.model ? ' (the editor model is in it)' : ' (NO editor model in it)'}; `
-    + `deleted ${report.deleted} superseded state entries (${report.freedGb} GB), ${report.kept ?? '?'} kept, ${report.failed} refused, ${report.left} left for the next run`
+    + `deleted ${report.deleted} superseded ${(kind || KINDS.state).name} entries (${report.freedGb} GB), ${report.kept ?? '?'} kept, ${report.failed} refused, ${report.left} left for the next run`
     + `${report.why ? `; ${report.why}` : ''} (${report.seconds} s)`);
   return report;
 }
@@ -155,5 +183,5 @@ async function main() {
   return 0;
 }
 
-module.exports = { superseded, prune, KEEP, STATE_KEY, DELETES_PER_RUN };
+module.exports = { superseded, partsDone, prune, KEEP, STATE_KEY, CARDS_KEY, PART_KEY, VECTORS_KEY, DELETES_PER_RUN };
 if (require.main === module) main().then((code) => process.exit(code), () => process.exit(0));

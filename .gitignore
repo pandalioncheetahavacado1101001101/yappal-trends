@@ -4,3 +4,6 @@ cycle.json
 cycle.log
 .state-*/
 .out-*/
+
+# never published: the size scale's private calibration (scripts/publish-ideas-collector.sh leaves it out and fails if it is here)
+lib/data/size-private.json

@@ -6,7 +6,7 @@
  *   node .github/scripts/ledger.js <ledger.jsonl>
  *
  * Appends this run's line and drops every line older than 7 days (and anything past 800 lines: a week is 672 quarter-hours).
- * Each line: { slot, started, published, rows, requests, answered, modelCards, seconds, code, by, run, phases, cache }
+ * Each line: { slot, started, published, rows, requests, answered, modelCards, seconds, code, by, run, phases, cache, enrich, stories }
  *   slot        the collector's own slot when a feed was published (status.json), else the quarter-hour nearest the job's start
  *   started     when the cycle job started (its clock, LEDGER_STARTED: epoch seconds)
  *   published   the feed's generatedAt when this run published one, else null: lead time is published minus slot
@@ -21,8 +21,10 @@
  *                 setup         checkout and node, from the job's clock
  *                 stateRestore  the state's cache restore
  *                 feedRead      the feed already out, fetched (restore.sh)
- *                 modelRestore  the editor model's cache restore (several GB)
- *                 modelStart    the model server installed, started, the model loaded and warmed (model.sh)
+ *                 wait          the wait for the quarter-hour (chain.sh align): a chained run is ready before its slot begins
+ *                 cardsRestore  the enrich pass's newest cards, restored from their cache key after the wait (ios/IDEAS-SUPER.md P11)
+ *                 modelRestore  the editor model's cache restore (several GB); null since P11: collect starts no model
+ *                 modelStart    the model server installed, started, the model loaded and warmed (model.sh); null since P11
  *                 cycle         collect.js as a process, start to exit; inside it, its own steps (its summary's `seconds`,
  *                               only when it published): fetch, build, measure, lines (less the editor), editor, feed, publish
  *                 push          the feed pushed to the branch (publish-feed.sh)
@@ -30,7 +32,23 @@
  *                 cachePrune    the superseded state entries deleted (cache-prune.js)
  *   cache       the repository's Actions cache after the prune, else null: { gb, entries, model (an editor model is in it),
  *               deleted (state entries deleted this run), failed (deletes refused) }
- * Marks: MARK_BEGIN, MARK_SETUP, MARK_STATE, MARK_FEED, MARK_MODEL, MARK_CYCLE, MARK_CYCLE_END, MARK_PUSHED, MARK_SAVED, MARK_LEDGER
+ *   enrich      the enrich pass whose cards this cycle imported (enrich.yml, P11; the collector's summary), else null:
+ *                 run           the pass's Actions run id (null: no cards restored); age: minutes since its merge
+ *                 fresh         the first cycle to import this pass: its asked, passed, seconds and shards are counted once by
+ *                               reading only the lines where it is true
+ *                 asked         rows the pass's shards asked the model for (first asks); passed: cards the gate passed
+ *                 seconds       the pass, plan to merge; shards: dealt; shardsDone: parts merged; perCard: the model's
+ *                               measured seconds a card (the median of the last passes), what the next pass is sized from
+ *                 imported      cards this cycle took into its cache, each for its row's dossier as it is now; held: already
+ *                               in it; stale: rows whose cards were for a story that has moved since (dropped, never shown)
+ *                 planned       rows this cycle left owed for the next pass; passPlanned: the pass's own
+ *                 whys, angles  on the cards the gate passed, the whys and the angles the model offered; whysPassed, anglesPassed:
+ *                               those the claim check passed (ios/IDEAS-SUPER.md P12: the gate's pass rate, published)
+ *   stories     the enrich pass's stories by meaning this cycle read (ios/IDEAS-SUPER.md P8; the collector's summary), else null:
+ *                 age           minutes since the pass made them (null: none read); size: sentences they hold
+ *                 joined        rows the desk folded into another by meaning on the main list; planned: rows left for the next pass
+ *                 texts         texts the pass clustered; vectors: of them, with a vector; seconds: the pass's own
+ * Marks: MARK_BEGIN, MARK_SETUP, MARK_STATE, MARK_FEED, MARK_WAITED, MARK_MODEL, MARK_CYCLE, MARK_CYCLE_END, MARK_PUSHED, MARK_SAVED, MARK_LEDGER
  * (epoch milliseconds, set by collect.yml's steps; seconds are read as such). Reads cycle.json (the collector's one-line summary,
  * empty unless it published), out/v1/status.json and cache-prune.json from the working folder.
  * Nothing private: instants, counts and seconds only, never a name, a key or a per-trend number. Zero dependencies.
@@ -68,7 +86,7 @@ function between(from, to) {
 
 /** Where the job's time went (the `phases` above), from the marks and the collector's and the prune's own seconds. */
 function phasesOf(env, nowMs, summary, prune) {
-  const m = Object.fromEntries(['BEGIN', 'SETUP', 'STATE', 'FEED', 'MODEL', 'CYCLE', 'CYCLE_END', 'PUSHED', 'SAVED', 'LEDGER'].map((k) => [k, markOf(env[`MARK_${k}`])]));
+  const m = Object.fromEntries(['BEGIN', 'SETUP', 'STATE', 'FEED', 'WAITED', 'MODEL', 'CYCLE', 'CYCLE_END', 'PUSHED', 'SAVED', 'LEDGER'].map((k) => [k, markOf(env[`MARK_${k}`])]));
   const begin = m.BEGIN ?? markOf(env.LEDGER_STARTED);
   const ledgerAt = m.LEDGER ?? nowMs;
   const own = summary && summary.seconds && typeof summary.seconds === 'object' ? summary.seconds : {};
@@ -77,6 +95,9 @@ function phasesOf(env, nowMs, summary, prune) {
     setup: between(begin, m.SETUP),
     stateRestore: between(m.SETUP, m.STATE),
     feedRead: between(m.STATE, m.FEED),
+    // (P11: the wait for the quarter-hour, then the cards restored; both null for a job of the model's days)
+    wait: m.WAITED === null ? null : between(m.FEED, m.WAITED),
+    cardsRestore: m.WAITED === null || m.MODEL !== null ? null : between(m.WAITED, m.CYCLE),
     // (no model step this run, the editor off or the owner's endpoint: both null)
     modelRestore: m.MODEL === null ? null : between(m.FEED, m.MODEL),
     modelStart: m.MODEL === null ? null : between(m.MODEL, m.CYCLE),
@@ -86,6 +107,21 @@ function phasesOf(env, nowMs, summary, prune) {
     stateSave: between(m.PUSHED, m.SAVED ?? ledgerAt),
     cachePrune: pruneSeconds === null || pruneSeconds < 0 ? null : tenth(pruneSeconds),
   };
+}
+
+const ENRICH_NUMBERS = ['run', 'age', 'asked', 'passed', 'seconds', 'shards', 'shardsDone', 'perCard', 'imported', 'held', 'stale', 'planned', 'passPlanned', 'whys', 'whysPassed', 'angles', 'anglesPassed'];
+/** The enrich pass as the collector's summary tells it (P11), numbers and one flag only, or null when the summary has none. */
+function enrichOf(summary) {
+  const e = summary && summary.enrich && typeof summary.enrich === 'object' ? summary.enrich : null;
+  if (!e) return null;
+  return { ...Object.fromEntries(ENRICH_NUMBERS.map((k) => [k, numberOrNull(e[k])])), fresh: e.fresh === true };
+}
+
+const STORIES_NUMBERS = ['age', 'size', 'joined', 'planned', 'texts', 'vectors', 'seconds'];
+/** The stories by meaning as the collector's summary tells it (P8), numbers only, or null when the summary has none. */
+function storiesOf(summary) {
+  const s = summary && summary.stories && typeof summary.stories === 'object' ? summary.stories : null;
+  return s ? Object.fromEntries(STORIES_NUMBERS.map((k) => [k, numberOrNull(s[k])])) : null;
 }
 
 /** The cache's counts after the prune (cache-prune.json), or null when the prune did not run or could not list the cache. */
@@ -114,6 +150,8 @@ function lineOf(env, nowMs, summary, status, prune = null) {
     run: numberOrNull(env.GITHUB_RUN_ID),
     phases: phasesOf(env, nowMs, summary, prune),
     cache: cacheOf(prune),
+    enrich: enrichOf(summary),
+    stories: storiesOf(summary),
   };
 }
 
@@ -149,5 +187,5 @@ function main() {
   return 0;
 }
 
-module.exports = { lineOf, keep, phasesOf, markOf };
+module.exports = { lineOf, keep, phasesOf, markOf, enrichOf, storiesOf };
 if (require.main === module) process.exit(main());

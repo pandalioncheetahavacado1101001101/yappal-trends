@@ -1,0 +1,838 @@
+{
+ "schema": 2,
+ "measuredAt": "2026-10-20",
+ "about": "One absolute size scale for every trend: 95-100% is the mega band, Among Us and everything bigger, ranked inside it; under it a logarithm from the floor (500 a day) up to Among Us; each trend sized by its best 30 days. Measured, never guessed; rationale in ios/.review/trend-size-scale.md. The live rows it was checked on and the matched pairs of its proxy fits are not here: they stay on the Mac that measured them.",
+ "unit": {
+  "id": "enwiki-day",
+  "name": "English Wikipedia views in one UTC day",
+  "definition": "all-access, agent=user views of the trend's article plus every page that redirects to it (a move leaves the old title as a redirect, so a peak survives renames), minus the article's own baseline; a trend about several subjects adds each subject's excess",
+  "perArticle": "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/user/{title}/daily/{YYYYMMDD}00/{YYYYMMDD}00",
+  "redirects": "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&redirects=1&prop=redirects&rdnamespace=0&rdlimit=max&titles={title}",
+  "baseline": "median of the article's days from 45 to 8 days before the trend began (missing days count as 0; an article created for the trend has baseline 0)",
+  "language": "English only. The feed is US and English, the collector reads en and en.m, and summing every edition ranks by world reach: it lifts Squid Game x1.61 and Wednesday x1.41 but 6-7 only x1.01. Each anchor's all-language peak is kept below for reference.",
+  "dailyFrom": "2015-07-01",
+  "before2015": {
+   "source": "Wikimedia pagecounts-ez merged daily dumps (desktop only, crawlers included, mobile only as one per-language total)",
+   "crawlerFactor": 0.993,
+   "crawlerFactorWhy": "modern desktop user views / legacy count for the 120 most-read articles of 2015-10-15 (p25 0.976, median 0.993, p75 1.007)",
+   "mobileOddsRatio": {
+    "central": 1.7,
+    "low": 0.88,
+    "high": 2.02
+   },
+   "mobileOddsRatioWhy": "a viral article's mobile share against the whole project's on the same day, 8 REST-era anchor days (6-7 1.61, Squid Game 1.83, Wednesday 2.02, Barbenheimer 1.15, Among Us 1.09, PewDiePie vs T-Series 0.88, PPAP 1.70 and 1.95)",
+   "projectDesktopHuman": 0.8,
+   "formula": "views = legacyDesktop * crawlerFactor / (1 - articleMobileShare); articleMobileShare from the project's share that day (en.mw total / (en.mw + 0.80 * legacy desktop total)) raised by the odds ratio"
+  }
+ },
+ "scale": {
+  "formula": "under the band: pct = 95 * log10(views / floor) / log10(mega / floor); in the band (views >= mega): pct = 95 + 5 * min(1, log10(views / mega) / log10(top / mega)); views being wiki-equivalent views a day averaged over the stretch the number is about",
+  "measure": "a trend's size (the headline) is its best 30-day mean (sizeDays): every window of 30 days that ends inside its life, days before the life counted as nothing, so a live trend reads its size so far. Its line is the mean of the 7 days centred on each day, inside the life (lineDays): days before a page existed are not counted, so a spike is drawn on the day it broke. One day of lookups decides neither: a news spike reads by the attention it keeps",
+  "floor": 500,
+  "band": {
+   "pct": 95,
+   "views": 73919,
+   "anchor": "among-us",
+   "why": "95 to 100 is kept for the mega-trends, Among Us and everything bigger (the owner, 2026-10-20: \"above 95% is the real good ones, like among us and above type\"). Its edge is Among Us's best 30 days (73,919 a day, to 2020-10-12), so Among Us reads 95. Inside the band the anchors are ranked in log space, not capped: 6-7 96.5, Gangnam Style 97.1, Harlem Shake 97.5, Wednesday 97.8, Ice Bucket Challenge 98.3, Squid Game 100 (the three pre-2015 ones are lower bounds)"
+  },
+  "top": 576658,
+  "topAnchor": "squid-game",
+  "cap": 100,
+  "lineDays": 7,
+  "sizeDays": 30,
+  "decades": 2.17,
+  "bandDecades": 0.892,
+  "pointsPerDoubling": 13.18,
+  "bandPointsPerDoubling": 1.69,
+  "topWhy": "the biggest of the owner's mega-trends on the size's measure (their best 30-day means: Squid Game 576,658, Ice Bucket Challenge 284,978 or more, Harlem Shake 205,084 or more, Gangnam Style 177,826 or more, 6-7 138,575) is Squid Game's, and that is 100%. Anything bigger reads 100 (only spikes have been: household-name obituaries, capped at the spike ceiling)",
+  "underWhy": "under the band the scale is the old logarithm from the floor, stretched so its top meets Among Us at 95: 13.18 points a doubling (it was 12.32 with 100% at 6-7's best month, 138,575 a day). Everything under the band rises a little: PPAP 61.8 to 66.1, PewDiePie vs T-Series 76.4 to 81.7, Barbenheimer 80.9 to 86.6",
+  "floorWhy": "kept at 500 a day: what a page's ordinary swing hides (the same floor the lifespan and the move test use). A best month under 500 a day reads 0 (about a quarter of the listed rows with an article did on 2026-10-19); their lines still show their week",
+  "spike": {
+   "days": 3,
+   "ceiling": 92,
+   "why": "the mega-trends held half their peak day on 4 days or more (6-7 18, PPAP 20, Squid Game 21, Among Us 37, Harlem Shake 8 or more in the days kept, PewDiePie vs T-Series 4: a rivalry of milestone days); a trend that held it on 3 days or fewer is a spike, however tall, and never enters the band. Its size tops out at 92: 3 points under the band's edge, so a spike never reads as a mega-trend even rounded, and above every sustained trend measured under the band (the highest, the Blake Lively lawsuit weeks, reads 91.0), so the biggest spikes still read as the biggest things under the mega-trends. 92 stands for 63,130 a day over a month, 85% of Among Us's. Household-name obituaries are the case that needs it: Kobe Bryant's page averaged 846,454 a day over the month after his death, more than Squid Game's best month, and no measure of lasting attention alone puts that under the band"
+  },
+  "readings": [
+   {
+    "pct": 0,
+    "views": 500
+   },
+   {
+    "pct": 10,
+    "views": 846
+   },
+   {
+    "pct": 20,
+    "views": 1431
+   },
+   {
+    "pct": 30,
+    "views": 2422
+   },
+   {
+    "pct": 40,
+    "views": 4098
+   },
+   {
+    "pct": 50,
+    "views": 6934
+   },
+   {
+    "pct": 60,
+    "views": 11732
+   },
+   {
+    "pct": 70,
+    "views": 19850
+   },
+   {
+    "pct": 80,
+    "views": 33586
+   },
+   {
+    "pct": 90,
+    "views": 56827
+   },
+   {
+    "pct": 92,
+    "views": 63130
+   },
+   {
+    "pct": 95,
+    "views": 73919
+   },
+   {
+    "pct": 96,
+    "views": 111478
+   },
+   {
+    "pct": 97,
+    "views": 168121
+   },
+   {
+    "pct": 98,
+    "views": 253544
+   },
+   {
+    "pct": 99,
+    "views": 382372
+   },
+   {
+    "pct": 100,
+    "views": 576658
+   }
+  ]
+ },
+ "combine": {
+  "space": "log10 of wiki-equivalent views",
+  "rule": "a day's value is the weighted mean, in log10, of every estimate for that day, weight 1/sigma^2",
+  "sigma": {
+   "wiki": 0.15,
+   "searches": 0.61,
+   "outlets": 0.55,
+   "players": 0.5
+  },
+  "wikiPartial": "when a calibrated proxy is above the Wikipedia estimate by more than 2 of its own sigmas, the article is taken as partial (made late, or the attention went to other pages) and its sigma becomes 0.6; only on days up to the article's own peak (a band held after it says nothing of a fading day)",
+  "shapeOnly": "series with no calibration (hourly wiki before the day closes, GDELT slot counts, TikTok video counts, YouTube results views) give shape only: scaled by one factor, the median log difference on days they share with calibrated estimates; sigma = the calibrated one + 0.1",
+  "gaps": "a day with no estimate is interpolated in log10 between its neighbours and drawn dotted",
+  "estimated": "a day whose combined sigma is above 0.3 (about 11 points) is drawn dotted"
+ },
+ "lifespan": {
+  "start": "the first day at or above the floor in the article's full history (backfilled from Wikipedia, so it can be long before tracking began), else the first day the collector saw the trend",
+  "end": "today, or the last day at or above the floor once the same lull as the start falls under it: 30 straight days for the trend's own page or a quiet one, 7 for a busy person's page (whose later, unrelated news is never this trend's life)",
+  "from": "\"page\" when the life starts within 14 days of the first day its page had any view, or the page was made for the trend: the chart then starts at the page, not at the trend; \"start\" otherwise; \"tracking\" with no article",
+  "beforeTracking": "for a trend with no article, days before the collector first saw it are not drawn; the chart says \"from when we started tracking\""
+ },
+ "proxies": [
+  {
+   "id": "searches",
+   "what": "Google Trends Trending Now volume band, US (the feed's demand.kind \"search\"; the band's lower bound)",
+   "fit": {
+    "a": 1.682,
+    "b": 0.547
+   },
+   "formula": "views = 10^(a + b * log10(band))",
+   "sigma": 0.61,
+   "n": 25,
+   "r": 0.58,
+   "readings": [
+    {
+     "band": 10000,
+     "views": 7413,
+     "pct": 51.3
+    },
+    {
+     "band": 20000,
+     "views": 10831,
+     "pct": 58.5
+    },
+    {
+     "band": 50000,
+     "views": 17879,
+     "pct": 68
+    },
+    {
+     "band": 100000,
+     "views": 26122,
+     "pct": 75.2
+    },
+    {
+     "band": 200000,
+     "views": 38165,
+     "pct": 82.4
+    },
+    {
+     "band": 500000,
+     "views": 62999,
+     "pct": 92
+    },
+    {
+     "band": 1000000,
+     "views": 92045,
+     "pct": 95.5
+    },
+    {
+     "band": 2000000,
+     "views": 134482,
+     "pct": 96.5
+    }
+   ],
+   "excluded": "bands of other countries, and pages read mostly outside the US (English Wikipedia is the English-reading world: a film abroad can draw hundreds of thousands of views against a small US band)",
+   "runningTotal": "the band is the trend's running total: Google keeps it at its highest level for as long as it lists the trend, a week or more. A band is read on the day it first reaches a new level, as an estimate of that day (the peak so far), and never on a later day; the partial-article test runs only on days up to the article's own peak",
+   "month": {
+    "ratio": 0.135,
+    "sigma": 0.18,
+    "n": 22,
+    "why": "a row with nothing but a band has no days to average: its size is the band's day times the median ratio of best 30 days so far to peak day over the 22 listed rows with a band and an article on 2026-10-19 (data to Oct 18), drawn as one dotted marker, \"searches (running total)\". The band does not predict the month directly (r 0.05 on the same rows)"
+   },
+   "pairs": "25 matched pairs, kept private (lib/data/size-private.json)"
+  },
+  {
+   "id": "outlets",
+   "what": "distinct news outlets with a headline (the feed's demand.kind \"outlets\")",
+   "fit": {
+    "a": 2.115,
+    "b": 1.162
+   },
+   "formula": "views = 10^(a + b * log10(outlets))",
+   "sigma": 0.55,
+   "n": 11,
+   "r": 0.64,
+   "readings": [
+    {
+     "outlets": 5,
+     "views": 846,
+     "pct": 10
+    },
+    {
+     "outlets": 10,
+     "views": 1892,
+     "pct": 25.3
+    },
+    {
+     "outlets": 20,
+     "views": 4234,
+     "pct": 40.6
+    },
+    {
+     "outlets": 40,
+     "views": 9475,
+     "pct": 55.9
+    },
+    {
+     "outlets": 80,
+     "views": 21203,
+     "pct": 71.3
+    }
+   ],
+   "pairs": "11 matched pairs, kept private (lib/data/size-private.json)"
+  },
+  {
+   "id": "players",
+   "what": "Roblox concurrent players (the feed's demand.kind \"players\")",
+   "fit": {
+    "a": 0.605,
+    "b": 0.462
+   },
+   "formula": "views = 10^(a + b * log10(players))",
+   "sigma": 0.5,
+   "n": 4,
+   "r": 0.95,
+   "note": "four documented peaks only; Among Us (3.8M players, 102,468 views) shows a non-Roblox game is looked up 10 to 100 times more per player",
+   "pairs": "4 matched pairs, kept private (lib/data/size-private.json)"
+  },
+  {
+   "id": "tiktok-rank",
+   "what": "TikTok chart position or a \"TikTok trend\" listing",
+   "status": "no magnitude",
+   "note": "a chart position has no magnitude: on the day it was checked, the chart's No. 2 sound had over a hundred times the views of its No. 1. Such a row shows the \"listed, size not measured\" band until a calibrated estimate exists"
+  },
+  {
+   "id": "tiktok-videos",
+   "what": "videos using a sound or hashtag (tiktok-sound, tiktok-web; off unless the owner switches them on)",
+   "status": "uncalibrated, shape only",
+   "note": "uncalibrated: fit once 8 sounds with a song article have both"
+  },
+  {
+   "id": "youtube-uploads",
+   "what": "videos uploaded today about a phrase and their views (yt-results; off by default)",
+   "status": "uncalibrated, shape only",
+   "note": "uncalibrated: fit once 8 pairs exist (one historic pair so far, kept private)"
+  },
+  {
+   "id": "gdelt",
+   "what": "headlines per quarter hour naming the trend",
+   "status": "shape only (its daily outlet count is the calibrated \"outlets\")"
+  }
+ ],
+ "anchors": [
+  {
+   "id": "six-seven",
+   "name": "6-7 (\"67\")",
+   "short": "6-7",
+   "owner": true,
+   "era": "2025",
+   "peakDay": "2025-10-18",
+   "views": 243469,
+   "method": "rest",
+   "articles": "\"6-7\" + 37 redirects; at the peak the page was titled \"6-7 (meme)\" (242,943 that day)",
+   "allLanguages": {
+    "peak": 246272,
+    "editions": 47
+   },
+   "mostRead": "6-7_(meme) #9 of all pages that day (Main Page and Search included)",
+   "mobileShare": 0.8,
+   "daysAboveHalfPeak": 18,
+   "documented": [
+    "Dictionary.com named \"67\" its 2025 Word of the Year (Oct 2025)",
+    "Google added a 6-7 screen-shake Easter egg (Dec 2025)"
+   ],
+   "mean7": 180974,
+   "mean30": 138575,
+   "best30To": "2025-11-08",
+   "pct": 96.5,
+   "like": "6-7"
+  },
+  {
+   "id": "harlem-shake",
+   "name": "Harlem Shake",
+   "short": "Harlem Shake",
+   "owner": true,
+   "era": "Feb 2013",
+   "peakDay": "2013-02-19",
+   "views": 645290,
+   "range": [
+    459729,
+    965086
+   ],
+   "method": "legacy-ez",
+   "legacy": {
+    "memeArticle": 389050,
+    "landingPage": 287753,
+    "central": 475376,
+    "rule": "meme article (every spelling) + 30% of the \"Harlem shake\" disambiguation page that routed searchers to it (most of its readers clicked through and are already counted)",
+    "projectMobileShare": 0.178,
+    "articleMobileShare": 0.269,
+    "factor": 1.357
+   },
+   "crossChecks": [
+    "stats.grok.se (Wayback copy): Harlem_Shake_(meme) 373,004 on 2013-02-19; the landing page 433,770 on 2013-02-15",
+    "Wikipedia:Top 25 Report, week of Feb 17-23 2013: meme article 2,122,810 + landing page 1,860,669 (desktop, legacy)"
+   ],
+   "documented": [
+    "4,000 uploads a day on 2013-02-10 (one every 21.6 s)",
+    "about 40,000 videos and 700 million views by 2013-02-15"
+   ],
+   "daysAboveHalfPeak": 8,
+   "lasting": "the meme article (every spelling, from the kept pagecounts-ez days and the stats.grok.se copy of Feb 2013) + 30% of its landing page on the kept days, converted with its factor; March 2013 counted as nothing, so the mean is a lower bound",
+   "mean30": 205084,
+   "mean30IsLowerBound": true,
+   "best30To": "2013-02-28",
+   "pct": 97.5,
+   "like": "Harlem Shake"
+  },
+  {
+   "id": "ppap",
+   "name": "Pen-Pineapple-Apple-Pen (PPAP)",
+   "short": "PPAP",
+   "owner": true,
+   "era": "autumn 2016",
+   "peakDay": "2016-10-01",
+   "views": 28600,
+   "method": "rest",
+   "articles": "\"PPAP (Pen-Pineapple-Apple-Pen)\" + 9 redirects; at the peak titled \"Pen-Pineapple-Apple-Pen\" (26,343 that day); the \"PPAP\" page had another 2,780 and Daimaou Kosaka ~1,000",
+   "allLanguages": {
+    "peak": 30396,
+    "editions": 25
+   },
+   "mostRead": "#139",
+   "mobileShare": 0.63,
+   "daysAboveHalfPeak": 20,
+   "documented": [
+    "the video averaged over 1.5 million YouTube views a day (Gangnam Style: over 9 million a day), so both measures put PPAP about 0.8 decades below Gangnam Style"
+   ],
+   "mean7": 24757,
+   "mean30": 16141,
+   "best30To": "2016-10-27",
+   "pct": 66.1,
+   "like": "PPAP"
+  },
+  {
+   "id": "pewdiepie-tseries",
+   "name": "PewDiePie vs T-Series",
+   "short": "PewDiePie vs T-Series",
+   "owner": true,
+   "era": "late 2018 to 2019",
+   "peakDay": "2019-04-01",
+   "views": 140564,
+   "method": "rest",
+   "articles": "cluster: \"PewDiePie vs T-Series\" 57,252 + PewDiePie page above its baseline 35,961 + T-Series page 47,351 (the \"Congratulations\" diss day); the article alone reads 68.1% over its best 30 days (23071 a day)",
+   "articleOnly": 57252,
+   "allLanguages": {
+    "peak": 58717,
+    "editions": 19,
+    "of": "the article"
+   },
+   "mostRead": "article #56, T-Series #69",
+   "mobileShare": 0.51,
+   "excluded": "2019-03-15 (147,983) is the Christchurch attack, a different story",
+   "documented": [
+    "T-Series passed PewDiePie on 2019-04-14 and reached 100M subscribers on 2019-05-29",
+    "\"Bye PewDiePie\" drew nearly 5 million views in 24 hours"
+   ],
+   "daysAboveHalfPeak": 4,
+   "mean7": 69573,
+   "mean30": 36722,
+   "best30To": "2019-04-12",
+   "pct": 81.7,
+   "lasting": "the cluster over its best 30 days, the PewDiePie page above 12640 and T-Series above 6452 (their days 45 to 8 before 2019-04-01); the Christchurch days (2019-03-15 and 16) left out of the PewDiePie page"
+  },
+  {
+   "id": "squid-game",
+   "name": "Squid Game",
+   "short": "Squid Game",
+   "owner": true,
+   "era": "autumn 2021",
+   "peakDay": "2021-10-03",
+   "views": 901993,
+   "method": "rest",
+   "articles": "\"Squid Game\" + 24 redirects (canonical alone 889,821)",
+   "allLanguages": {
+    "peak": 1449952,
+    "editions": 106
+   },
+   "mostRead": "#3 on Oct 2 and Oct 4 behind Main Page and Search (the Oct 3 list is missing from the API)",
+   "mobileShare": 0.79,
+   "daysAboveHalfPeak": 21,
+   "documented": [
+    "1.65 billion hours viewed in its first 28 days (Netflix)"
+   ],
+   "mean7": 808575,
+   "mean30": 576658,
+   "best30To": "2021-10-20",
+   "pct": 100,
+   "like": "Squid Game"
+  },
+  {
+   "id": "gangnam-style",
+   "name": "Gangnam Style",
+   "short": "Gangnam Style",
+   "owner": false,
+   "era": "2012",
+   "peakDay": "2012-09-23",
+   "views": 250579,
+   "range": [
+    215881,
+    263993
+   ],
+   "method": "legacy-ez",
+   "legacy": {
+    "raw": 180118,
+    "projectMobileShare": 0.191,
+    "articleMobileShare": 0.286,
+    "factor": 1.391
+   },
+   "crossChecks": [
+    "stats.grok.se (Wayback copies): a 160,000-173,000 a day plateau from Sep 16 to Oct 8 2012, top 172,985 on Sep 23",
+    "later days kept: 88,640 (Nov 24), 126,808 and 132,988 (Dec 21-22, the first billion-view day)"
+   ],
+   "documented": [
+    "over 9 million YouTube views a day within two months",
+    "first YouTube video to a billion views (2012-12-21)"
+   ],
+   "lasting": "the stats.grok.se copies of Sep and Oct 2012 (120 days held), converted with its factor; a lower bound",
+   "mean30": 177826,
+   "mean30IsLowerBound": true,
+   "best30To": "2012-10-30",
+   "pct": 97.1,
+   "like": "Gangnam Style"
+  },
+  {
+   "id": "ice-bucket",
+   "name": "Ice Bucket Challenge",
+   "short": "Ice Bucket Challenge",
+   "owner": false,
+   "era": "Aug 2014",
+   "peakDay": "2014-08-21",
+   "views": 1097081,
+   "range": [
+    847613,
+    1194548
+   ],
+   "method": "legacy-ez",
+   "legacy": {
+    "raw": 584249,
+    "projectMobileShare": 0.344,
+    "articleMobileShare": 0.471,
+    "factor": 1.878
+   },
+   "crossChecks": [
+    "stats.grok.se (Wayback copy): 559,582 on 2014-08-21",
+    "Top 25 Report: #1 two weeks running, 2,902,018 in Aug 17-23"
+   ],
+   "documented": [
+    "1.2 million Facebook videos between Jun 1 and Aug 13 2014",
+    "over 70,000 tweets a day at its peak",
+    "the ALS article went from about 163,000 views a month to 2.89 million in Aug 2014"
+   ],
+   "lasting": "the stats.grok.se copy of Aug 2014 (Aug 28 missing, counted as nothing), converted with its factor; a lower bound",
+   "mean30": 284978,
+   "mean30IsLowerBound": true,
+   "best30To": "2014-08-31",
+   "pct": 98.3,
+   "like": "Ice Bucket Challenge"
+  },
+  {
+   "id": "among-us",
+   "name": "Among Us",
+   "short": "Among Us",
+   "owner": false,
+   "era": "autumn 2020",
+   "peakDay": "2020-09-21",
+   "views": 102468,
+   "method": "rest",
+   "articles": "\"Among Us\" + 50 redirects",
+   "allLanguages": {
+    "peak": 152637,
+    "editions": 63,
+    "day": "2020-09-28"
+   },
+   "mostRead": "#28",
+   "mobileShare": 0.62,
+   "daysAboveHalfPeak": 37,
+   "documented": [
+    "3.8 million concurrent players in late Sep 2020",
+    "Among Us videos drew 4 billion YouTube views in Sep 2020"
+   ],
+   "mean7": 94637,
+   "mean30": 73919,
+   "best30To": "2020-10-12",
+   "pct": 95,
+   "like": "Among Us"
+  },
+  {
+   "id": "wednesday",
+   "name": "Wednesday (the dance's show)",
+   "short": "Wednesday",
+   "owner": false,
+   "era": "Nov-Dec 2022",
+   "peakDay": "2022-11-27",
+   "views": 440627,
+   "method": "rest",
+   "articles": "\"Wednesday (TV series)\"; the dance itself never had an article, and its sound (\"Bloody Mary (Lady Gaga song)\") peaked near 4,700 a day in Dec 2022; the series held 200,000-300,000 a day while the dance spread",
+   "allLanguages": {
+    "peak": 619591,
+    "editions": 55
+   },
+   "mostRead": "#6",
+   "mobileShare": 0.83,
+   "documented": [
+    "341 million hours in its first week; 1 billion hours within three weeks (Netflix)"
+   ],
+   "daysAboveHalfPeak": 13,
+   "mean7": 368467,
+   "mean30": 234952,
+   "best30To": "2022-12-22",
+   "pct": 97.8,
+   "like": "Wednesday dance"
+  },
+  {
+   "id": "barbenheimer",
+   "name": "Barbenheimer",
+   "short": "Barbenheimer",
+   "owner": false,
+   "era": "Jul 2023",
+   "peakDay": "2023-07-22",
+   "views": 139898,
+   "method": "rest",
+   "articles": "\"Barbenheimer\" (the meme article); the films themselves peaked the next day at 841,692 (Barbie) and 1,363,059 (Oppenheimer)",
+   "allLanguages": {
+    "peak": 153776,
+    "editions": 33
+   },
+   "mostRead": "#31",
+   "mobileShare": 0.77,
+   "documented": [
+    "$162M + $82.4M opening weekend, the fourth-largest US box-office weekend"
+   ],
+   "daysAboveHalfPeak": 6,
+   "mean7": 99333,
+   "mean30": 47443,
+   "best30To": "2023-08-08",
+   "pct": 86.6,
+   "like": "Barbenheimer"
+  }
+ ],
+ "ladder": [
+  {
+   "name": "Kobe Bryant death",
+   "kind": "obituary",
+   "peakDay": "2020-01-26",
+   "views": 9541998,
+   "daysAboveHalfPeak": 2,
+   "mean30": 846454,
+   "spike": true,
+   "pct": 92
+  },
+  {
+   "name": "Matthew Perry death",
+   "kind": "obituary",
+   "peakDay": "2023-10-29",
+   "views": 8793516,
+   "daysAboveHalfPeak": 1,
+   "mean30": 498712,
+   "spike": true,
+   "pct": 92
+  },
+  {
+   "name": "Queen Elizabeth II death",
+   "kind": "obituary",
+   "peakDay": "2022-09-08",
+   "views": 8542925,
+   "daysAboveHalfPeak": 2,
+   "mean30": 924347,
+   "spike": true,
+   "pct": 92
+  },
+  {
+   "name": "Liam Payne death",
+   "kind": "obituary",
+   "peakDay": "2024-10-17",
+   "views": 3702900,
+   "daysAboveHalfPeak": 2,
+   "mean30": 361606,
+   "spike": true,
+   "pct": 92
+  },
+  {
+   "name": "Malcolm-Jamal Warner death",
+   "kind": "obituary",
+   "peakDay": "2025-07-21",
+   "views": 1912066,
+   "daysAboveHalfPeak": 2,
+   "mean30": 150318,
+   "spike": true,
+   "pct": 92
+  },
+  {
+   "name": "Will Smith slap (his page above baseline)",
+   "kind": "celebrity scandal",
+   "peakDay": "2022-03-28",
+   "views": 1475847,
+   "note": "the incident article itself had 65,902 at its own peak; the attention went to the person",
+   "daysAboveHalfPeak": 1,
+   "mean30": 119562,
+   "spike": true,
+   "pct": 92
+  },
+  {
+   "name": "Titan submersible implosion",
+   "kind": "news",
+   "peakDay": "2023-06-22",
+   "views": 1064813,
+   "daysAboveHalfPeak": 2,
+   "mean30": 148447,
+   "spike": true,
+   "pct": 92
+  },
+  {
+   "name": "Raygun (Olympic breaker)",
+   "kind": "one-week meme",
+   "peakDay": "2024-08-12",
+   "views": 191837,
+   "daysAboveHalfPeak": 6,
+   "mean30": 38780,
+   "pct": 82.7
+  },
+  {
+   "name": "Blake Lively lawsuit week",
+   "kind": "celebrity scandal",
+   "peakDay": "2024-12-22",
+   "views": 118783,
+   "daysAboveHalfPeak": 17,
+   "mean30": 59893,
+   "pct": 91
+  },
+  {
+   "name": "Coldplay kiss cam",
+   "kind": "one-week meme",
+   "peakDay": "2025-07-20",
+   "views": 106697,
+   "daysAboveHalfPeak": 2,
+   "mean30": 12215,
+   "spike": true,
+   "pct": 60.8
+  },
+  {
+   "name": "Dr Disrespect ban revelation",
+   "kind": "streamer ban",
+   "peakDay": "2024-06-26",
+   "views": 82291,
+   "daysAboveHalfPeak": 5,
+   "mean30": 20866,
+   "pct": 70.9
+  },
+  {
+   "name": "Italian brainrot",
+   "kind": "meme",
+   "peakDay": "2025-04-29",
+   "views": 77896,
+   "daysAboveHalfPeak": 15,
+   "mean30": 43253,
+   "pct": 84.8,
+   "like": "Italian brainrot"
+  },
+  {
+   "name": "Not Like Us (release week)",
+   "kind": "viral sound",
+   "peakDay": "2024-05-05",
+   "views": 72382,
+   "note": "the Super Bowl halftime day later reached 629,376 (100%)",
+   "daysAboveHalfPeak": 1,
+   "mean30": 14811,
+   "spike": true,
+   "pct": 64.4,
+   "like": "Not Like Us"
+  },
+  {
+   "name": "Moo Deng",
+   "kind": "one-week meme",
+   "peakDay": "2024-09-30",
+   "views": 64388,
+   "daysAboveHalfPeak": 9,
+   "mean30": 29853,
+   "pct": 77.8,
+   "like": "Moo Deng"
+  },
+  {
+   "name": "Grimace Shake",
+   "kind": "meme",
+   "peakDay": "2023-07-03",
+   "views": 44051,
+   "daysAboveHalfPeak": 18,
+   "mean30": 26638,
+   "pct": 75.6,
+   "like": "Grimace Shake"
+  },
+  {
+   "name": "Chill Guy",
+   "kind": "meme",
+   "peakDay": "2024-12-03",
+   "views": 37515,
+   "daysAboveHalfPeak": 19,
+   "mean30": 22048,
+   "pct": 72,
+   "like": "Chill Guy"
+  },
+  {
+   "name": "Pesto the penguin",
+   "kind": "one-day meme",
+   "peakDay": "2024-10-11",
+   "views": 24622,
+   "note": "a single day above half its peak",
+   "daysAboveHalfPeak": 1,
+   "mean30": 6257,
+   "spike": true,
+   "pct": 48,
+   "like": "Pesto the penguin"
+  },
+  {
+   "name": "Espresso (Sabrina Carpenter)",
+   "kind": "viral sound",
+   "peakDay": "2025-02-03",
+   "views": 15577,
+   "note": "Grammys day; its TikTok spring of 2024 stayed lower",
+   "daysAboveHalfPeak": 4,
+   "mean30": 6138,
+   "pct": 47.7,
+   "like": "Espresso"
+  },
+  {
+   "name": "Very demure, very mindful",
+   "kind": "one-day meme",
+   "peakDay": "2024-10-21",
+   "views": 14173,
+   "daysAboveHalfPeak": 2,
+   "mean30": 2132,
+   "spike": true,
+   "pct": 27.6,
+   "like": "Very demure"
+  },
+  {
+   "name": "Pedro (the raccoon sound)",
+   "kind": "viral sound",
+   "peakDay": "2024-05-18",
+   "views": 6527,
+   "daysAboveHalfPeak": 53,
+   "mean30": 4896,
+   "pct": 43.4,
+   "like": "Pedro the raccoon"
+  }
+ ],
+ "limits": [
+  {
+   "limit": "Google Trends daily history is refused without a key",
+   "shows": "search bands exist only as the collector saw them live: points from when we started tracking, dotted between, nothing before"
+  },
+  {
+   "limit": "TikTok's own view and video totals are closed (Creative Center needs signed requests; the public pages refuse automated reads; the two adapters are off unless the owner switches them on)",
+   "shows": "TikTok-only rows show a hatched \"listed, size not measured\" band near the floor, never a made-up %"
+  },
+  {
+   "limit": "YouTube, Instagram, Snapchat and X give no keyless history of views",
+   "shows": "documented totals appear as notes on anchors, never as chart points"
+  },
+  {
+   "limit": "Wikipedia before July 2015 counts desktop only, crawlers included, with no per-article mobile",
+   "shows": "converted with the measured factors; a pre-2015 stretch is drawn dashed with its range as a band"
+  },
+  {
+   "limit": "Wikipedia measures looking things up, not taking part",
+   "shows": "a death or big news reaches 1-10 million a day for a day or two; the size reads the best month, and a spike (half its peak on 3 days or fewer) tops out at 92, under the mega band; Roblox hits with 20M+ players read about 50%"
+  },
+  {
+   "limit": "English Wikipedia is the English-reading world, not the US",
+   "shows": "when the US searches band sits more than 2 sigmas under the Wikipedia estimate the day is flagged \"mostly outside the US\""
+  },
+  {
+   "limit": "Many trends have no article and no calibrated proxy (most TikTok formats, sounds without a song article, small memes)",
+   "shows": "no % until a calibrated measurement exists; the chart starts at the first one with \"from when we started tracking\""
+  },
+  {
+   "limit": "The daily figures land about a day late",
+   "shows": "today is the hourly dumps' partial sum scaled to 24 hours, dotted until the daily figure replaces it"
+  },
+  {
+   "limit": "The proxy fits are small (25, 11 and 4 pairs) with sigma 0.5-0.6 decades, about plus or minus 20 points",
+   "shows": "proxy-only days are dotted; the fits are refit as pairs accumulate"
+  }
+ ],
+ "sources": [
+  "Wikimedia REST pageviews: per-article daily, top (most-read) and aggregate, plus the legacy pagecounts aggregate (wikimedia.org/api/rest_v1)",
+  "Wikimedia pagecounts-ez merged daily dumps, streamed once and cut to English rows of 300+ views: 2012-09-23, 10-08, 11-24, 12-01, 12-21, 12-22; 2013-02-10 to 02-21; 2014-08-17 to 08-25; 2015-10-15 (crawler calibration)",
+  "stats.grok.se pages as saved by the Wayback Machine (Gangnam Style Jul-Nov 2012, Harlem Shake Feb 2013, Ice Bucket Challenge Aug 2014)",
+  "Wikipedia:Top 25 Report weekly pages (Feb 2013, Aug 2014)",
+  "MediaWiki API: redirects, language links and the article text for documented numbers"
+ ],
+ "private": "lib/data/size-private.json (never published) holds the live rows, the ladder rows that name a benchmark's subject and the matched pairs; this file holds only the scale, its constants and the historic anchors' public figures"
+}
