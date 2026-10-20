@@ -145,6 +145,9 @@ jobs:
       EDITOR_OFF: ${{ vars.IDEAS_EDITOR_OFF }}
       # (the enrich pass's stories by meaning, P8: read beside the cards; "off" and the desk decides by its own rules alone)
       STORIES_OFF: ${{ vars.IDEAS_STORIES }}
+      # (GDELT name discovery, P13: off unless the repository variable IDEAS_GDELT is "1"; it counts either way, so its baseline is
+      # warm the day it is switched on, and the ledger line's `gdelt` records the switch-on: lib/discover.js)
+      IDEAS_GDELT: ${{ vars.IDEAS_GDELT }}
       FEED_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
       FRESH: ${{ inputs.cold_start && '--fresh' || '' }}
     steps:

@@ -33,9 +33,11 @@ const TIMELINE_KINDS = ['start', 'chapter', 'reply', 'measure', 'latest'];
 const POST_KINDS = ['video', 'clip', 'thread'];
 // (what a creator could film, D4 `angles`: lib/editor/prompt.js ANGLE_KINDS)
 const ANGLE_KINDS = ['explain', 'react', 'take', 'ask', 'timeline', 'try'];
+// (what joins a row to another, D4 `relatedRows`: lib/entity/graph.js)
+const RELATED_KINDS = ['person', 'work', 'sound', 'query'];
 const GRAPH_STEPS = [15, 30, 60, 120, 360, 1440];
 const LIMITS = { rows: 80, minRows: 5, listBytes: 120000, detailBytes: 6000, bundleBytes: 150000, title: 90, line: 200, query: 60,
-  timelineText: 120, earlyOnPage: 3, earlyInList: 12, urgent: 3, namesBytes: 60000, posts: 3, related: 5, spread: 6, why: 6, whyText: 160, angles: 3, angleText: 160 };
+  timelineText: 120, earlyOnPage: 3, earlyInList: 12, urgent: 3, namesBytes: 60000, posts: 3, related: 5, spread: 6, why: 6, whyText: 160, angles: 3, angleText: 160, relatedRows: 3, via: 60 };
 // Section C, as far as a row can show it: how old an Early row, an urgent row, a spike and a flare may be, and the shortest time left
 // a start known only to the day may carry.
 const HOUR = 3600e3;
@@ -260,6 +262,15 @@ function validateDetail(detail, { bytes = 0, name = 'detail' } = {}) {
       if (new Set(sp.map((e) => e.where)).size !== sp.length) say('spread: one name once');
     }
   }
+  // (the other rows of this cycle's lists that name the same person, work or sound, and an earlier story of its people: D4
+  // `relatedRows`, 2026-10-20. A listed row is { id, title, via, kind }, an earlier story { id: null, title, via, kind, at })
+  if (detail.relatedRows !== undefined) {
+    const rr = detail.relatedRows;
+    const one = (r) => r && typeof r === 'object' && isText(r.title, LIMITS.title) && isText(r.via, LIMITS.via) && RELATED_KINDS.includes(r.kind)
+      && (r.id === null ? isInstant(r.at) : typeof r.id === 'string' && /^[a-z0-9]{6,32}$/.test(r.id) && r.at === undefined);
+    if (!Array.isArray(rr) || rr.length < 1 || rr.length > LIMITS.relatedRows || !rr.every(one)) say(`relatedRows: 1-${LIMITS.relatedRows} entries of { id (a row's id, or null for an earlier story with its at), title (1-${LIMITS.title}), via (1-${LIMITS.via}), kind (${RELATED_KINDS.join(', ')}) }`);
+    else if (rr.some((r) => r.id && r.id === detail.id) || new Set(rr.filter((r) => r.id).map((r) => r.id)).size !== rr.filter((r) => r.id).length) say('relatedRows: another row, once');
+  }
   return out;
 }
 
@@ -357,7 +368,7 @@ function validateFolder(dir) {
   return { problems, files };
 }
 
-module.exports = { validateRow, validateList, validateDetail, validateBundle, validateNames, validateFolder, statusAgainstGraph, keyOf, LIMITS, RULES, SCHEMA_VERSION, ANGLE_KINDS };
+module.exports = { validateRow, validateList, validateDetail, validateBundle, validateNames, validateFolder, statusAgainstGraph, keyOf, LIMITS, RULES, SCHEMA_VERSION, ANGLE_KINDS, RELATED_KINDS };
 
 if (require.main === module) {
   const dir = process.argv[2];

@@ -109,6 +109,7 @@ const HY = require('./lib/hygiene');
 const RESEED = require('./lib/reseed');
 const DESK = require('./lib/desk');
 const PSINK = require('./lib/page-sink');
+const SENSE = require('./lib/sense');
 const V = require('./samples/validate.cjs');
 const { AUDIENCES, slotOf, instant, HOUR, DAY, SLOT_SECONDS, localDay, keyOf } = require('./lib/util');
 
@@ -436,6 +437,9 @@ async function runCycle(opts) {
       } else log(`[fetch] ${request.id}: ${result.status || result.error || 'failed'}`);
     };
 
+    // (GDELT name discovery, P13: whether it acts this cycle, and what it did; lib/discover.js gdeltStep)
+    const gdeltOn = DISC.gdeltOn(env);
+    let gdeltCycle = null;
     // ---- step 2: fetch (tier 0, then the names that need a look now, the rotation, and what is owed) ----
     if (transport) {
       // (the clip charts are tier 0 too: what stands in for the streamer boards where Reddit turns the host away. A4)
@@ -588,12 +592,25 @@ async function runCycle(opts) {
       // (and who the creator-native signals are about, or the shortlist names, that no search has looked at lately: L6, L10)
       nativeStats.research = NDESK.research(peopleNow(), { lately: (name) => lately(name) || picked.now.includes(TS.talkKey(name)) });
       if (nativeStats.research.length) log(`[native] worth a search: ${nativeStats.research.join(', ')}`);
-      const wantedNow = [...new Set([...flared, ...shown, ...nativeStats.research])];
+      // GDELT's slot, read again for the names the list does not hold that break out in the press (lib/discover.js gdeltStep, P13):
+      // no request of its own. Counted whether or not it acts, so its baseline is warm the day it is switched on; on, a name that
+      // breaks out has the slot's headlines naming it in the store, and one nobody searched lately is searched now, last in the round
+      try {
+        const held = new Set([...lastRows.map((r) => keyOf(r.name || '')), ...platformNames.map((n) => n.key)].filter(Boolean));
+        gdeltCycle = DISC.gdeltStep(meta.get('gdeltNames', null), obs.gdeltArticles, { slot: obs.gdelt ? obs.gdelt.slot : null, on: gdeltOn, nowMs,
+          searched: (name) => lately(name) || picked.now.includes(TS.talkKey(name)), known: (name) => held.has(keyOf(name)) });
+        if (gdeltCycle.stats) {
+          meta.set('gdeltNames', gdeltCycle.state);
+          for (const row of gdeltCycle.rows) ST.upsertRow(store, row, nowMs);
+        }
+      } catch (e) { log(`[gdelt] name discovery failed, the cycle goes on without it: ${e.message}`); gdeltCycle = null; }
+      const wantedNow = [...new Set([...flared, ...shown, ...nativeStats.research, ...(gdeltCycle ? gdeltCycle.fresh : [])])];
       budget.release('news.google.com');
       const thirdRound = wantedNow.length ? await round(wantedNow.flatMap((name) => NAMES.nameRequests(name, 1)).filter((r) => r.kind === 'name-news')) : [];
       // (a signal is used up only when its search was sent: a name the budget refused flares again next cycle, with its noun still
       // new, and a game whose search was not sent is still new to the chart then)
       const sent = new Set(thirdRound.map((r) => TS.talkKey((r.request.args || {}).name || '')));
+      if (gdeltCycle) gdeltCycle.searched = gdeltCycle.fresh.filter((name) => sent.has(TS.talkKey(name))).length;
       for (const name of flared) { const key = TS.talkKey(name); if (!sent.has(key)) { if (watchState.carried && watchState.carried[key]) carried[key] = watchState.carried[key]; else delete carried[key]; } }
       const gamesSent = !games || games.fresh.every((g) => sent.has(TS.talkKey(g.name)) || lately(g.name) || picked.now.includes(TS.talkKey(g.name)));
       if (games && gamesSent) meta.set('twitchGames', games.state);
@@ -692,7 +709,15 @@ async function runCycle(opts) {
       platformRows = PDESK.rowsOf(things, { t, audiences: opts.audiences, taken, rankFrom: Object.fromEntries(opts.audiences.map((a) => [a, Math.max(NATIVE_RANK_FROM, nextRank(a))])) });
     } catch (e) { log(`[platform] no rows made: ${e.message}`); }
     const withPlatform = (a) => { try { return [...PDESK.attach(nativeByAudience[a], ledgerP, t), ...(platformRows[a] || [])]; } catch (e) { log(`[platform] ${a}: nothing added: ${e.message}`); return nativeByAudience[a]; } };
-    const rowsByAudience = Object.fromEntries(opts.audiences.map((a) => [a, withPlatform(a)]));
+    // (word sense, P9 and B8, lib/sense: each word row's line is the dictionary sense people mean, a dossier line where none can be
+    // shown, or a format's own recap. IDEAS_SENSE "off" stops it; should it fail, that audience's rows go on as they came)
+    const sensed = Object.fromEntries(opts.audiences.map((a) => {
+      const rows = withPlatform(a);
+      if (!SENSE.on(env)) return [a, { rows, notes: [], counts: null }];
+      try { return [a, SENSE.lineRows(rows, { typed: things.typed })]; } catch (e) { log(`[sense] ${a}: the lines stand: ${e.message}`); return [a, { rows, notes: [], counts: null }]; }
+    }));
+    const rowsByAudience = Object.fromEntries(opts.audiences.map((a) => [a, sensed[a].rows]));
+    for (const n of sensed[opts.audiences.includes('US') ? 'US' : opts.audiences[0]].notes) log(`[sense] "${n.title}": ${n.did}`);
     for (const r of platformRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || []) log(`[platform] ${r.platform.sub} "${r.title}"${r.platform.status ? ` (${r.platform.status})` : ''}${r.platform.page ? ' [page]' : ''}: ${r.line}`);
     for (const r of nativeRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || []) log(`[native] "${r.title}": ${Object.keys(r.meta.native.kinds).join(' + ')} | ${r.line}`);
     const deskNotes = (edited[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || { notes: [] }).notes;
@@ -805,6 +830,21 @@ async function runCycle(opts) {
     meta.set('originsWanted', [...cycleState.trends.values()].filter((c) => c.originOwed).sort((a, b) => rankOf(a) - rankOf(b)).slice(0, ORIGINS_WANTED_KEPT).map((c) => c.originOwed));
     // what the next cycle's tier 1 reads: the rows as published, each with the name its searches are stored under
     const us = feeds.lists[good.includes('US') ? 'US' : good[0]] || { items: [] };
+    // what GDELT name discovery did this cycle, for the ledger: counts only, never a name (P13; lib/discover.js). since: the slot it was
+    // first on (this switch-on): P13's 7 days before and after are read from there
+    const gdeltSince = gdeltOn ? (meta.get('gdeltOnSince', null) ?? t) : null;
+    meta.set('gdeltOnSince', gdeltSince);
+    const gdeltOut = (() => {
+      const s = gdeltCycle && gdeltCycle.stats;
+      let tally = { minted: 0, boosted: 0, page: 0 };
+      try {
+        if (s && gdeltOn) tally = DISC.gdeltTally(us.items, { nameOf: (id) => { const c = cycleState.trends.get(id); return c && c.info ? c.info.name : null; },
+          mintedIds: new Set(cycleState.minted.map((m) => m.id)), keys: gdeltCycle.keys, state: gdeltCycle.state, slot: t });
+      } catch (e) { log(`[gdelt] the rows were not counted: ${e.message}`); }
+      return { on: gdeltOn, since: Number.isFinite(gdeltSince) ? instant(gdeltSince) : null, read: !!s, seen: s ? s.seen : 0, passed: s ? s.passed : 0, fresh: s ? s.fresh : 0,
+        searched: s ? gdeltCycle.searched || 0 : 0, minted: tally.minted, boosted: tally.boosted, page: tally.page, baseHours: s ? Math.floor(s.baseSlots / 4) : 0, weekly: !!(s && s.weekly) };
+    })();
+    if (gdeltOut.read) log(`[gdelt] ${gdeltOut.on ? 'on' : 'off (counting only)'}: ${gdeltOut.seen} names in the slot, ${gdeltOut.passed} breaking out (${gdeltOut.baseHours} h of baseline${gdeltOut.weekly ? ', last week\'s slot in it' : ''}), ${gdeltOut.searched} of ${gdeltOut.fresh} searched; ${gdeltOut.minted} rows minted, ${gdeltOut.boosted} boosted, ${gdeltOut.page} on page one`);
     // (person: the row is about someone, which is what Bing News is asked a second opinion on. L8)
     meta.set('lastRows', us.items.map((it) => { const c = cycleState.trends.get(it.id); return { name: c && c.info.name, rank: it.rank, rising: it.status === 'rising', early: it.isEarly,
       accelerating: !!(c && c.measure.a > 0 && c.measure.v > 0), person: it.people.length > 0 }; }).filter((r) => r.name));
@@ -906,7 +946,7 @@ async function runCycle(opts) {
     log(`[time] fetch ${seconds.fetch}s, build ${seconds.build}s, identity + history ${seconds.measure}s, lines ${seconds.lines}s, editor ${seconds.editor}s, feed ${seconds.feed}s, write + publish ${seconds.publish}s`);
     const summary = { cycle, slot: instant(t), requests: outcome.sent, blocked: stale, items: Object.fromEntries(good.map((a) => [a, feeds.lists[a].items.length])), modelLines, ms: Date.now() - started,
       answered: outcome.ok, seconds, byHost: status.requests.byHost, bytes: Object.fromEntries(good.map((a) => [a, written.bytes[`${PUB.fileOf(a)}.json`]])), counts, ...(enrich ? { enrich } : {}),
-      ...(storiesOut ? { stories: storiesOut } : {}) };
+      ...(storiesOut ? { stories: storiesOut } : {}), gdelt: gdeltOut };
     return { code: 0, summary };
   } finally {
     if (state) state.close();

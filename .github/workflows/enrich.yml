@@ -12,16 +12,22 @@ name: enrich
 #      wait for the quarter-hour: shown ONE SLOT LATE. A pass that starts too late for that (after a cycle of the cron's at :07, or
 #      a slow one) writes until one slot from its own start, for the cycle after next, unless it waited behind another pass (it
 #      would then hold the next pass back in turn): it asks nothing and the next cycle plans its rows again. How many shards: as
-#      many as it takes for every owed card at the model's measured seconds a card (27 s until a pass has measured its own; the
-#      median of the last eight passes after), from the moment a shard's model answers (260 s after the plan) to that deadline,
-#      at most IDEAS_ENRICH_SHARDS (6). None when nothing is owed, under a minute of cards is left, the plan is over 40 minutes
-#      old, or IDEAS_ENRICH is "off" / IDEAS_EDITOR_OFF is "1".
-#   2. "shard" (a matrix, one job a shard, in parallel): restores the same state and cards, the model (the cache key collect used,
-#      "editor-model-v1-<model>"), starts it (.github/scripts/model.sh) and asks it for the rows dealt to this shard, round-robin
-#      from the most valuable, through the editor's own loop and gate (lib/editor askQueue: one request a story, a refused card sent
-#      back once, the claim check on every card) until the pass's deadline; its answers (cards the gate passed, and the ones it
-#      refused twice) to a part, saved as the cache entry "cardpart-<run>-<attempt>-<shard>". The editor's log (titles, a refused
-#      card's wording) is kept in a file on the runner and never printed, uploaded or published: the job log shows counts only.
+#      many as it takes for every owed card at the measured seconds a card a shard (70 s until a pass has measured its own; the
+#      median of the last eight passes that asked as many at once after), from the moment a shard's model answers (the median of
+#      the last passes' measured start; 260 s until one is measured) to that deadline, at most IDEAS_ENRICH_SHARDS (12: the
+#      account runs 20 jobs at once, and 8 are left for collect's three, the stories, the plan or merge, the scoreboard, a probe
+#      and one to spare). None when nothing is owed, under a minute of cards is left, the plan is over 40 minutes old, or
+#      IDEAS_ENRICH is "off" / IDEAS_EDITOR_OFF is "1".
+#   2. "shard" (a matrix, one job a shard, in parallel): fetches the model server in the background as its first step (behind the
+#      restores, which take about a minute), restores the same state and cards, the model (the cache key collect used,
+#      "editor-model-v1-<model>"), starts it (.github/scripts/model.sh: IDEAS_ENRICH_LANES sequences side by side, 3 by default)
+#      and asks it for the rows dealt to this shard, round-robin from the most valuable, as many at once from one queue, through
+#      the editor's own loop and gate (lib/editor askQueue: one request a story, a refused card sent back once, the claim check on
+#      every card) until the pass's deadline; its answers (cards the gate passed, and the ones it refused twice) to a part, saved as
+#      the cache entry "cardpart-<run>-<attempt>-<shard>", with where the model's time went (the server's own timings). Only
+#      shard 0 ever fetches the model from the network, and only when the cache restore missed it (never when the restore
+#      failed). The editor's log (titles, a refused card's wording) is kept in a file on the runner and never printed, uploaded or
+#      published: the job log shows counts and seconds only.
 #   3. "merge": the parts and the cards before them, the newest answer for each row and dossier, six hours of them at most, saved
 #      as "cards-<run>-<attempt>": what the next collect cycle restores. Then the superseded "cards-*" entries (the newest 3 kept)
 #      and every part of this pass or an older one are deleted by exact key (.github/scripts/cache-prune.js, PRUNE_KIND=cards).
@@ -29,8 +35,9 @@ name: enrich
 # NEVER: the feed (no write access to contents at all), the state (restored, never saved), the "collect" group. A pass that fails,
 # hangs or is never dispatched costs the feed only fresher cards: collect goes on with the cards its state holds. Its numbers reach
 # the ledger through the next collect cycle that imports its cards (ledger.jsonl `enrich`: asked, passed, seconds, shards; and the
-# cycle's own imported, held, stale and planned). Concurrency group "enrich": one pass at a time; a pass dispatched while another
-# runs waits, and a newer dispatch replaces the one waiting (the newest plan is the one worth writing).
+# cycle's own imported, held, stale and planned; with the collector's summary also calls, lanes, a shard's start, and the server's
+# timings summed: prompt tokens and seconds, reply tokens and seconds, the model's loads). Concurrency group "enrich": one pass at a
+# time; a pass dispatched while another runs waits, and a newer dispatch replaces the one waiting (the newest plan is the one worth writing).
 #
 # THE STORIES (ios/IDEAS-SUPER.md P8; .github/scripts/stories.js): beside the shards, a "stories" job, when the plan step says one is
 # due (collect's own plan of its rows, state/enrich/stories.json; IDEAS_STORIES "off" stops it; IDEAS_STORIES_EVERY, minutes, sets
@@ -41,8 +48,14 @@ name: enrich
 # puts them beside the cards as cards/stories.json (with no shard, the merge runs for the stories alone). It ends 90 s before the
 # shards' deadline, so the merge is never held. A failure costs fresher stories only: the next collect cycle reads the ones before.
 #
-# The model's file: a shard that finds it missing from the cache starts fetching it and writes no card; shard 0 then waits for it
-# and keeps it under the same key for every later pass. IDEAS_EDITOR_MODEL names another model; IDEAS_LLM_BASE_URL with
+# The model's file: shard 0, finding it missing from the cache, starts fetching it and writes no card, then waits for it and keeps
+# it under the same key for every later pass; every other shard writes no card that pass.
+#
+# THROUGHPUT (2026-10-20; the arithmetic in lib/editor/cards.js): 18 cards asked a pass on 6 shards at 87 s a card became, by
+# design, about 6 a shard on 12 (three stories at once at ~45 s a card a shard, the server fetched behind the restores):
+# ~70 a pass. Repository variables, all optional: IDEAS_ENRICH_SHARDS (12 at most), IDEAS_ENRICH_LANES (1 to 4), IDEAS_ENRICH_NATIVE
+# ("0": the OpenAI-style endpoint, no timings), IDEAS_ENRICH_CTX (6144), IDEAS_ENRICH_THREADS (every core), IDEAS_ENRICH_FLASH ("0":
+# off), IDEAS_ENRICH_KV (q8_0: a smaller KV cache). IDEAS_EDITOR_MODEL names another model; IDEAS_LLM_BASE_URL with
 # IDEAS_LLM_MODEL an OpenAI-compatible endpoint of the owner's own (no model is started then).
 on:
   workflow_dispatch:
@@ -71,6 +84,7 @@ jobs:
       shard_count: ${{ steps.plan.outputs.shard_count }}
       until: ${{ steps.plan.outputs.until }}
       slot: ${{ steps.plan.outputs.slot }}
+      planned_at: ${{ steps.plan.outputs.planned_at }}
       started: ${{ steps.clock.outputs.started }}
       state_key: ${{ steps.state.outputs.cache-matched-key }}
       cards_key: ${{ steps.cards.outputs.cache-matched-key }}
@@ -228,7 +242,7 @@ jobs:
     timeout-minutes: 16
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 12
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     env:
@@ -236,14 +250,27 @@ jobs:
       EDITOR_MODEL: ${{ vars.IDEAS_EDITOR_MODEL || 'hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M' }}
       OWN_ENDPOINT: ${{ vars.IDEAS_LLM_BASE_URL }}
       OWN_MODEL: ${{ vars.IDEAS_LLM_MODEL }}
-      # a card's own limits: a card with its why and three angles (ios/IDEAS-SUPER.md P12) is about 450 tokens back, so two and a
-      # half minutes a call and 900 tokens (the collector never asks for fewer: lib/editor/prompt.js MAX_TOKENS). No count a shard:
-      # the clock decides
-      IDEAS_EDITOR_TIMEOUT_MS: 150000
+      # a card's own limits: a card with its why and three angles (ios/IDEAS-SUPER.md P12) is about 450 tokens back, 900 at most
+      # (the collector never asks for fewer: lib/editor/prompt.js MAX_TOKENS). Four minutes a call: with three stories at once each
+      # sequence decodes at about 5 tokens a second, so a whole 900 takes three. No count a shard: the clock decides
+      IDEAS_EDITOR_TIMEOUT_MS: 240000
       IDEAS_EDITOR_MAX_TOKENS: 900
       ENRICH_UNTIL: ${{ needs.plan.outputs.until }}
+      ENRICH_PLANNED_AT: ${{ needs.plan.outputs.planned_at }}
+      # the stories a shard asks at once, and the sequences the server serves side by side (model.sh): the same number
+      ENRICH_LANES: ${{ vars.IDEAS_ENRICH_LANES || '3' }}
     steps:
       # (the model must be answering a minute before the pass's deadline, or this shard writes nothing)
+      # First, behind everything else: the model server's own install (about 40 s to fetch and unpack) runs while the repository,
+      # the state, the cards and the model's file are restored (about a minute); model.sh waits for it, or installs it itself.
+      - name: Fetch the model server, behind the restores
+        if: env.OWN_ENDPOINT == ''
+        continue-on-error: true
+        run: |
+          nohup bash -c 'curl -fsSL --max-time 150 https://ollama.com/install.sh -o /tmp/ollama-install.sh && timeout 240 sh /tmp/ollama-install.sh > /tmp/ollama-install.log 2>&1; echo $? > /tmp/ollama-install.code' > /dev/null 2>&1 &
+          echo $! > /tmp/ollama-install.pid
+          echo "the model server is being fetched behind the restores"
+
       - name: The shard's clock
         run: |
           echo "MODEL_BY=$(( ENRICH_UNTIL - 60 ))" >> "$GITHUB_ENV"
@@ -272,6 +299,7 @@ jobs:
           key: ${{ needs.plan.outputs.cards_key }}
 
       - name: Restore the editor model
+        id: modelcache
         if: env.OWN_ENDPOINT == ''
         continue-on-error: true
         timeout-minutes: 4
@@ -280,11 +308,21 @@ jobs:
           path: ~/.ollama/models
           key: editor-model-v1-${{ env.MODEL_KEY }}
 
+      # (served as model.sh's header says: ENRICH_LANES sequences side by side, Ollama's own API with its timings. The network
+      # only for shard 0 and only when the restore found no entry: a restore that failed or ran out of time fetches nothing)
       - name: Start the editor model
         id: model
         if: env.OWN_ENDPOINT == ''
         continue-on-error: true
         timeout-minutes: 6
+        env:
+          MODEL_PARALLEL: ${{ env.ENRICH_LANES }}
+          MODEL_PULL: ${{ (matrix.shard == 0 && steps.modelcache.outcome == 'success' && steps.modelcache.outputs.cache-hit != 'true') && '1' || '0' }}
+          MODEL_NATIVE: ${{ vars.IDEAS_ENRICH_NATIVE || '1' }}
+          MODEL_CTX: ${{ vars.IDEAS_ENRICH_CTX }}
+          MODEL_THREADS: ${{ vars.IDEAS_ENRICH_THREADS }}
+          MODEL_FLASH: ${{ vars.IDEAS_ENRICH_FLASH || '1' }}
+          MODEL_KV: ${{ vars.IDEAS_ENRICH_KV }}
         run: bash .github/scripts/model.sh "$EDITOR_MODEL" "$MODEL_BY"
 
       - name: An endpoint of the owner's own, when one is named
@@ -294,8 +332,8 @@ jobs:
           echo "IDEAS_LLM_MODEL=$OWN_MODEL" >> "$GITHUB_ENV"
           echo "IDEAS_EDITOR=1" >> "$GITHUB_ENV"
 
-      # Counts only on this log. enrich.log holds the editor's own lines (titles, and a refused card's unchecked wording): it stays
-      # on this runner, never printed, uploaded or published.
+      # Counts and seconds only on this log. enrich.log holds the editor's own lines (titles, and a refused card's unchecked
+      # wording): it stays on this runner, never printed, uploaded or published.
       - name: Write this shard's cards
         run: |
           mkdir -p part
@@ -310,8 +348,8 @@ jobs:
           path: part
           key: cardpart-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
 
-      # Once: a shard that found no model in the cache started fetching it (model.sh) and wrote no card; shard 0 waits for the file
-      # and keeps it for every later pass. Never a reason for the job to fail.
+      # Once: shard 0, finding no model in the cache, started fetching it (model.sh) and wrote no card; it waits for the file and
+      # keeps it for every later pass. Never a reason for the job to fail.
       - name: Has the editor model arrived
         id: fetched
         if: always() && matrix.shard == 0 && steps.model.outputs.pulled == 'started'
@@ -363,7 +401,7 @@ jobs:
           path: cards
           key: ${{ needs.plan.outputs.cards_key }}
 
-      # (one step a shard, up to the most a pass deals: IDEAS_ENRICH_SHARDS is held to 6 by enrich.js plan)
+      # (one step a shard, up to the most a pass deals: IDEAS_ENRICH_SHARDS is held to 12 by enrich.js plan, lib/editor/cards.js SHARDS_MAX)
       - name: Restore part 0
         if: fromJSON(needs.plan.outputs.shard_count) > 0
         continue-on-error: true
@@ -412,6 +450,54 @@ jobs:
         with:
           path: part
           key: cardpart-${{ github.run_id }}-${{ github.run_attempt }}-5
+      - name: Restore part 6
+        if: fromJSON(needs.plan.outputs.shard_count) > 6
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/cache/restore@v4
+        with:
+          path: part
+          key: cardpart-${{ github.run_id }}-${{ github.run_attempt }}-6
+      - name: Restore part 7
+        if: fromJSON(needs.plan.outputs.shard_count) > 7
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/cache/restore@v4
+        with:
+          path: part
+          key: cardpart-${{ github.run_id }}-${{ github.run_attempt }}-7
+      - name: Restore part 8
+        if: fromJSON(needs.plan.outputs.shard_count) > 8
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/cache/restore@v4
+        with:
+          path: part
+          key: cardpart-${{ github.run_id }}-${{ github.run_attempt }}-8
+      - name: Restore part 9
+        if: fromJSON(needs.plan.outputs.shard_count) > 9
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/cache/restore@v4
+        with:
+          path: part
+          key: cardpart-${{ github.run_id }}-${{ github.run_attempt }}-9
+      - name: Restore part 10
+        if: fromJSON(needs.plan.outputs.shard_count) > 10
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/cache/restore@v4
+        with:
+          path: part
+          key: cardpart-${{ github.run_id }}-${{ github.run_attempt }}-10
+      - name: Restore part 11
+        if: fromJSON(needs.plan.outputs.shard_count) > 11
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/cache/restore@v4
+        with:
+          path: part
+          key: cardpart-${{ github.run_id }}-${{ github.run_attempt }}-11
 
       - name: Merge the parts
         id: merge

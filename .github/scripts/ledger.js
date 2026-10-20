@@ -6,7 +6,7 @@
  *   node .github/scripts/ledger.js <ledger.jsonl>
  *
  * Appends this run's line and drops every line older than 7 days (and anything past 800 lines: a week is 672 quarter-hours).
- * Each line: { slot, started, published, rows, requests, answered, modelCards, seconds, code, by, run, phases, cache, enrich, stories }
+ * Each line: { slot, started, published, rows, requests, answered, modelCards, seconds, code, by, run, phases, cache, enrich, stories, gdelt }
  *   slot        the collector's own slot when a feed was published (status.json), else the quarter-hour nearest the job's start
  *   started     when the cycle job started (its clock, LEDGER_STARTED: epoch seconds)
  *   published   the feed's generatedAt when this run published one, else null: lead time is published minus slot
@@ -48,6 +48,14 @@
  *                 age           minutes since the pass made them (null: none read); size: sentences they hold
  *                 joined        rows the desk folded into another by meaning on the main list; planned: rows left for the next pass
  *                 texts         texts the pass clustered; vectors: of them, with a vector; seconds: the pass's own
+ *   gdelt       GDELT name discovery this cycle (ios/IDEAS-SUPER.md P13; the collector's summary, lib/discover.js), else null:
+ *                 on            whether it acted (IDEAS_GDELT); since: the slot it was switched on (null while off): P13's
+ *                               7 days before and after on the scoreboard's lead and coverage "first" are read from there
+ *                 read          GDELT's slot was read this cycle; seen: names in it; passed: names breaking out; fresh: of
+ *                               them, the ones nobody searched lately and the list does not hold; searched: of those, sent
+ *                 minted        rows of the US list new this cycle about a name it passed; boosted: rows already listed about
+ *                               a name breaking out now; page: of those, on page one
+ *                 baseHours     hours of baseline behind the test; weekly: the same quarter-hour last week was in it
  * Marks: MARK_BEGIN, MARK_SETUP, MARK_STATE, MARK_FEED, MARK_WAITED, MARK_MODEL, MARK_CYCLE, MARK_CYCLE_END, MARK_PUSHED, MARK_SAVED, MARK_LEDGER
  * (epoch milliseconds, set by collect.yml's steps; seconds are read as such). Reads cycle.json (the collector's one-line summary,
  * empty unless it published), out/v1/status.json and cache-prune.json from the working folder.
@@ -109,7 +117,8 @@ function phasesOf(env, nowMs, summary, prune) {
   };
 }
 
-const ENRICH_NUMBERS = ['run', 'age', 'asked', 'passed', 'seconds', 'shards', 'shardsDone', 'perCard', 'imported', 'held', 'stale', 'planned', 'passPlanned', 'whys', 'whysPassed', 'angles', 'anglesPassed'];
+const ENRICH_NUMBERS = ['run', 'age', 'asked', 'passed', 'seconds', 'shards', 'shardsDone', 'perCard', 'imported', 'held', 'stale', 'planned', 'passPlanned', 'whys', 'whysPassed', 'angles', 'anglesPassed',
+  'calls', 'lanes', 'ready', 'metered', 'promptTokens', 'promptSeconds', 'replyTokens', 'replySeconds', 'loadSeconds'];
 /** The enrich pass as the collector's summary tells it (P11), numbers and one flag only, or null when the summary has none. */
 function enrichOf(summary) {
   const e = summary && summary.enrich && typeof summary.enrich === 'object' ? summary.enrich : null;
@@ -122,6 +131,15 @@ const STORIES_NUMBERS = ['age', 'size', 'joined', 'planned', 'texts', 'vectors',
 function storiesOf(summary) {
   const s = summary && summary.stories && typeof summary.stories === 'object' ? summary.stories : null;
   return s ? Object.fromEntries(STORIES_NUMBERS.map((k) => [k, numberOrNull(s[k])])) : null;
+}
+
+const GDELT_NUMBERS = ['seen', 'passed', 'fresh', 'searched', 'minted', 'boosted', 'page', 'baseHours'];
+/** GDELT name discovery as the collector's summary tells it (P13): flags, the switch-on instant and counts only, or null when none. */
+function gdeltOf(summary) {
+  const g = summary && summary.gdelt && typeof summary.gdelt === 'object' ? summary.gdelt : null;
+  if (!g) return null;
+  const since = typeof g.since === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(g.since) ? g.since : null;
+  return { on: g.on === true, since, read: g.read === true, ...Object.fromEntries(GDELT_NUMBERS.map((k) => [k, numberOrNull(g[k])])), weekly: g.weekly === true };
 }
 
 /** The cache's counts after the prune (cache-prune.json), or null when the prune did not run or could not list the cache. */
@@ -152,6 +170,7 @@ function lineOf(env, nowMs, summary, status, prune = null) {
     cache: cacheOf(prune),
     enrich: enrichOf(summary),
     stories: storiesOf(summary),
+    gdelt: gdeltOf(summary),
   };
 }
 
@@ -187,5 +206,5 @@ function main() {
   return 0;
 }
 
-module.exports = { lineOf, keep, phasesOf, markOf, enrichOf, storiesOf };
+module.exports = { lineOf, keep, phasesOf, markOf, enrichOf, storiesOf, gdeltOf };
 if (require.main === module) process.exit(main());

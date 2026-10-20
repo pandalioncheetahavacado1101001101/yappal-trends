@@ -294,7 +294,10 @@ function recaseFrom(text, items, lex = null) {
  * Names of private people: a name right after a role noun ("teacher Mele Taeiloa", "woman Cyrena Anne Quast") or one that only
  * one or two outlets print. Lines naming them are not shown.
  */
-const ROLE_BEFORE_NAME = /\b(?:dancer|teacher|nurse|woman|man|mom|mum|dad|fan|concertgoer|shopper|student|worker|staffer|employee|wife|husband|girlfriend|boyfriend|neighbou?r|customer|passenger|driver|influencer|tiktoker|mother|father|daughter|son)\s+((?:\p{Lu}[\p{L}’'-]+\s?){2,3})/u;
+// (the roles that make the name after them a private person's; lib/entity/graph.js crosses no such name to another story)
+const PRIVATE_ROLES = ['dancer', 'teacher', 'nurse', 'woman', 'man', 'mom', 'mum', 'dad', 'fan', 'concertgoer', 'shopper', 'student', 'worker', 'staffer', 'employee', 'wife', 'husband',
+  'girlfriend', 'boyfriend', 'neighbor', 'neighbour', 'customer', 'passenger', 'driver', 'influencer', 'tiktoker', 'mother', 'father', 'daughter', 'son'];
+const ROLE_BEFORE_NAME = new RegExp(`\\b(?:${PRIVATE_ROLES.join('|')})\\s+((?:\\p{Lu}[\\p{L}’'-]+\\s?){2,3})`, 'u');
 function privateNames(items, nameSources) {
   const out = new Set();
   for (const it of items) {
@@ -310,5 +313,5 @@ const namesPrivate = (text, priv, keep) => { const tw = words(text).join(' '); r
 module.exports = {
   byline, FUTURE, VAGUE, NAME_GLOSS, otherBearer, CLICKBAIT, VERDICT, HEARSAY, RESULT, RETRO, GRAVE_EVENT, NO_ACTION, BAIT_TITLE, BACKLASH, TURN, MOMENT_FRAME, META, CONFLICT, SELF_DEFENSE, REVIEW, EXPLAINER, LOGISTICS, STAKES, EVENT, SCALE_NUM, OPINION, LABEL, ACCUSE, HEDGE, CENSORED,
   CONTRADICT_BOO, ROMANCE, ACCIDENT, CORRECTION, MAJOR, outletQuality, titleKey, contentStems, docFreq, consensusOf, minorityWords,
-  correctionsOf, correctionClause, safeLine, unsafeLine, recaseFrom, privateNames, namesPrivate, quoteWordCase,
+  correctionsOf, correctionClause, safeLine, unsafeLine, recaseFrom, privateNames, namesPrivate, quoteWordCase, PRIVATE_ROLES, ROLE_BEFORE_NAME,
 };
