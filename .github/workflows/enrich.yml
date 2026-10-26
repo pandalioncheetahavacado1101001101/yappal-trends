@@ -20,7 +20,7 @@ name: enrich
 #      IDEAS_ENRICH is "off" / IDEAS_EDITOR_OFF is "1".
 #   2. "shard" (a matrix, one job a shard, in parallel): fetches the model server in the background as its first step (behind the
 #      restores, which take about a minute), restores the same state and cards, the model (the cache key collect used,
-#      "editor-model-v1-<model>"), starts it (.github/scripts/model.sh: IDEAS_ENRICH_LANES sequences side by side, 3 by default)
+#      "editor-model-v1-<model>"), starts it (.github/scripts/model.sh: IDEAS_ENRICH_LANES sequences side by side, 1 by default)
 #      and asks it for the rows dealt to this shard, round-robin from the most valuable, as many at once from one queue, through
 #      the editor's own loop and gate (lib/editor askQueue: one request a story, a refused card sent back once, the claim check on
 #      every card) until the pass's deadline; its answers (cards the gate passed, and the ones it refused twice) to a part, saved as
@@ -258,7 +258,7 @@ jobs:
       ENRICH_UNTIL: ${{ needs.plan.outputs.until }}
       ENRICH_PLANNED_AT: ${{ needs.plan.outputs.planned_at }}
       # the stories a shard asks at once, and the sequences the server serves side by side (model.sh): the same number
-      ENRICH_LANES: ${{ vars.IDEAS_ENRICH_LANES || '3' }}
+      ENRICH_LANES: ${{ vars.IDEAS_ENRICH_LANES || '1' }}
     steps:
       # (the model must be answering a minute before the pass's deadline, or this shard writes nothing)
       # First, behind everything else: the model server's own install (about 40 s to fetch and unpack) runs while the repository,
