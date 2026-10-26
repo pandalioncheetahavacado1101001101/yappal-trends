@@ -1,7 +1,7 @@
 {
   "name": "yappal-ideas-scoreboard",
-  "version": 2,
-  "registered": "2026-10-19",
+  "version": 3,
+  "registered": "2026-10-27",
   "rule": "Pre-registered (ios/IDEAS-SUPER.md 1). Every number on the scoreboard branch is computed by .github/scoreboard/*.js from the values in this file. Each published day carries one hash of this file and of the scoring code (comparators.js, history.js, match.js, metrics.js, ours.js, report.js, stats.js); a change to any value or any of those files changes the hash and restarts the 14-day clock.",
   "audience": "US",
   "minN": 15,
@@ -11,7 +11,7 @@
     "why": "The run at 06:20Z scores the UTC day two days before it: an entry that surfaced at 23:59 that day has had its 24 hours to be listed, and the 18:00 list of that day its 24 hours to be checked."
   },
   "matcher": {
-    "version": 2,
+    "version": 3,
     "order": [
       "alias",
       "person",
@@ -139,6 +139,13 @@
       "split": " by ",
       "artistMustOverlap": true
     },
+    "alternates": {
+      "comparators": [
+        "kym"
+      ],
+      "split": " / ",
+      "rule": "an entry titled several ways at once (\"A / B\") is matched whole and as each of its names; the best join holds, every check applying to each"
+    },
     "kinds": {
       "gt": {
         "not": [
@@ -194,6 +201,13 @@
       "kym": "seenFirst of the entry's address in the state's store rows",
       "viral50": "first_seen of the sound in platform_items (source tts, viral chart), or the scoreboard's own first read",
       "x": "the scoreboard's own first read"
+    },
+    "searches": "a trend is also known by the Google Trends searches the collector tied to it (its info.searches keywords) that name it: two or more of the search's title-core words (every one of a one-word search) are words of the trend's own titles, subject or people. The matcher reads those as alias keys, so the bare-name and long-lead checks still hold every join",
+    "reads": {
+      "gt": "the store's Google Trends rows of the audience's country (talkTrends), by the keyword as typed",
+      "kym": "the store's Know Your Meme rows, by address",
+      "viral50": "platform_items of the viral chart, by sound",
+      "x": null
     }
   },
   "comparators": {
@@ -288,7 +302,10 @@
       "first": "listed before the surface: the earlier of the entry's own time and our own read of that comparator showing it (the anchor when neither is known), the rule lead uses",
       "via": "listed at or after it"
     },
-    "insufficient": "under minN scope entries, a day (or the rolling window) reads insufficient: no share"
+    "insufficient": "under minN scope entries, a day (or the rolling window) reads insufficient: no share",
+    "stages": {
+      "rule": "every scope entry of the day that is not covered is counted once, at the first stage that holds: listedLate (matched a trend we listed, more than withinHours after the anchor), outside (matched a trend we listed more than lead.window.days before it), notListed (matched only a trend we built and never listed inside listDepth), readOnly (matched nothing we built, but our own read of the comparator showed it: ours.reads), unseen (neither). Counts only, per comparator and day, and summed over the rolling window; readOnly and unseen are null for a comparator the collector does not read"
+    }
   },
   "breadth": {
     "definition": "new stories over new Google Trends scope entries, flow over flow: distinct stories that first reached page one that day (shared, or only here and confirmed), over the Google Trends scope entries that started that day",

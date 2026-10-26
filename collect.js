@@ -80,6 +80,7 @@ const PRESS = require('./lib/sources/press');
 const BING = require('./lib/sources/bing');
 const PS = require('./lib/platform-signals');
 const PDESK = require('./lib/platform-desk');
+const SDESK = require('./lib/search-desk');
 const TTS = require('./lib/sources/tts');
 const ROUNDUPS = require('./lib/sources/roundups');
 const REELS = require('./lib/sources/reels');
@@ -109,6 +110,7 @@ const HY = require('./lib/hygiene');
 const RESEED = require('./lib/reseed');
 const DESK = require('./lib/desk');
 const PSINK = require('./lib/page-sink');
+const LABELS = require('./lib/labels');
 const SENSE = require('./lib/sense');
 const V = require('./samples/validate.cjs');
 const { AUDIENCES, slotOf, instant, HOUR, DAY, SLOT_SECONDS, localDay, keyOf } = require('./lib/util');
@@ -711,8 +713,12 @@ async function runCycle(opts) {
     const withPlatform = (a) => { try { return [...PDESK.attach(nativeByAudience[a], ledgerP, t), ...(platformRows[a] || [])]; } catch (e) { log(`[platform] ${a}: nothing added: ${e.message}`); return nativeByAudience[a]; } };
     // (word sense, P9 and B8, lib/sense: each word row's line is the dictionary sense people mean, a dossier line where none can be
     // shown, or a format's own recap. IDEAS_SENSE "off" stops it; should it fail, that audience's rows go on as they came)
+    // (what people are searching now that no row tells yet, lib/search-desk.js: a row of its own, after everything else made)
+    const searchNews = [...recent, ...[...store.rows.values()].filter((r) => r.fam === 'trends' && Number.isFinite(r.t) && nowMs - r.t < THREAD_BACK_MS).map((r) => ({ t: r.t, title: r.title, outlet: r.publisher || r.label || null }))];
+    const resolved = new Map([...store.trends.values()].filter((tr) => tr.headline).map((tr) => [tr.key, tr.headline]));
+    const withSearch = (a) => { const rows = withPlatform(a); try { return SDESK.add(rows, { trends: [...(store.talkTrends || new Map()).values()], resolved, news: searchNews, lookups: store.lookups, t, audience: a }); } catch (e) { log(`[search] ${a}: no rows made: ${e.message}`); return rows; } };
     const sensed = Object.fromEntries(opts.audiences.map((a) => {
-      const rows = withPlatform(a);
+      const rows = withSearch(a);
       if (!SENSE.on(env)) return [a, { rows, notes: [], counts: null }];
       try { return [a, SENSE.lineRows(rows, { typed: things.typed })]; } catch (e) { log(`[sense] ${a}: the lines stand: ${e.message}`); return [a, { rows, notes: [], counts: null }]; }
     }));
@@ -734,6 +740,13 @@ async function runCycle(opts) {
       // (every timeline sentence is told by the desk's one function: lib/desk.js tellEvent)
       tell: (row, r) => DESK.tellEvent(row, r, built.lex) });
     for (const f of cycleState.failed || []) log(`[history] "${f.title}" left out of this cycle: ${f.error}`);
+    // (the labels, P5 B3-B5: what a row's own history, curve and ranked list say it is, read over the measured status for what this
+    // cycle publishes and how the page sinks; the state keeps its own. lib/labels. Off with the page's sink, IDEAS_PAGE_SINK=0)
+    let labelled = null;
+    if (PSINK.on(env)) {
+      try { labelled = LABELS.apply(cycleState, { t, db }); } catch (e) { log(`[labels] not read this cycle: ${e.message}`); }
+      if (labelled) log(`[labels] ${Object.entries(labelled.counts).map(([k, n]) => `${n} ${k}`).join(', ')}`);
+    }
     lap('measure');
 
     // ---- step 6, lines (G): at most 6 model calls, 60 s in all; a line is shown as the model's only when the claim check passes it ----
@@ -766,7 +779,9 @@ async function runCycle(opts) {
       if (!c) return null;
       const turns = [c.next.chapterAt, c.turnAt].filter((x) => Number.isFinite(x) && x <= t);
       return { status: Object.values(c.early || {}).some(Boolean) ? 'rising' : c.statusOwn !== false ? c.status : null,
-        startedAt: Number.isFinite(c.next.startedAt) ? c.next.startedAt : null, newsAt: turns.length ? Math.max(...turns) : null };
+        startedAt: Number.isFinite(c.next.startedAt) ? c.next.startedAt : null, newsAt: turns.length ? Math.max(...turns) : null,
+        // (what the labels read of it: whether it will last the day, the run it returned to the list on. lib/labels)
+        ...(labelled ? { sink: LABELS.sinkOf(labelled, row.id) } : {}) };
     };
     const orderOf = (a, rows) => { try { return DESK.order(rows, { statusOf, startedOf, seriesOf, sink: PSINK.on(env), now: t }); } catch (e) { log(`[desk] ${a}: order failed, the engine's order stands: ${e.message}`); return rows; } };
     // (the writer asks for the rows a reader meets first: the page as it will be laid out, not as the engine ranked it)
@@ -781,7 +796,10 @@ async function runCycle(opts) {
     } catch (e) { log(`[lines] the writer failed, every line stays its headline: ${e.message}`); }
     for (const [id, w] of lined.lines) if (w.drop) log(`[lines] "${(Object.values(rowsByAudience).flat().find((r) => r.id === id) || {}).title || id}" left out: ${w.drop}`);
     // (and a card's why and angles on its row, for the detail: lib/editor/ideas.js, D4)
-    const linedRows = Object.fromEntries(Object.entries(LW.applyLines(rowsByAudience, lined.lines, lined.casing, lined.ideas)).map(([a, rows]) => [a, orderOf(a, DESK.advise(DESK.respellLines(rows)))]));
+    // (a title no surer than its sources, P5: a row titled by a noun none of its own texts says of its name is titled again from its
+    // line. lib/labels/title.js; with the labels)
+    const titledOf = (rows) => (labelled ? LABELS.titled(rows, DESK.nounTitle, nowMs) : rows);
+    const linedRows = Object.fromEntries(Object.entries(LW.applyLines(rowsByAudience, lined.lines, lined.casing, lined.ideas)).map(([a, rows]) => [a, orderOf(a, titledOf(DESK.advise(DESK.respellLines(rows))))]));
     // (the enrich pass whose cards this cycle imported, for the ledger: counts and seconds only, never a row)
     const enrich = cardsOnly ? XC.enrichOf(cardsOnly.enrichHeader, lined.stats.editor, { nowS: clock(), seenRun: meta.get('enrichSeen', null) }) : null;
     if (enrich) log(`[enrich] cards of pass ${enrich.run ?? 'none'}${enrich.age !== undefined && enrich.age !== null ? ` (${enrich.age} min old)` : ''}: ${enrich.imported} imported, ${enrich.held} held already, ${enrich.stale} dropped for a story that moved; ${enrich.planned ?? '?'} rows planned for the next pass`);

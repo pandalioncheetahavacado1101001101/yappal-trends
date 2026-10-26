@@ -47,11 +47,27 @@ test('coverage: first only when listed before the surface (the earlier of the en
   const scope = X.scopeOf('gt', rows, HISTORY, BOUNDS, spec);
   assert.deepEqual(scope.map((r) => r.key), ['e0', 'e1', 'e2', 'e3']);
   const cov = X.coverageOf(scope, oursOf(trends), spec);
-  assert.deepEqual({ ...cov }, { n: 4, covered: 4, first: 2, via: 2, excluded: 0, share: null, firstShare: null, status: 'insufficient' });
+  assert.deepEqual({ ...cov }, { n: 4, covered: 4, first: 2, via: 2, excluded: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 0 } });
   // (15 entries or more: a share)
   const many = Array.from({ length: 15 }, (_, i) => gtEntry(10 + i, S + 10 * HOUR, null, i < 6 ? 'c' : null));
   const big = X.coverageOf(X.scopeOf('gt', many, HISTORY, BOUNDS, spec), oursOf(trends), spec);
-  assert.deepEqual({ ...big }, { n: 15, covered: 6, first: 6, via: 0, excluded: 0, share: 0.4, firstShare: 1, status: 'ok' });
+  assert.deepEqual({ ...big }, { n: 15, covered: 6, first: 6, via: 0, excluded: 0, share: 0.4, firstShare: 1, status: 'ok', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 9 } });
+});
+
+test('coverage\'s misses by stage: listed late, listed long before, built and never listed, read and nothing built, never seen; each entry once', () => {
+  const trends = [{ id: 'on', listed: S + 11 * HOUR }, { id: 'late', listed: S + 40 * HOUR }, { id: 'old', listed: S - 9 * DAY }, { id: 'cut', listed: null }];
+  const row = (i, id, extra = {}) => ({ ...gtEntry(i, S + 10 * HOUR, null, id), built: null, read: false, ...extra });
+  const rows = [row(0, 'on'), row(1, 'late'), row(2, 'old'), row(3, null, { built: { id: 'cut', how: 'person', score: 1 }, read: true }), row(4, null, { read: true }), row(5, null), row(6, null)];
+  const cov = X.coverageOf(X.scopeOf('gt', rows, HISTORY, BOUNDS, spec), oursOf(trends), spec);
+  assert.deepEqual(cov.stages, { listedLate: 1, outside: 1, notListed: 1, readOnly: 1, unseen: 2 });
+  assert.equal(cov.covered + Object.values(cov.stages).reduce((a, x) => a + x, 0), cov.n, 'every entry once');
+  // (a comparator the collector does not read: what it read cannot be said)
+  const x = X.coverageOf(X.scopeOf('gt', rows.map((r) => ({ ...r, read: null })), HISTORY, BOUNDS, spec), oursOf(trends), spec);
+  assert.deepEqual(x.stages, { listedLate: 1, outside: 1, notListed: 1, readOnly: null, unseen: null });
+  // (the reads ours.js gives: Google Trends by the keyword as typed, Know Your Meme by address, the Viral 50 by sound; X none)
+  const ours = { reads: { gt: new Set(['velma orrin split']), kym: new Set(['https://knowyourmeme.com/memes/brimvale']), viral50: new Set(['123456789']) } };
+  assert.deepEqual([X.readByUs('gt', { title: 'Velma  Orrin split' }, ours), X.readByUs('kym', { key: 'https://knowyourmeme.com/memes/brimvale/' }, ours), X.readByUs('viral50', { key: '123456789' }, ours),
+    X.readByUs('gt', { title: 'velma orrin' }, ours), X.readByUs('x', { key: 'velma orrin' }, ours)], [true, true, true, false, null]);
 });
 
 test('breadth: distinct stories new to page one that day, over Google Trends\' new starts; stock, re-keyed rows and rotation earn nothing', () => {

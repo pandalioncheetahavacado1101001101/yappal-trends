@@ -21,7 +21,9 @@ const KEYS = new Set(['schema', 'name', 'spec', 'version', 'hash', 'generatedAt'
   'stories', 'newStories', 'gtStarts', 'ratio', 'lists', 'gate', 'mark', 'rows', 'checked', 'live', 'fading', 'duplicates', 'old', 'runs', 'published',
   'failed', 'lagMedianMinutes', 'lagP90Minutes', 'meanAgeMinutes', 'ageCoveredShare', 'maxGapMinutes', 'probeN', 'probeMeanAgeMinutes',
   'latest', 'rolling', 'from', 'to', 'gateDays', 'checkedDays', 'targets', 'ciLowAbove', 'liveMin', 'duplicatesMax', 'fadingMax',
-  'speedMeanAgeMinutes', 'claim', 'consecutiveDays', 'needed', 'holds', 'minN', 'matcher', 'audit', 'audited', 'wrong', 'rate']);
+  'speedMeanAgeMinutes', 'claim', 'consecutiveDays', 'needed', 'holds', 'minN', 'matcher', 'audit', 'audited', 'wrong', 'rate',
+  // (coverage's misses by stage, metrics.js coverageOf: counts only)
+  'stages', 'outside', 'notListed', 'readOnly', 'unseen']);
 
 /** Throws unless every key and value of `doc` is aggregate (see above). Returns doc. */
 function assertAggregate(doc, where = 'doc') {
@@ -154,6 +156,17 @@ function auditOf(audit) {
   return { day: audit.day, audited: audit.pairs, wrong: audit.wrong, rate: share(audit.wrong, audit.pairs) };
 }
 
+/** Coverage's misses by stage summed over day lines' coverage of one comparator (a stage no day measured stays null). */
+function stagesOf(rows) {
+  const out = {};
+  for (const k of STAGES) {
+    const vs = rows.map((v) => v.stages && v.stages[k]).filter(Number.isFinite);
+    out[k] = vs.length ? vs.reduce((a, x) => a + x, 0) : null;
+  }
+  return out;
+}
+const STAGES = ['listedLate', 'outside', 'notListed', 'readOnly', 'unseen'];
+
 /** latest.json: the newest line, the rolling window, the targets, the claim, the matcher's audited false-match rate. history gives the pooled 14-day lead. */
 function latestOf({ lines, history, hash, at, spec, audit = null }) {
   const newest = lines[lines.length - 1];
@@ -165,7 +178,7 @@ function latestOf({ lines, history, hash, at, spec, audit = null }) {
     const rows = window.map((l) => l.coverage[c]).filter((v) => v && Number.isFinite(v.n));
     const n = rows.reduce((a, v) => a + v.n, 0); const covered = rows.reduce((a, v) => a + v.covered, 0); const first = rows.reduce((a, v) => a + v.first, 0);
     const ok = n >= spec.minN;
-    coverage[c] = { days: rows.length, n, covered, first, share: ok ? share(covered, n) : null, firstShare: ok ? share(first, covered) : null, status: ok ? 'ok' : spec.insufficient };
+    coverage[c] = { days: rows.length, n, covered, first, share: ok ? share(covered, n) : null, firstShare: ok ? share(first, covered) : null, status: ok ? 'ok' : spec.insufficient, stages: stagesOf(rows) };
   }
   const br = window.map((l) => l.breadth).filter((b) => Number.isFinite(b.gtStarts) && Number.isFinite(b.stories));
   const stories = br.reduce((a, b) => a + b.stories, 0); const gtStarts = br.reduce((a, b) => a + b.gtStarts, 0);
@@ -187,7 +200,7 @@ function latestOf({ lines, history, hash, at, spec, audit = null }) {
   return assertAggregate(doc, 'latest');
 }
 
-module.exports = { assertAggregate, SCORING_FILES, scoringCode, specHash, pooledLead, pooledBreadth, meetsOf, dayLine, readDays, withLine, claimRun, auditOf, latestOf, KEYS, ENUMS };
+module.exports = { stagesOf, STAGES, assertAggregate, SCORING_FILES, scoringCode, specHash, pooledLead, pooledBreadth, meetsOf, dayLine, readDays, withLine, claimRun, auditOf, latestOf, KEYS, ENUMS };
 
 // node .github/scoreboard/report.js --check <file>...   the guard alone, on files about to be published (exit 1 on anything not aggregate)
 if (require.main === module) {

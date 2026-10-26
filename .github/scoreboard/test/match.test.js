@@ -137,3 +137,12 @@ test('the hand-checked audit: the matcher makes exactly the checked Google Trend
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'audit-result.json'), 'utf8')), auditCounts(labelled),
     'audit-result.json is the labelled audit\'s counts (node .github/scoreboard/audit.js --record)');
 });
+
+test('alternates: a Know Your Meme entry titled two ways is matched whole and as each name; Google Trends titles are never split', () => {
+  const rows = [row({ id: 'f', kind: 'word', sub: 'meme', titles: ['Glorp face meme'] }), row({ id: 'k', titles: ['Velma Orrin cheating allegations'], people: [{ name: 'Velma Orrin' }] })];
+  // (whole, neither name joins: "zib zab staring glorp face" against "glorp face" is 2 of 5)
+  assert.deepEqual(one(rows, { title: 'Zib Zab Staring / Glorp Face Meme' }, 'kym'), { id: 'f', how: 'alias', score: 1 });
+  assert.deepEqual(one(rows, { title: 'Velma Orrin Cheating Controversy / Quorra Affair Scandal' }, 'kym'), { id: 'k', how: 'jaccard', score: 0.75 });
+  assert.equal(one(rows, { title: 'Zib Zab Staring / Glorp Face Meme' }, 'gt'), null, 'only the comparators the spec names');
+  assert.equal(one(rows, { title: 'Zib Zab / Quorra' }, 'kym'), null, 'no name of it joins: nothing');
+});

@@ -16,6 +16,8 @@
  *            words are stopwords or framing)
  *   long lead  a join whose entry surfaced more than 48 h after our first listing, on a comparator that gives related searches,
  *            holds only when those searches corroborate it as above (the longest leads are where a wrong join would count most)
+ *   alternates  an entry a comparator titles several ways at once (Know Your Meme's "Zib Zab Staring / Glorp Face Meme") is matched
+ *            whole and as each of its names, the best join of them held (every check above applies to each)
  * A comparator matches only the kinds the spec gives it: a chart of sounds matches our sounds, nothing else matches a sound (the
  * sound "Velma Orrin by Quorra" is never the actress).
  */
@@ -172,9 +174,22 @@ function longLeadHolds(row, core, entry, comparator, m) {
 
 /**
  * The best of our trends for one entry of comparator `comparator`, or null. entry: { title, artist (a sound's, optional), related
- * (its related searches, optional), t (when it surfaced, epoch s, optional) }. Returns { id, how, score }.
+ * (its related searches, optional), t (when it surfaced, epoch s, optional) }. Returns { id, how, score }. On a comparator the spec
+ * gives alternates (matcher.alternates), the entry whole and each of its names, the best of their joins.
  */
 function matchEntry(entry, comparator, index) {
+  const alt = index.m.alternates;
+  const parts = alt && alt.comparators.includes(comparator) ? String(entry.title || '').split(alt.split).map((x) => x.trim()).filter(Boolean) : [];
+  if (parts.length < 2) return matchOne(entry, comparator, index);
+  let best = null;
+  for (const title of [entry.title, ...parts]) {
+    const hit = matchOne({ ...entry, title }, comparator, index);
+    if (hit && better({ ...hit, listed: (index.rows.find((r) => r.id === hit.id) || {}).listed }, best)) best = { ...hit, listed: (index.rows.find((r) => r.id === hit.id) || {}).listed };
+  }
+  return best ? { id: best.id, how: best.how, score: best.score } : null;
+}
+
+function matchOne(entry, comparator, index) {
   const { m, rows, byToken, byWhole, byPerson } = index;
   const rule = m.kinds[comparator];
   const isSound = comparator === 'viral50';

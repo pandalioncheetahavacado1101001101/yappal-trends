@@ -34,9 +34,26 @@ function collectorSighting(c, e, trendId, ours) {
 
 const minOf = (...xs) => { const v = xs.filter(Number.isFinite); return v.length ? Math.min(...v) : null; };
 
-/** Every comparator entry of the history, matched: Map(comparator -> [{ key, e, own, surface, sighting, match }]). */
+/**
+ * Whether our own read of the comparator showed the entry, whatever was made of it (ours.reads): Google Trends by the keyword as
+ * typed, Know Your Meme by its address, the Viral 50 by its sound. X: the collector does not read getdaytrends (null).
+ */
+function readByUs(c, e, ours) {
+  const reads = ours.reads || {};
+  if (c === 'gt') return !!reads.gt && reads.gt.has(String(e.title || '').toLowerCase().replace(/\s+/g, ' ').trim());
+  if (c === 'kym') return !!reads.kym && reads.kym.has(urlKey(e.key));
+  if (c === 'viral50') return !!reads.viral50 && reads.viral50.has(e.key);
+  return null;
+}
+
+/**
+ * Every comparator entry of the history, matched: Map(comparator -> [{ key, e, own, surface, sighting, match, built, read }]).
+ * built: the entry's match among the trends we built and never listed inside listDepth (only when it matched no listed one);
+ * read: whether our own read of the comparator showed it (readByUs).
+ */
 function matchHistory(history, ours, spec) {
   const index = M.prepareOurs([...ours.trends.values()].filter((t) => t.listed !== null), spec);
+  const unlisted = M.prepareOurs([...ours.trends.values()].filter((t) => t.listed === null), spec);
   const out = new Map();
   for (const c of COMPARATORS) {
     const comp = history.comparators[c];
@@ -45,7 +62,8 @@ function matchHistory(history, ours, spec) {
       const own = ownTime(c, e, comp);
       const match = M.matchEntry({ title: e.title, artist: e.artist || null, related: e.related || [], t: own ?? e.firstRead }, c, index);
       const sighting = collectorSighting(c, e, match && match.id, ours);
-      return { key: e.key, e, own, sighting, surface: minOf(own, sighting), match };
+      const built = match ? null : M.matchEntry({ title: e.title, artist: e.artist || null, related: e.related || [], t: own ?? e.firstRead }, c, unlisted);
+      return { key: e.key, e, own, sighting, surface: minOf(own, sighting), match, built, read: readByUs(c, e, ours) };
     }));
   }
   return out;
@@ -125,21 +143,35 @@ function scopeOf(c, rows, history, { start, end }, spec) {
 /**
  * Coverage for one comparator: of its scope entries of the day, the share we listed from 7 days before to 24 h after the anchor,
  * split first (listed before the surface, the rule lead uses) and via. Under minN entries: insufficient, no share.
+ * stages (spec coverage.stages): where each entry we did not cover was lost, as counts: listedLate (listed, more than 24 h after the
+ * anchor), outside (listed, but more than 7 days before it: another story of the same words), notListed (matched only a trend we
+ * built and never listed inside listDepth), readOnly (matched nothing we built, but our own read of the comparator showed it),
+ * unseen (neither); null for a comparator the collector does not read. They sum to n - covered.
  */
-function coverageOf(scope, ours, spec) {
+function coverageOf(scope, ours, spec, { readable: readsIt = true } = {}) {
   if (!scope) return null;
   let n = 0; let covered = 0; let first = 0; let excluded = 0;
+  const stages = { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 0 };
+  let readable = readsIt;
   for (const r of scope) {
     if (!reaches(ours, r.anchor, spec)) { excluded += 1; continue; }
     n += 1;
     const tr = r.match && ours.trends.get(r.match.id);
-    if (!tr || tr.listed === null) continue;
-    if (tr.listed > r.anchor + spec.coverage.withinHours * HOUR || tr.listed < r.anchor - spec.lead.window.days * DAY) continue;
+    if (!tr || tr.listed === null) {
+      if (r.built) stages.notListed += 1;
+      else if (r.read === null || !readable) readable = false;
+      else if (r.read) stages.readOnly += 1;
+      else stages.unseen += 1;
+      continue;
+    }
+    if (tr.listed > r.anchor + spec.coverage.withinHours * HOUR) { stages.listedLate += 1; continue; }
+    if (tr.listed < r.anchor - spec.lead.window.days * DAY) { stages.outside += 1; continue; }
     covered += 1;
     if (tr.listed < (r.surface ?? r.anchor)) first += 1;
   }
   const ok = n >= spec.minN;
-  return { n, covered, first, via: covered - first, excluded, share: ok ? share(covered, n) : null, firstShare: ok ? share(first, covered) : null, status: statusOf(n, spec) };
+  return { n, covered, first, via: covered - first, excluded, share: ok ? share(covered, n) : null, firstShare: ok ? share(first, covered) : null, status: statusOf(n, spec),
+    stages: readable ? stages : { listedLate: stages.listedLate, outside: stages.outside, notListed: stages.notListed, readOnly: null, unseen: null } };
 }
 
 /** Page one of a list: its rows ranked inside the page, in rank order. */
@@ -286,7 +318,7 @@ function scoreDay({ day, now, spec, history, ours, ledger = [] }) {
   }
   const coverage = {};
   for (const c of COMPARATORS) {
-    const cov = coverageOf(scopeOf(c, matched.get(c), history, bounds, spec), ours, spec);
+    const cov = coverageOf(scopeOf(c, matched.get(c), history, bounds, spec), ours, spec, { readable: readByUs(c, { title: '', key: '' }, ours) !== null });
     coverage[c] = cov || { status: 'unmeasured' };
   }
   const lists = ours.lists.filter((l) => l.day === day);
@@ -297,4 +329,4 @@ function scoreDay({ day, now, spec, history, ours, ledger = [] }) {
   return { result: { day, lead, coverage, breadth, precision, speed }, store: { lead: leadStore, breadth: breadthStore } };
 }
 
-module.exports = { COMPARATORS, scoreDay, matchHistory, leadOf, leadNumbers, scopeOf, coverageOf, storiesOf, breadthOf, precisionOf, duplicatesOf, liveAfter, speedOf, ownTime };
+module.exports = { COMPARATORS, scoreDay, matchHistory, readByUs, leadOf, leadNumbers, scopeOf, coverageOf, storiesOf, breadthOf, precisionOf, duplicatesOf, liveAfter, speedOf, ownTime };

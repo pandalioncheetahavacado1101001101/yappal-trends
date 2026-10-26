@@ -2,12 +2,15 @@
 /*
  * Our side of the scoreboard, read from a restored copy of the collector's state and never written: the database opens read-only,
  * the archive and the store are only read. What it reads (scoreboard-spec.json "ours"):
- *   trends     id, kind, titles (the trend's, every title it was listed under, the archived ones), alias keys, subject, people and
+ *   trends     id, kind, titles (the trend's, every title it was listed under, the archived ones), alias keys (and the Google Trends
+ *              searches the collector tied to it, info.searches, that name it: searchNames), subject, people and
  *              tags named on its archived or published rows, first seen, ended, reseeded; its first listing and first page one from
  *              its samples (ours.listed, ours.firstPage: the first own read ranking it 1 to listDepth, 1 to page, in the US list), so
  *              rows ranked below listDepth never count however many the collector publishes
  *   sightings  when our own read of each comparator first showed a thing: Google Trends (the trend's first sample with sv_us > 0),
  *              Know Your Meme (the store's seenFirst of the entry's address), the Viral 50 (platform_items first_seen)
+ *   reads      what our own read of a comparator showed whether or not anything was made of it: Google Trends, the store's Trends rows
+ *              of the audience's country (talkTrends, by folded keyword); Know Your Meme and the Viral 50 as their sightings
  *   lists      the archived US lists (09:00 and 18:00 US time), whole
  *   series     a trend's samples between two instants (precision and breadth read them)
  * Everything returned is per trend and stays in memory: none of it is ever printed, written or cached.
@@ -16,6 +19,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const { DatabaseSync } = require('node:sqlite');
+const M = require('./match');
 
 const HOUR = 3600;
 // (the collector's sample flags, lib/state.js FLAG: a reseeded sample was read back from the feed, a backfilled one rebuilt from a
@@ -42,11 +46,11 @@ function readLists(archiveDir, audience, marks) {
   return out;
 }
 
+const readStore = (storeFile) => { try { return JSON.parse(fs.readFileSync(storeFile, 'utf8')); } catch { return null; } };
+
 /** Store rows the collector read from Know Your Meme: Map(address -> first seen, epoch seconds). */
-function kymSightings(storeFile) {
+function kymSightings(storeFile, store = readStore(storeFile)) {
   const out = new Map();
-  let store = null;
-  try { store = JSON.parse(fs.readFileSync(storeFile, 'utf8')); } catch { return out; }
   for (const r of (store && store.rows) || []) {
     if (!r || r.fam !== 'kym' || !Number.isFinite(r.seenFirst)) continue;
     const key = urlKey(r.url || r.key);
@@ -54,6 +58,23 @@ function kymSightings(storeFile) {
     if (!out.has(key) || at < out.get(key)) out.set(key, at);
   }
   return out;
+}
+
+/** The searches the collector's own Google Trends read showed in the audience's country (the store's Trends rows): a Set of keywords as typed, lower case. */
+function gtReads(store, audience) {
+  const out = new Set();
+  for (const t of (store && store.talkTrends) || []) if (t && t.geo === audience && typeof t.keyword === 'string') out.add(t.keyword.toLowerCase().replace(/\s+/g, ' ').trim());
+  return out;
+}
+
+/**
+ * The searches tied to a trend that name it (spec ours.searches): a search's title-core words shared with the trend's own titles,
+ * subject and people, two or more, or every one of a one-word search. The collector ties a search to a story by the names in it, so a
+ * judge's name searched for a pet ties to a dance show's row as well; only a search that names the row is the row's.
+ */
+function searchNames(tr, m) {
+  const own = new Set([...tr.titles, tr.subject, ...tr.people.map((p) => p.name)].filter(Boolean).flatMap((t) => [...M.coreOf(t, m)]));
+  return (tr.searched || []).filter((k) => { const core = [...M.coreOf(k, m)]; const shared = core.filter((w) => own.has(w)).length; return core.length > 0 && shared >= Math.min(2, core.length); });
 }
 
 /**
@@ -94,7 +115,8 @@ function readState(stateDir, spec, { feedItems = [] } = {}) {
   const trends = new Map();
   for (const r of db.prepare('SELECT id, kind, sub, title, first_seen, ended_at, first_listed_at, first_page_at, info FROM trends').all()) {
     const info = parse(r.info, {}) || {};
-    trends.set(r.id, { id: r.id, kind: r.kind, sub: r.sub, titles: [r.title].filter(Boolean), aliases: Array.isArray(info.keys) ? [...info.keys] : [], people: [], tags: [],
+    const searched = [...new Set((Array.isArray(info.searches) ? info.searches : []).map((x) => x && x.keyword).filter((k) => typeof k === 'string' && k.trim()))];
+    trends.set(r.id, { id: r.id, kind: r.kind, sub: r.sub, titles: [r.title].filter(Boolean), aliases: Array.isArray(info.keys) ? [...info.keys] : [], searched, people: [], tags: [],
       subject: typeof info.name === 'string' ? info.name : null,
       listed: firstRanked(listedAt.get(r.id), parse(r.first_listed_at, {})[audience]), firstPage: firstRanked(pagedAt.get(r.id), parse(r.first_page_at, {})[audience]),
       firstSeen: r.first_seen, endedAt: r.ended_at, reseeded: !!info.reseeded, cold: r.first_seen <= coldEnd });
@@ -110,20 +132,26 @@ function readState(stateDir, spec, { feedItems = [] } = {}) {
     for (const p of it.people || []) if (p && p.name && !tr.people.some((q) => q.name === p.name)) tr.people.push({ name: p.name });
     for (const g of it.tags || []) if (typeof g === 'string' && !tr.tags.includes(g)) tr.tags.push(g);
   }
+  for (const tr of trends.values()) {
+    for (const k of searchNames(tr, spec.matcher)) if (!tr.aliases.includes(k)) tr.aliases.push(k);
+    delete tr.searched;
+  }
 
   const gt = new Map(db.prepare(`SELECT trend_id id, MIN(t) t FROM samples WHERE sv_${audience.toLowerCase()} > 0 AND (COALESCE(flags, 0) & ${NOT_OWN_READ}) = 0 GROUP BY trend_id`).all().map((r) => [r.id, r.t]));
   const viral50 = new Map();
   if (hasTable(db, 'platform_items')) {
     for (const r of db.prepare("SELECT key, first_seen FROM platform_items WHERE source = 'tts' AND key LIKE 'viral:%'").all()) viral50.set(r.key.slice('viral:'.length), r.first_seen);
   }
-  const kym = kymSightings(path.join(stateDir, 'engine', 'store.json'));
+  const store = readStore(path.join(stateDir, 'engine', 'store.json'));
+  const kym = kymSightings(null, store);
+  const reads = { gt: gtReads(store, audience), kym: new Set(kym.keys()), viral50: new Set(viral50.keys()) };
 
   const seriesStmt = db.prepare(`SELECT t, interest, n24, outlets FROM samples WHERE trend_id = ? AND t >= ? AND t <= ? AND (COALESCE(flags, 0) & ${RESEEDED_FLAG}) = 0 ORDER BY t`);
   return {
-    firstCycleAt, reseedAt, coldEnd, lastSampleAt, trends, lists, sightings: { gt, kym, viral50 },
+    firstCycleAt, reseedAt, coldEnd, lastSampleAt, trends, lists, sightings: { gt, kym, viral50 }, reads,
     series: (id, from, to) => seriesStmt.all(id, from, to),
     close: () => db.close(),
   };
 }
 
-module.exports = { readState, readLists, kymSightings, urlKey, firstRanked };
+module.exports = { readState, readLists, kymSightings, gtReads, searchNames, urlKey, firstRanked };

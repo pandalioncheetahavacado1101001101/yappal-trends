@@ -148,6 +148,9 @@ jobs:
       # (GDELT name discovery, P13: off unless the repository variable IDEAS_GDELT is "1"; it counts either way, so its baseline is
       # warm the day it is switched on, and the ledger line's `gdelt` records the switch-on: lib/discover.js)
       IDEAS_GDELT: ${{ vars.IDEAS_GDELT }}
+      # (page one's sink, its labels and its title check, P5: on unless the repository variable IDEAS_PAGE_SINK is "0", so a bad page
+      # is undone without a publish: lib/page-sink.js)
+      IDEAS_PAGE_SINK: ${{ vars.IDEAS_PAGE_SINK }}
       FEED_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
       FRESH: ${{ inputs.cold_start && '--fresh' || '' }}
     steps:

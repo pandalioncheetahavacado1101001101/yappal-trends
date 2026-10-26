@@ -82,3 +82,19 @@ test('a compacted hour is dated from its start, never before the collector\'s ow
   assert.equal(firstRanked(S, undefined), S);
   assert.equal(firstRanked(undefined, S), null);
 });
+
+test('a trend is known by the searches the collector tied to it; our own Google Trends read is the store\'s Trends rows of the audience\'s country', () => {
+  const state = F.writeState({
+    firstCycleAt: S,
+    trends: [{ id: 'G', title: 'Young Quorra star Velma Orrin asked for a stand-in', kind: 'moment', sub: 'story', firstSeen: S + 4 * HOUR, listed: S + 5 * HOUR,
+      info: { keys: ['story:Young Quorra star Velma Orrin asked for a stand-in'], searches: [{ start: S, end: null, volume: 100000, keyword: 'velma orrin', geo: 'US' }, { start: S, end: null, volume: 2000 },
+        // (a search the collector tied to the row by a name in its story that does not name the row: another's pet, never the row's)
+        { start: S, end: null, volume: 100000, keyword: 'brimvale kell pet passes away', geo: 'US' }] } }],
+    talkTrends: [{ geo: 'US', keyword: 'Velma  Orrin', start: S * 1000 }, { geo: 'GB', keyword: 'tamsin kell', start: S * 1000 }],
+  });
+  const ours = readState(state, spec);
+  try {
+    assert.deepEqual(ours.trends.get('G').aliases, ['story:Young Quorra star Velma Orrin asked for a stand-in', 'velma orrin'], 'only the searches that name it');
+    assert.deepEqual([...ours.reads.gt], ['velma orrin'], 'the audience\'s country only, as typed, lower case');
+  } finally { ours.close(); }
+});

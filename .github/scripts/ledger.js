@@ -118,7 +118,10 @@ function phasesOf(env, nowMs, summary, prune) {
 }
 
 const ENRICH_NUMBERS = ['run', 'age', 'asked', 'passed', 'seconds', 'shards', 'shardsDone', 'perCard', 'imported', 'held', 'stale', 'planned', 'passPlanned', 'whys', 'whysPassed', 'angles', 'anglesPassed',
-  'calls', 'lanes', 'ready', 'metered', 'promptTokens', 'promptSeconds', 'replyTokens', 'replySeconds', 'loadSeconds'];
+  'calls', 'lanes', 'ready', 'metered', 'promptTokens', 'promptSeconds', 'replyTokens', 'replySeconds', 'loadSeconds',
+  // (2026-10-27, enrich v2: the stories answered and the replies cut at the allowance, so the compact prompt's fallback triggers,
+  // passed of answered under 0.72 or cut above 0, read from the ledger and not only the Actions log; unanswered is asked less answered)
+  'answered', 'cut'];
 /** The enrich pass as the collector's summary tells it (P11), numbers and one flag only, or null when the summary has none. */
 function enrichOf(summary) {
   const e = summary && summary.enrich && typeof summary.enrich === 'object' ? summary.enrich : null;

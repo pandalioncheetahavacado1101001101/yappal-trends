@@ -349,6 +349,8 @@ function chapterOf(ev, subject, family, now) {
       while (ws.length && TN.ROLE.has(ws[0])) ws.shift();
       const n = ws.join(' ');
       if (ws.length < 2 || ws.some((w) => subj.includes(w)) || R.isPlaceOrTeam(n) || older.has(n) || ws.every((w) => older.has(w))) continue;
+      // (a phrase the headline quotes is someone's words, never a person: "tease 'Second Chance' reunion". Review, 2026-10-27)
+      if (quotedRun(r.title, n)) continue;
       names.add(n);
     }
   }
@@ -361,6 +363,11 @@ function chapterOf(ev, subject, family, now) {
   // (who the new name is, as the lines call them: "TikToker")
   const roles = best.rows.map((r) => (hay(r.title).match(new RegExp(` (\\S+) ${best.n} `)) || [])[1]).filter((w) => w && TN.ROLE.has(w));
   return { name: best.n, rows: best.rows, role: roles[0] || null, surface: TN.nameSurface(best.n, best.rows.map((r) => r.title)) };
+}
+/** Whether a headline prints a name run (lower case keys, "second chance") inside quotes. */
+function quotedRun(title, run) {
+  const n = run.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^\\p{L}\\p{N}]+');
+  return new RegExp(`[‘“"']\\s*${n}\\s*[,.!?]?[’”"']`, 'iu').test(String(title || ''));
 }
 /**
  * Whether a headline has a name making a claim: the name right before a claiming verb ("alleges", "accuses", "claims", "sues", "files",
@@ -1634,7 +1641,7 @@ function metaOf({ c, ev, f, said, noun, subject, surface, what, lex, now, chapte
   return {
     key: c.key, subject, surface, family: f ? f.key : null, noun: noun ? noun.noun : null, from: c.from,
     own, around, outletsOwn: new Set(ownRows.filter((r) => !r.youtube && r.fam !== 'reddit' && r.fam !== 'bluesky').map((r) => outletKey(r.outlet))).size, outletsAll: ev.outlets,
-    trends: c.trends.map((t) => ({ key: t.key, geo: t.geo, keyword: t.keyword, volume: t.volume || 0, growth: t.growth || 0, start: t.start, end: t.end ?? null })),
+    trends: c.trends.map((t) => ({ key: t.key, geo: t.geo, keyword: t.keyword, volume: t.volume || 0, growth: t.growth || 0, start: t.start, end: t.end ?? null, ...(Array.isArray(t.cats) && t.cats.length ? { cats: t.cats } : {}) })),
     fresh: fresh.slice(0, 8), searched: !!ev.searched, newsAt: ev.newsAt || null, ytAt: ev.ytAt || null,
     wiki: c.wiki.length ? Math.max(...c.wiki.map((w) => w.views)) : null,
     sinceT, sinceRun: !!sinceRun, denied: !!denied, admitted: !!owned, creator: who.tier === 'creator', person: !!who.person,
@@ -2173,6 +2180,6 @@ const MEME_LOOKUP_AT = 20;
 const MEME_LOOKUP_MAX = 6;
 
 module.exports = { build, lists, nativePair, postNoun, postLine, candidates, relatedCandidates, lookupNames: lookupNamesAll, dramaLookupNames: (ctx) => TC.dramaLookupNames({ ...ctx, items: hayed(ctx.items) }), recentNames, evidenceOf, pointOf, leadName, wordPoints, momentPoints, crazePoints, crazeTitle, WINDOW_DAYS,
-  wikiDaysIndex, wikiCurveOf, momentumOf, makesClaim, hoaxOf, POST_PLAY, POST_HEDGE,
+  wikiDaysIndex, wikiCurveOf, momentumOf, makesClaim, quotedRun, hoaxOf, POST_PLAY, POST_HEDGE,
   // (the collector's own rules, held by test/honesty.test.js)
   arrestStated, arrestGiven, arrestOf, whoseArrest, claimedOf, admissionNoun, eventText, dropKicker, ARREST_OVER };

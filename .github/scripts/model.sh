@@ -5,7 +5,8 @@
 #
 # Installs the model server (its own install script; or waits for the one the job's first step started behind the restores,
 # enrich.yml), serves it as this user from ~/.ollama/models (the folder the Actions cache restores), waits until the model answers
-# one small question, reads the editor's unchanging prompt to it, and only then writes the collector's settings to $GITHUB_ENV. ANY
+# one small question (MODEL_WARM=1: and reads the editor's unchanging prompt to it), and only then writes the collector's settings to
+# $GITHUB_ENV, printing the seconds each step took since it began (the shard's start, counts and seconds only). ANY
 # failure, or the deadline passing, leaves $GITHUB_ENV untouched and exits 0: the job then runs with no model, nothing asked. Never
 # fails a job.
 #
@@ -20,6 +21,9 @@
 #   MODEL_THREADS   threads (nproc: every core the job has)
 #   MODEL_FLASH     1 (the default): OLLAMA_FLASH_ATTENTION; MODEL_KV: OLLAMA_KV_CACHE_TYPE (unset: f16; q8_0 halves the KV reads,
 #                   ~3% of a step at this context, and is left to a variable because it changes the numbers a little)
+#   MODEL_WARM      0 (the default since 2026-10-27): no warm read. Measured on the runner with one story at a time, every card's call
+#                   read its whole prompt again (~3,450 tokens: the model's sliding-window layers keep no long prefix), so the warm
+#                   read only cost its ~15 s of every shard's start. 1: read the editor's prompt once before the first card, as before
 #   MODEL_PULL      1 (the default): a model the cache did not hold is fetched; 0: never from the network (a shard that is not
 #                   shard 0, or a restore that failed rather than missed: enrich.yml)
 #
@@ -40,7 +44,11 @@ THREADS="${MODEL_THREADS:-$LOGICAL}"; [[ "$THREADS" =~ ^[0-9]+$ ]] && [ "$THREAD
 FLASH="${MODEL_FLASH:-1}"; [ "$FLASH" = "0" ] || FLASH=1
 KV="${MODEL_KV:-}"; [[ "$KV" =~ ^(f16|q8_0|q4_0)$ ]] || KV=""
 PULL="${MODEL_PULL:-1}"
+WARM="${MODEL_WARM:-0}"; [ "$WARM" = "1" ] || WARM=0
+BEGAN=$(date +%s)
 left() { echo $(( DEADLINE - $(date +%s) )); }
+# (the seconds since this script began, for the job's log: where a shard's start goes)
+took() { echo "model: $1 $(( $(date +%s) - BEGAN )) s in"; }
 none() { echo "model: none this cycle ($1); the cards are rule-built"; echo "ready=false" >> "$OUT"; exit 0; }
 
 [ -n "$MODEL" ] || none "no model named"
@@ -51,6 +59,7 @@ none() { echo "model: none this cycle ($1); the cards are rule-built"; echo "rea
 if [ -f /tmp/ollama-install.pid ]; then
   while kill -0 "$(cat /tmp/ollama-install.pid 2>/dev/null)" 2>/dev/null && [ "$(left)" -gt 60 ]; do sleep 1; done
   echo "model: the server fetched behind the restores ($( [ -f /tmp/ollama-install.code ] && echo "exit $(cat /tmp/ollama-install.code)" || echo "unfinished"))"
+  took "the install waited for"
 fi
 if ! command -v ollama >/dev/null 2>&1; then
   curl -fsSL --max-time 150 https://ollama.com/install.sh -o /tmp/ollama-install.sh || none "the install script did not download"
@@ -69,6 +78,7 @@ nohup env "${SERVE[@]}" ollama serve > "$HOME/ollama.log" 2>&1 &
 for _ in $(seq 1 30); do curl -sf --max-time 2 "$BASE/api/version" >/dev/null && break; sleep 1; done
 curl -sf --max-time 2 "$BASE/api/version" >/dev/null || { tail -n 5 "$HOME/ollama.log"; none "the server did not start"; }
 PHYSICAL=$(lscpu -p=core,socket 2>/dev/null | grep -v '^#' | sort -u | wc -l | tr -d ' '); [ "${PHYSICAL:-0}" -gt 0 ] 2>/dev/null || PHYSICAL="?"
+took "the server answering"
 echo "model: serving $PARALLEL at once, context $CTX a sequence, $THREADS threads ($PHYSICAL physical cores, $LOGICAL logical), flash attention $FLASH, KV cache ${KV:-f16}, $( [ "$NATIVE" = 1 ] && echo "Ollama's own API" || echo "the OpenAI-style API")"
 
 # 2. the model file: from the cache. A job that finds none starts fetching it (several GB) and runs its cycle with NO model: the
@@ -101,6 +111,7 @@ else
     -d "{\"model\":\"$MODEL\",\"reasoning_effort\":\"none\",\"temperature\":0,\"max_tokens\":24,\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"user\",\"content\":\"Reply with JSON only: {\\\"ok\\\": true}\"}]}")
 fi
 echo "$REPLY" | grep -q '"content":"[^"]' || { echo "$REPLY" | head -c 300; none "it did not answer"; }
+took "the model loaded and answering"
 
 # the collector's settings: the editor pass on this model, bounded by its own budget and by the job's clock
 SETTINGS=("IDEAS_LLM_BASE_URL=$BASE/v1" "IDEAS_LLM_MODEL=$MODEL" "IDEAS_LLM_REASONING=none" "IDEAS_EDITOR=1")
@@ -109,9 +120,10 @@ SETTINGS=("IDEAS_LLM_BASE_URL=$BASE/v1" "IDEAS_LLM_MODEL=$MODEL" "IDEAS_LLM_REAS
 # 3b. the editor's unchanging prompt, read once now: the server keeps the start of a request it has seen, so every card's request
 # then costs only its own story (best effort: never a reason to go without the model). Through the very settings the cards use
 T=$(left)
-if [ "$T" -gt 20 ]; then
+if [ "$WARM" = "1" ] && [ "$T" -gt 20 ]; then
   if [ "$NATIVE" = "1" ] && [ -f .github/scripts/enrich.js ]; then timeout "$T" env "${SETTINGS[@]}" node .github/scripts/enrich.js warm --seconds "$(( T < 150 ? T : 150 ))" || true
   elif [ -f .github/llm/warm.js ]; then timeout "$T" node .github/llm/warm.js "$MODEL" "$(( T < 150 ? T : 150 ))" || true; fi
+  took "the prompt read"
 fi
 
 # 4. the settings, only now that the model answers

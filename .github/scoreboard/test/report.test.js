@@ -12,14 +12,16 @@ const S = require('../stats');
 const H = require('../history');
 const spec = require('../scoreboard-spec.json');
 
-// The spec and the scoring code as registered on 2026-10-19 (spec version 2). A change to any value of the spec or any line of
+// The spec and the scoring code as registered on 2026-10-27 (spec version 3: coverage's misses by stage, the searches the collector
+// tied to a trend read as its aliases, Know Your Meme's alternate titles; version 2 was e59adec9a786; the first v3 record, 12a32ff4b3cd, quoted a real name in match.js's
+// alternates comment, now an invented one). A change to any value of the spec or any line of
 // comparators, history, match, metrics, ours, report or stats .js changes this hash and restarts the 14-day clock (ios/IDEAS-SUPER.md
 // 1): update it here only on purpose, with the reason in the commit.
-const REGISTERED = 'e59adec9a786';
+const REGISTERED = '4b9feb14a703';
 
 test('the spec and the scoring code are the ones registered: the hash, the minimum n, the matcher threshold, the list depth, the scoring lag', () => {
   assert.equal(R.specHash(spec, R.scoringCode()), REGISTERED);
-  assert.equal(spec.version, 2);
+  assert.equal(spec.version, 3);
   assert.equal(spec.minN, 15);
   assert.equal(spec.matcher.jaccardMin, 0.6);
   assert.equal(spec.ours.listDepth, 80);
@@ -117,7 +119,7 @@ test('coverage under 15 scope entries is "insufficient" in the rolling window to
   const l = (n, covered, first) => ({ day: '2026-10-17', spec: REGISTERED, lead: {}, coverage: { gt: { n, covered, first, share: null, firstShare: null, status: 'insufficient' } },
     breadth: { status: 'nolists' }, precision: { lists: [], gate: null }, speed: { status: 'noledger' }, pooled: {}, meets: {} });
   const latest = R.latestOf({ lines: [l(4, 0, 0)], history: H.empty(), hash: REGISTERED, at: '2026-10-19T06:21:00Z', spec });
-  assert.deepEqual({ ...latest.rolling.coverage.gt }, { days: 1, n: 4, covered: 0, first: 0, share: null, firstShare: null, status: 'insufficient' });
+  assert.deepEqual({ ...latest.rolling.coverage.gt }, { days: 1, n: 4, covered: 0, first: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: null, outside: null, notListed: null, readOnly: null, unseen: null } });
   assert.equal(latest.rolling.breadth.status, 'insufficient');
   assert.equal(R.meetsOf({ ...l(4, 4, 4), breadth: {} }, spec).coverage.gt, false);
 });

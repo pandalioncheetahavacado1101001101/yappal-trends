@@ -7,14 +7,17 @@ name: enrich
 # After a cycle that published, collect.yml dispatches this workflow with the key of the state it saved ("chain.sh enrich").
 #
 #   1. "plan" (seconds): restores that state READ-ONLY (it is never saved here) and the cards merged before; the rows still owed are
-#      the plan's less what those cards already answer. The deadline: the shards stop 90 s before the next quarter-hour after the
-#      plan's slot (75 s for the merge, 15 to spare), so the cards are merged before the next collect cycle restores them, after its
-#      wait for the quarter-hour: shown ONE SLOT LATE. A pass that starts too late for that (after a cycle of the cron's at :07, or
-#      a slow one) writes until one slot from its own start, for the cycle after next, unless it waited behind another pass (it
-#      would then hold the next pass back in turn): it asks nothing and the next cycle plans its rows again. How many shards: as
-#      many as it takes for every owed card at the measured seconds a card a shard (70 s until a pass has measured its own; the
-#      median of the last eight passes that asked as many at once after), from the moment a shard's model answers (the median of
-#      the last passes' measured start; 260 s until one is measured) to that deadline, at most IDEAS_ENRICH_SHARDS (12: the
+#      the plan's less what those cards already answer. The deadline: the shards stop 90 s before the quarter-hour
+#      IDEAS_ENRICH_LAND_SLOTS (2; 1 to 3) after the plan's slot (75 s for the merge, 15 to spare), and never write for more than 20
+#      minutes, so the cards are merged before a collect cycle restores them, after its wait for the quarter-hour: shown ONE SLOT LATE
+#      when the shards are done by the first quarter-hour, TWO when they write on past it (lib/editor/cards.js THE WINDOW). A pass
+#      that starts too late for that (after a cycle of the cron's at :07, or a slow one) writes until that many slots from its own
+#      start, unless it waited behind another pass (it would then hold the next pass back in turn): it asks nothing and the next
+#      cycle plans its rows again. How many shards: as many as it takes for every owed card at the measured seconds a card a shard
+#      (over the stories answered; 60 s until a pass has measured its own; the median of the last eight passes that asked as many at
+#      once in the same prompt after), from the moment a shard's model answers (the median of the last passes' measured start; 260 s
+#      until one is measured) to the FIRST quarter-hour after the plan's slot where a minute of it is left (else to the deadline):
+#      what is left then is written on until the deadline. At most IDEAS_ENRICH_SHARDS (12: the
 #      account runs 20 jobs at once, and 8 are left for collect's three, the stories, the plan or merge, the scoreboard, a probe
 #      and one to spare). None when nothing is owed, under a minute of cards is left, the plan is over 40 minutes old, or
 #      IDEAS_ENRICH is "off" / IDEAS_EDITOR_OFF is "1".
@@ -53,7 +56,15 @@ name: enrich
 #
 # THROUGHPUT (2026-10-20; the arithmetic in lib/editor/cards.js): 18 cards asked a pass on 6 shards at 87 s a card became, by
 # design, about 6 a shard on 12 (three stories at once at ~45 s a card a shard, the server fetched behind the restores):
-# ~70 a pass. Repository variables, all optional: IDEAS_ENRICH_SHARDS (12 at most), IDEAS_ENRICH_LANES (1 to 4), IDEAS_ENRICH_NATIVE
+# ~70 a pass. MEASURED (2026-10-20 to 10-26): three at once answered 31% of calls (each read its whole ~3,450-token prompt in
+# ~50 s and wrote ~495 tokens at ~4.9 a second); one at once (4eefa26) answered 88%, ~18 s to read and ~58 s to write a call,
+# but a shard had only ~145 s to write in: ~7 cards a pass, 73% of the owed rows asked. NOW (2026-10-27): the compact prompt (lib/editor/prompt.js: ~1,700
+# fewer prompt tokens, ~35% fewer reply tokens, the reply's allowance 700), the window above, no warm read (model.sh MODEL_WARM),
+# the seconds a card over the answered stories. RUNNER TIME: 12 shards at most at once, so 288 runner-hours a day at the very
+# most; a usual pass (~20 owed, ~50 s a card) deals ~7 shards of ~7 minutes, ~75 runner-hours a day; a backlog of 80 deals 12 to
+# the deadline. Repository variables, all optional: IDEAS_ENRICH_SHARDS (12 at most), IDEAS_ENRICH_LANES (1 to 4),
+# IDEAS_ENRICH_LAND_SLOTS (2; 1 is the old one-slot window), IDEAS_EDITOR_PROMPT ("full": every rule at length and three examples,
+# with a reply allowance of 900), IDEAS_EDITOR_MAX_TOKENS (the reply's allowance), IDEAS_ENRICH_WARM ("1": the warm read), IDEAS_ENRICH_NATIVE
 # ("0": the OpenAI-style endpoint, no timings), IDEAS_ENRICH_CTX (6144), IDEAS_ENRICH_THREADS (every core), IDEAS_ENRICH_FLASH ("0":
 # off), IDEAS_ENRICH_KV (q8_0: a smaller KV cache). IDEAS_EDITOR_MODEL names another model; IDEAS_LLM_BASE_URL with
 # IDEAS_LLM_MODEL an OpenAI-compatible endpoint of the owner's own (no model is started then).
@@ -127,6 +138,7 @@ jobs:
           ENRICH_OFF: ${{ (vars.IDEAS_ENRICH == 'off' || vars.IDEAS_EDITOR_OFF == '1') && '1' || '' }}
           ENRICH_SHARDS_MAX: ${{ vars.IDEAS_ENRICH_SHARDS }}
           ENRICH_CARD_SECONDS: ${{ vars.IDEAS_ENRICH_CARD_SECONDS }}
+          ENRICH_LAND_SLOTS: ${{ vars.IDEAS_ENRICH_LAND_SLOTS }}
         run: node .github/scripts/enrich.js plan --state state --cards cards/cards.jsonl
 
       # (P8: whether the stories job below runs for this plan: its own plan in the state, the pace IDEAS_STORIES_EVERY sets)
@@ -238,8 +250,9 @@ jobs:
     needs: plan
     if: needs.plan.outputs.shard_count != '' && needs.plan.outputs.shard_count != '0'
     runs-on: ubuntu-latest
-    # (the cards stop at the pass's deadline, "until": at most thirteen and a half minutes after the plan; the rest is the part's save)
-    timeout-minutes: 16
+    # (the cards stop at the pass's deadline, "until": at most a shard's measured start (600 s at the most) and 20 minutes of cards
+    # after the plan, 30 minutes; the rest is the part's save, and once, shard 0's wait for a model it fetched)
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       max-parallel: 12
@@ -250,11 +263,14 @@ jobs:
       EDITOR_MODEL: ${{ vars.IDEAS_EDITOR_MODEL || 'hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M' }}
       OWN_ENDPOINT: ${{ vars.IDEAS_LLM_BASE_URL }}
       OWN_MODEL: ${{ vars.IDEAS_LLM_MODEL }}
-      # a card's own limits: a card with its why and three angles (ios/IDEAS-SUPER.md P12) is about 450 tokens back, 900 at most
-      # (the collector never asks for fewer: lib/editor/prompt.js MAX_TOKENS). Four minutes a call: with three stories at once each
-      # sequence decodes at about 5 tokens a second, so a whole 900 takes three. No count a shard: the clock decides
+      # a card's own limits: a card with its why and three angles (ios/IDEAS-SUPER.md P12) was ~476 tokens back in the full prompt
+      # (its longest pass 676 on average), 900 at most; the compact prompt asks for no part to be copied out again (~310 expected),
+      # so 700, which also stops a reply that runs on 200 tokens sooner (the collector never asks for fewer than lib/editor/prompt.js
+      # MAX_TOKENS, which follows IDEAS_EDITOR_PROMPT the same way). Four minutes a call: with three stories at once each sequence
+      # decodes at about 5 tokens a second. No count a shard: the clock decides
       IDEAS_EDITOR_TIMEOUT_MS: 240000
-      IDEAS_EDITOR_MAX_TOKENS: 900
+      IDEAS_EDITOR_PROMPT: ${{ vars.IDEAS_EDITOR_PROMPT || 'compact' }}
+      IDEAS_EDITOR_MAX_TOKENS: ${{ vars.IDEAS_EDITOR_MAX_TOKENS || (vars.IDEAS_EDITOR_PROMPT == 'full' && '900' || '700') }}
       ENRICH_UNTIL: ${{ needs.plan.outputs.until }}
       ENRICH_PLANNED_AT: ${{ needs.plan.outputs.planned_at }}
       # the stories a shard asks at once, and the sequences the server serves side by side (model.sh): the same number
@@ -323,6 +339,7 @@ jobs:
           MODEL_THREADS: ${{ vars.IDEAS_ENRICH_THREADS }}
           MODEL_FLASH: ${{ vars.IDEAS_ENRICH_FLASH || '1' }}
           MODEL_KV: ${{ vars.IDEAS_ENRICH_KV }}
+          MODEL_WARM: ${{ vars.IDEAS_ENRICH_WARM || '0' }}
         run: bash .github/scripts/model.sh "$EDITOR_MODEL" "$MODEL_BY"
 
       - name: An endpoint of the owner's own, when one is named

@@ -16,11 +16,11 @@ const iso = (s) => new Date(s * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
 /**
  * Writes a state folder. trends: [{ id, kind, sub, title, firstSeen, listed, rank (at its first listing: 10 unless given), ended,
  * aliases, info }]; samples: [{ id, t, sv_us, interest, n24, outlets, r_us, flags }]; lists: [{ name ("2026-10-17-0900"), t, items }];
- * kym: [{ url, seenFirst (s) }]; viral: [{ id, firstSeen }] (platform_items, optional). As the collector does, a trend's first listing
+ * kym: [{ url, seenFirst (s) }]; viral: [{ id, firstSeen }] (platform_items, optional); talkTrends: the store's Trends rows (optional). As the collector does, a trend's first listing
  * is a sample ranking it (r_us) at `listed`, and every archived list's row a sample ranking it at the list's time; first_listed_at and
  * first_page_at are the first of those ranked at all and ranked 1 to 20.
  */
-function writeState({ firstCycleAt, trends = [], samples = [], lists = [], kym = [], viral = null, meta = {} }) {
+function writeState({ firstCycleAt, trends = [], samples = [], lists = [], kym = [], viral = null, meta = {}, talkTrends = null }) {
   const dir = tmp('state');
   fs.mkdirSync(path.join(dir, 'engine'), { recursive: true });
   const db = new DatabaseSync(path.join(dir, 'collector.db'));
@@ -62,7 +62,7 @@ function writeState({ firstCycleAt, trends = [], samples = [], lists = [], kym =
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, zlib.gzipSync(JSON.stringify({ schemaVersion: 1, audience: 'US', generatedAt: iso(l.t), items: l.items })));
   }
-  fs.writeFileSync(path.join(dir, 'engine', 'store.json'), JSON.stringify({ rows: kym.map((k) => ({ key: k.url, url: k.url, fam: 'kym', seenFirst: k.seenFirst * 1000 })) }));
+  fs.writeFileSync(path.join(dir, 'engine', 'store.json'), JSON.stringify({ rows: kym.map((k) => ({ key: k.url, url: k.url, fam: 'kym', seenFirst: k.seenFirst * 1000 })), ...(talkTrends ? { talkTrends } : {}) }));
   return dir;
 }
 

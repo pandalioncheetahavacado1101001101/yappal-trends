@@ -640,7 +640,7 @@ function momentMeta(st, items) {
   const own = uniqByKey(items).filter((i) => Number.isFinite(i.t)).map((i) => ({ t: i.t, title: i.title, outlet: i.outlet, fam: i.fam, url: i.url || null,
     ...(i.fam === 'reddit' ? { sub: i.sub, rank: i.rankDay } : {}), ...(i.fam === 'bluesky' ? { posts: i.postCount || 0, live: i.status === 'hot' } : {}) }));
   const trends = uniqByKey(st.unit.clusters.flatMap((c) => c.trends.map(({ tr }) => ({ key: tr.key, geo: tr.geo, keyword: tr.keyword, volume: tr.volume || 0,
-    growth: tr.growth || 0, start: tr.start, end: tr.end ?? null }))));
+    growth: tr.growth || 0, start: tr.start, end: tr.end ?? null, ...(Array.isArray(tr.cats) && tr.cats.length ? { cats: tr.cats } : {}) }))));
   const wiki = Math.max(0, ...st.unit.clusters.flatMap((c) => c.wiki.map((w) => w.views)));
   return { firstT: st.momentFirst, storyT: st.storySince, own, trends, wiki: wiki || null };
 }

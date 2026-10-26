@@ -97,11 +97,11 @@ test('three mornings over one cache: the scored day\'s numbers, worked out by ha
   // coverage: 20 GT scope starts (anchored on their own start), 16 listed in time; first only when listed before the surface (the
   // earlier of the start and our own read showing it), as lead counts: the 10 listed 4 h ahead. Via: the 3 ties (listed after our
   // read showed them) and the 3 listed 2 h after the start, which our read never linked
-  assert.deepEqual({ ...l.coverage.gt }, { n: 20, covered: 16, first: 10, via: 6, excluded: 0, share: 0.8, firstShare: 0.625, status: 'ok' });
+  assert.deepEqual({ ...l.coverage.gt }, { n: 20, covered: 16, first: 10, via: 6, excluded: 0, share: 0.8, firstShare: 0.625, status: 'ok', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 4 } });
   // (under 15 scope entries a day: counts, never a share)
-  assert.deepEqual({ ...l.coverage.kym }, { n: 2, covered: 1, first: 0, via: 1, excluded: 0, share: null, firstShare: null, status: 'insufficient' });
-  assert.deepEqual({ ...l.coverage.viral50 }, { n: 2, covered: 1, first: 0, via: 1, excluded: 0, share: null, firstShare: null, status: 'insufficient' }, 'charted from 00:00, listed at 01:00: via, as lead calls it late');
-  assert.deepEqual({ ...l.coverage.x }, { n: 2, covered: 1, first: 1, via: 0, excluded: 0, share: null, firstShare: null, status: 'insufficient' });
+  assert.deepEqual({ ...l.coverage.kym }, { n: 2, covered: 1, first: 0, via: 1, excluded: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 1 } });
+  assert.deepEqual({ ...l.coverage.viral50 }, { n: 2, covered: 1, first: 0, via: 1, excluded: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 1 } }, 'charted from 00:00, listed at 01:00: via, as lead calls it late');
+  assert.deepEqual({ ...l.coverage.x }, { n: 2, covered: 1, first: 1, via: 0, excluded: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: null, unseen: null } }, 'the collector does not read X: what it read cannot be said');
   // breadth, flow over flow: 20 page-one rows are 19 stories ("Amber Vantor feud" twice is one), all first on page one that day and
   // all shared, over 20 Google Trends scope starts; pooled over the 7 days (one scored day so far, the same numbers)
   assert.deepEqual({ ...l.breadth, pooled: undefined }, { pageStories: 19, newStories: 19, shared: 19, onlyHere: 0, onlyHereConfirmed: 0, stories: 19, gtStarts: 20, ratio: 0.95, status: 'ok', pooled: undefined });
@@ -116,11 +116,11 @@ test('three mornings over one cache: the scored day\'s numbers, worked out by ha
   const latest = JSON.parse(fs.readFileSync(path.join(out, 'latest.json'), 'utf8'));
   assert.equal(latest.latest.day, D);
   assert.deepEqual({ ...latest.claim }, { consecutiveDays: 0, needed: 14, holds: false });
-  assert.equal(latest.matcher.version, 2);
-  assert.equal(latest.spec.version, 2);
+  assert.equal(latest.matcher.version, 3);
+  assert.equal(latest.spec.version, 3);
   // (the rolling window: shares only from minN entries; breadth on the window's stories over its Google Trends starts)
-  assert.deepEqual({ ...latest.rolling.coverage.gt }, { days: 1, n: 20, covered: 16, first: 10, share: 0.8, firstShare: 0.625, status: 'ok' });
-  assert.deepEqual({ ...latest.rolling.coverage.kym }, { days: 1, n: 2, covered: 1, first: 0, share: null, firstShare: null, status: 'insufficient' });
+  assert.deepEqual({ ...latest.rolling.coverage.gt }, { days: 1, n: 20, covered: 16, first: 10, share: 0.8, firstShare: 0.625, status: 'ok', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 4 } });
+  assert.deepEqual({ ...latest.rolling.coverage.kym }, { days: 1, n: 2, covered: 1, first: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 1 } });
   assert.deepEqual({ ...latest.rolling.breadth }, { days: 1, stories: 19, gtStarts: 20, ratio: 0.95, status: 'ok' });
   assert.ok(latest.matcher.audit === null || (Number.isFinite(latest.matcher.audit.rate) && latest.matcher.audit.audited > 0), 'the matcher\'s audited false-match rate, when there is one');
   assert.ok(Buffer.byteLength(JSON.stringify(latest)) < 10 * 1024, 'latest.json stays under 10 KB');

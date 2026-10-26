@@ -7,13 +7,14 @@
  *   node .github/scripts/enrich.js plan  --state <dir> --cards <file>
  *       Reads the plan collect left in <dir>/enrich/plan.json and the cards already merged (<file>, may be absent): the rows still
  *       owed, how many shards to deal them to (at the measured seconds a card, and the shards' measured start) and until when they
- *       write: merged before the next quarter-hour after the plan's slot, when the next cycle restores them (lib/editor/cards.js
- *       shardsFor). To $GITHUB_OUTPUT: count, shards (a JSON list, [0, 1, ...]), shard_count, until (epoch seconds), slot,
- *       card_seconds, ready_seconds, planned_at (this step's clock: a shard's start is measured from it), lands (next: the cycle at
- *       the next quarter-hour imports the cards; later: the one after; none).
+ *       write: merged before the quarter-hour ENRICH_LAND_SLOTS (2; 1 to 3) after the plan's slot, the shards sized to have written
+ *       every owed card by the first of them where they can (lib/editor/cards.js shardsFor). To $GITHUB_OUTPUT: count, shards (a JSON
+ *       list, [0, 1, ...]), shard_count, until (epoch seconds), soon (the mark the shards are sized for), land_slots, slot,
+ *       card_seconds, ready_seconds, planned_at (this step's clock: a shard's start is measured from it), lands (next: by the plan's
+ *       landing quarter-hour; later: counted from the pass's own start; none).
  *   node .github/scripts/enrich.js shard --state <dir> --cards <file> --shard <i> --shards <n> --out <part file>
  *       Asks the model this job started (IDEAS_LLM_BASE_URL and IDEAS_LLM_MODEL, set by model.sh; none set: nothing is asked) for
- *       shard i's rows, ENRICH_LANES (3) at once, through the editor's own loop and gate, until ENRICH_UNTIL; ENRICH_PLANNED_AT (the
+ *       shard i's rows, ENRICH_LANES (1) at once, through the editor's own loop and gate, until ENRICH_UNTIL; ENRICH_PLANNED_AT (the
  *       plan's clock) gives the shard's start. Writes the part (always: a header of counts at the least). The editor's log (titles,
  *       and a refused card's wording) goes to stderr ONLY: the workflow keeps it in a file that is never printed, uploaded or
  *       published. stdout: counts and seconds.
@@ -22,7 +23,7 @@
  *       To $GITHUB_OUTPUT: wrote=true|false, cards. Environment: ENRICH_STARTED (the pass's start, epoch seconds), ENRICH_PLANNED,
  *       ENRICH_SHARDS, ENRICH_SLOT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT.
  *   node .github/scripts/enrich.js warm [--seconds <s>]
- *       Reads the editor's unchanging prompt (its system text and worked examples, lib/editor/prompt.js) to the model model.sh just
+ *       (model.sh, only when MODEL_WARM=1: the server keeps no long prefix of this model, so it is off by default) Reads the editor's unchanging prompt (its system text and worked examples, lib/editor/prompt.js) to the model model.sh just
  *       started, through the very settings every card's request carries (IDEAS_LLM_*: Ollama's own API with the same load-time
  *       options, or the server reloads the model and forgets what it read), so its prompt cache holds that start before the first
  *       card. Best effort: exit 0 whatever happens.
@@ -74,12 +75,13 @@ function plan(o, env) {
   const started = intOf(env.ENRICH_STARTED) || nowS();
   const at = nowS();
   const r = E.planStep({ plan: read.plan, why: read.why, previous, startedS: started, nowS: at, off: env.ENRICH_OFF === '1',
-    max: Math.max(1, Math.min(C.SHARDS_MAX, intOf(env.ENRICH_SHARDS_MAX) || C.SHARDS_MAX)), cardSeconds: Number(env.ENRICH_CARD_SECONDS) || null });
+    max: Math.max(1, Math.min(C.SHARDS_MAX, intOf(env.ENRICH_SHARDS_MAX) || C.SHARDS_MAX)), cardSeconds: Number(env.ENRICH_CARD_SECONDS) || null, landSlots: C.landSlotsOf(env.ENRICH_LAND_SLOTS) });
   const shards = Array.from({ length: r.shards }, (_, i) => i);
-  console.log(r.shards ? `plan: ${r.owed} cards owed, ${r.shards} shard(s) at ${r.cardSeconds} s a card a shard, a shard's model answering ${r.readySeconds} s after the plan, writing until ${new Date(r.until * 1000).toISOString()} (${r.budget} s a shard once its model answers; for the ${r.lands === 'next' ? 'next cycle' : 'cycle after next'})`
+  const iso = (s) => new Date(s * 1000).toISOString();
+  console.log(r.shards ? `plan: ${r.owed} cards owed, ${r.shards} shard(s) at ${r.cardSeconds} s a card a shard, a shard's model answering ${r.readySeconds} s after the plan, sized to write them by ${iso(r.soon)}, writing until ${iso(r.until)} at most (${r.budget} s a shard once its model answers; merged by the quarter-hour ${r.landSlots} after the plan's slot, ${r.lands === 'next' ? 'as planned' : 'counted from this pass\'s start'})`
     : `plan: nothing asked this pass (${r.why}; ${r.owed} owed)`);
-  out({ count: r.shards ? r.owed : 0, shards: JSON.stringify(shards), shard_count: r.shards, until: r.until || 0, slot: r.slot || 0, card_seconds: r.cardSeconds || 0,
-    ready_seconds: r.readySeconds || 0, planned_at: at, lands: r.lands || 'none' });
+  out({ count: r.shards ? r.owed : 0, shards: JSON.stringify(shards), shard_count: r.shards, until: r.until || 0, soon: r.soon || 0, land_slots: r.landSlots || 0, slot: r.slot || 0,
+    card_seconds: r.cardSeconds || 0, ready_seconds: r.readySeconds || 0, planned_at: at, lands: r.lands || 'none' });
   return 0;
 }
 
@@ -105,7 +107,7 @@ async function shard(o, env) {
   console.log(`shard ${i} of ${n}: ${h.rows ?? 0} rows dealt, ${h.asked ?? 0} asked in ${h.calls ?? 0} calls, ${h.lanes ?? 1} at once, ${h.passed ?? 0} passed, ${h.refused ?? 0} refused, ${h.unreadable ?? 0} unreadable, `
     + `${h.unanswered ?? 0} unanswered, ${h.waiting ?? 0} left for the next pass; ${Math.round((h.ms || 0) / 1000)} s of the model; ${wrote} cards in the part; `
     + `on the cards passed, the why ${h.whysPassed ?? 0} of ${h.whys ?? 0} and the angles ${h.anglesPassed ?? 0} of ${h.angles ?? 0} passed the check${h.why ? ` (${h.why})` : ''}${h.off ? ` (the model stood back: ${h.off})` : ''}`);
-  console.log(`shard ${i}: answering ${h.ready ?? '?'} s after the plan; ${splitOf(h)}`);
+  console.log(`shard ${i}: answering ${h.ready ?? '?'} s after the plan; ${splitOf(h)}; the prompt ${h.style || '?'}, the longest reply ${h.replyMax ?? '?'} tokens, ${h.cut ?? 0} cut short`);
   return 0;
 }
 
@@ -120,10 +122,10 @@ function merge(o, env) {
   if (!r) { console.log('merge: no shard left a part: the cards before stay the newest'); out({ wrote: 'false', cards: previous.cards.length }); return 0; }
   const n = C.writeCards(o.out, r.header, r.cards);
   const h = r.header;
-  console.log(`merge: ${h.shardsDone} of ${h.shards ?? '?'} parts; ${h.asked} asked in ${h.calls} calls, ${h.lanes} at once a shard, ${h.passed} passed, ${h.refused} refused, ${h.unanswered} unanswered; ${n} cards kept in all; `
+  console.log(`merge: ${h.shardsDone} of ${h.shards ?? '?'} parts; ${h.asked} asked in ${h.calls} calls, ${h.lanes} at once a shard, ${h.answered} answered, ${h.passed} passed, ${h.refused} refused, ${h.unreadable} unreadable, ${h.unanswered} unanswered; ${n} cards kept in all; `
     + `the why ${h.whysPassed} of ${h.whys} and the angles ${h.anglesPassed} of ${h.angles} passed the check; the pass took ${h.seconds ?? '?'} s; the seconds a card a shard, the last passes: ${JSON.stringify(h.perCard)}; `
     + `a shard answering after the plan, the last passes: ${JSON.stringify(h.readies)} s`);
-  console.log(`merge: ${splitOf(h)}`);
+  console.log(`merge: ${splitOf(h)}; the prompt ${h.style || '?'}, the longest reply ${h.replyMax} tokens, ${h.cut} cut short; the seconds a card over the answered stories`);
   out({ wrote: 'true', cards: n });
   return 0;
 }
