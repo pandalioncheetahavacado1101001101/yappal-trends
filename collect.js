@@ -773,17 +773,22 @@ async function runCycle(opts) {
       return Math.max(c.next.startedAt, ...[c.next.chapterAt, c.turnAt].filter((x) => Number.isFinite(x) && x <= t));
     };
     // (what the measured series says of a row, for what sinks on the page (P5, lib/page-sink.js): its word where a rule of the
-    // collector's own gave it and the card says it, an Early row's "rising"; the card's own start; its newest chapter or turn)
+    // collector's own gave it and the card says it, an Early row's "rising"; the card's own start; its newest chapter or turn, and
+    // each of the two apart: a turn of the day must not hide a chapter of the same day, lib/desk.js chapterWhy)
     const seriesOf = (row) => {
       const c = cycleState.trends.get(row.id);
       if (!c) return null;
       const turns = [c.next.chapterAt, c.turnAt].filter((x) => Number.isFinite(x) && x <= t);
+      const by = (x) => (Number.isFinite(x) && x <= t ? x : null);
       return { status: Object.values(c.early || {}).some(Boolean) ? 'rising' : c.statusOwn !== false ? c.status : null,
         startedAt: Number.isFinite(c.next.startedAt) ? c.next.startedAt : null, newsAt: turns.length ? Math.max(...turns) : null,
+        chapterAt: by(c.next.chapterAt), turnAt: by(c.turnAt),
         // (what the labels read of it: whether it will last the day, the run it returned to the list on. lib/labels)
         ...(labelled ? { sink: LABELS.sinkOf(labelled, row.id) } : {}) };
     };
-    const orderOf = (a, rows) => { try { return DESK.order(rows, { statusOf, startedOf, seriesOf, sink: PSINK.on(env), now: t }); } catch (e) { log(`[desk] ${a}: order failed, the engine's order stands: ${e.message}`); return rows; } };
+    // (and what keeps each row of page one there, from the audience's last layout: the page's tally below, counts only)
+    const keptBy = {};
+    const orderOf = (a, rows) => { try { keptBy[a] = new Map(); return DESK.order(rows, { statusOf, startedOf, seriesOf, sink: PSINK.on(env), now: t, keptBy: keptBy[a] }); } catch (e) { log(`[desk] ${a}: order failed, the engine's order stands: ${e.message}`); return rows; } };
     // (the writer asks for the rows a reader meets first: the page as it will be laid out, not as the engine ranked it)
     const laidOut = Object.fromEntries(Object.entries(rowsByAudience).map(([a, rows]) => [a, orderOf(a, rows)]));
     let lined = { lines: new Map(), casing: new Map(), stats: { asked: 0, calls: 0, passed: 0, failedCheck: 0, unanswered: 0, shown: 0, headlinesChanged: 0, off: null } };
@@ -823,6 +828,9 @@ async function runCycle(opts) {
     }
     // (what page one carries of what sinks, P5: counts alone, never a row's name or times)
     for (const a of good) { const p = PSINK.pageTally(feeds.lists[a]); log(`[desk] ${a} page one: ${p.fading} Fading (${p.fadingMeasured} measured), ${p.old} over ${PSINK.OLD_DAYS} days old and not rising, of ${p.rows}`); }
+    // (and, with the sink on, what kept its Fading rows up: the news the desk read in a measured one, a short page, or no rule's Fading.
+    // lib/page-sink.js keptTally)
+    if (PSINK.on(env)) for (const a of good) { const k = PSINK.keptTally(feeds.lists[a], keptBy[a]); log(`[desk] ${a} page one Fading kept by: ${Object.entries(k).map(([why, n]) => `${why} ${n}`).join(', ')}`); }
 
     // ---- step 5 (written once the ranks are final): history, in one transaction ----
     // (fenced: the lock is still this run's and nothing newer was published while it worked. A cycle that slept through its turn,
