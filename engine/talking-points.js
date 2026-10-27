@@ -182,7 +182,7 @@ const WIKI_TOP_CAT = 0.9;
 const CREATORS_STILL = 3;
 const CREATORS_RECENCY = 0.85;
 const DRAMA = new Set(['allegations', 'arrest', 'fight', 'stabbing', 'attack', 'feud', 'split', 'rumors', 'lawsuit', 'leak', 'argument', 'quit', 'prison', 'execution',
-  'mistrial', 'verdict', 'backlash', 'flop', 'apology', 'threats', 'scam']);
+  'mistrial', 'verdict', 'backlash', 'flop', 'apology', 'threats', 'scam', 'desist', 'cheating']);
 const SOFT = new Set(['romance', 'ending', 'trailer', 'boxoffice', 'performance', 'speech', 'tribute', 'injury', 'comeback', 'collab', 'election', 'reviews']);
 const DRAMA_MULT = 1.1;
 // a claim of wrongdoing about a person, an arrest, an attack: the benchmark's own kind ("Kai Cenat allegations"), argued about harder
@@ -946,6 +946,7 @@ const ARGUED_NOUN_MIN = 4;
 const STABBING_SAID = 5;
 const STABBING_SHARE = 0.15;
 const DRAMA_TITLE_WORDS = 4;
+const LEGAL_DRAMA = new Set(['sentencing', 'verdict', 'mistrial']);
 const PLACED_IN = /\bin (\p{Lu}\p{Ll}{3,})(?=[.;,]|$)/u;
 const DEATH_THREATS = /\bdeath threats?\b/i;
 const ANSWERED_MIN = 3;
@@ -1029,7 +1030,26 @@ function pointOf(c, ctx) {
   // (and one a post of its week's top POST_LEAD_RANK tells, whatever else the name's week was about: "Logan Paul fraud")
   const post = postNoun(ev, near);
   const posted = post && (!found || !found.f || (!wave && c.drama && post.rank < POST_LEAD_RANK)) ? post : null;
-  let noun0 = posted || (!wave && found && !found.wave && found.f && titles.length >= 20 && found.count < Math.max(3, NOUN_MIN_SHARE * titles.length) ? null : found);
+  // (a drama name's noun is judged by its newest wave, not its week: a noun in a sliver of a mega-creator's week of other coverage is no
+  // aside when its last WAVE_DAYS of headlines say it. Collector only, 2026-10-28)
+  const dramaName = (!!c.drama || creatorName) && !c.parent;
+  const aside0 = !wave && found && !found.wave && found.f && titles.length >= 20 && found.count < Math.max(3, NOUN_MIN_SHARE * titles.length);
+  let noun0 = posted || (aside0 && !(dramaName && waveHolds(ev, found.f, near, now, NOUN_MIN_SHARE)) ? null : found);
+  // (a drama name one or two headlines tell so far is named by the noun its own headline puts right after it: "Influencer <name> banned by
+  // two airlines", "<name> apologizes after ...". Collector only, 2026-10-28: early stories had no noun until two headlines said one)
+  // (and a name people search that a headline calls a creator: "Twitch streamer <name> found dead at home", or that reads as a person's:
+  // "Game creator <name> dies at <age>". Never any searched name: a place, a parade or a brand has no story of its own to lead a headline with)
+  const leadable = dramaName || (c.trends.length > 0 && !c.parent && (ev.rows.some((r) => TC.calledCreator(r.title, near)) || (near.includes(' ') && TN.personLike(near, lex))));
+  // (only while its headlines are few: a name in the news all week has nouns of its own, and one headline's word is no story of a
+  // week of many headlines)
+  // (a searched person no drama headline or creator's beat names is named this way by a death alone: one headline's claim is no title)
+  if ((!noun0 || !noun0.f) && leadable && titles.length <= LEAD_ROWS_MAX) noun0 = leadNoun(ev, near, now, dramaName || ev.rows.some((r) => TC.calledCreator(r.title, near)) ? LEAD_FAMS : LEAD_DEATH) || noun0;
+  // (a cease-and-desist sent over claims about the name is the claims' story, the letter its answer: "<name> sends cease-and-desist to
+  // ex-friend over videos accusing him", told as "<name> allegations" once two of its newest headlines say the claims are about it)
+  if (noun0 && noun0.f && noun0.f.key === 'desist' && dramaName) {
+    const claimed = waveSaid(ev, TN.FAMILY.get('allegations'), near, now);
+    if (claimed.said >= WAVE_MIN) noun0 = { ...noun0, f: TN.FAMILY.get('allegations'), noun: 'allegations', count: claimed.said, share: claimed.said / Math.max(1, titles.length) };
+  }
   // (a drama name's newest wave the headlines call a controversy is titled by what it is, a backlash: "controversy" says nothing)
   if (noun0 && (noun0 === wave || noun0 === posted)) noun0 = { ...noun0, wave: true, ...(noun0.noun === 'controversy' ? { noun: 'backlash' } : {}) };
   // (a sexual assault is a claim against the name, never an attack on it: "Jacob Geller allegations", whatever the post that broke it says)
@@ -1107,6 +1127,13 @@ function pointOf(c, ctx) {
   }
   // (a personal noun about someone else in the line is not the name's: "Rob Gronkowski says Caleb Williams' injury ...")
   let noun = TN.personalNear(subject0, f0, titles) && !(f0 && f0.key === 'romance' && !TN.personLike(subject0, lex)) ? noun0 : null;
+  // (and the name's next noun its headlines repeat, when the first is a personal noun that is not its own: a singer sentenced over an
+  // attack he made is "<name> suspended sentence", never no card. Collector only, 2026-10-28)
+  // (a drama name's only, and never another personal noun: a death or an injury beside an attack is most often the victim's)
+  if (!noun && f0 && dramaName && TN.PERSONAL.has(f0.key)) {
+    const next = TN.nounOf(titles, { related: c.related, fresh, rest: c.rests.join(' '), name: near, only: new Set([...TN.FAMILY.keys()].filter((k) => !TN.PERSONAL.has(k) && !UNLISTED_FAMS.has(k))) });
+    if (next && next.f && TN.personalNear(subject0, next.f, titles)) noun = next;
+  }
   // (a romance is a person's: a film is never pregnant, "Verity pregnancy" is Anne Hathaway's aside)
   let f = noun && noun.f;
   const subject = f ? subject0 : c.key;
@@ -1340,7 +1367,9 @@ function pointOf(c, ctx) {
   // "... reacts to Zach Bryan wearing ...", "... stirs Ed Sheeran drama")
   const answeredBy = !!f && CLIP.has(f.key) && !TN.DRAMA_FAMS.has(f.key) ? ev.press.filter((r) => !r.youtube && mentions(hay(r.title), lastWord0) && ARGUED.test(r.title)).length : 0;
   const argued = answeredBy >= ARGUED_MIN && answeredBy >= ARGUED_SHARE * ev.press.length;
-  const drama = !!f && (TN.DRAMA_FAMS.has(f.key) || argued) && kind !== 'show' && (who.person || who.tier === 'creator') && heat0.parts.regional >= 1 && !retro;
+  // (and a sentence or a verdict handed to a name the drama headlines lead with is that name's drama: "<singer> suspended sentence" over
+  // the attack the drama feeds told for a week. Collector only, 2026-10-28)
+  const drama = !!f && (TN.DRAMA_FAMS.has(f.key) || argued || (LEGAL_DRAMA.has(f.key) && !!c.drama)) && kind !== 'show' && (who.person || who.tier === 'creator') && heat0.parts.regional >= 1 && !retro;
   // (nor a search that started today: YouTube's completions lag a story that broke this morning)
   // (nor a press story that broke in the last two days: "Prince Andrew lawsuit" the morning after)
   // (nor a drama name's story of the last two days: what people type into YouTube lags it, "Halle Berry allegations" the day after)
@@ -1377,6 +1406,8 @@ function pointOf(c, ctx) {
   const latest = chapter ? [...chapter.rows].filter((r) => !r.blocked).sort((a, b) => b.t - a.t)[0] || null : admissionOf(ev, subject, f, traced.trace, now);
   return {
     c, ev, noun, subject, title, how, what, denied, kind, generic, aside, work, own, score: heat.score, parts: heat.parts, searchVolume,
+    // (whether a drama name's newest wave says its noun: lists() judges such a noun's share by that wave, not the week)
+    waveHeld: dramaName && !!noun && !!noun.f && waveHolds(ev, noun.f, subject, now, PRESS_NOUN_SHARE),
     out: {
       title, kind, what, subject: surface, noun: noun ? noun.noun : work ? work.noun : null,
       heat: heatNumber(heat.score), status,
@@ -1873,7 +1904,7 @@ function lists(p, now, ctxLex) {
   // (Collector only: or two creator-native signals alone, nativePair below: what Early is for, before any press volume exists)
   const demand = p.searchVolume >= 20000 || ev.outlets >= 5 || ev.redditBest < 3 || ev.redditWeek < REDDIT_WEEK_RANK || c.sustained ||
     c.wiki.some((w) => w.views >= WIKI_MIN_VIEWS) || (!!c.drama && (ev.outlets >= (c.creator ? DRAMA_CREATOR_OUTLETS : DRAMA_OUTLETS) || ev.redditWeek < DRAMA_WEEK_RANK)) ||
-    nativePair(c, ev, noun).length >= NATIVE_PAIR;
+    nativePair(c, ev, noun).length >= NATIVE_PAIR || earlyLead(c, noun, now);
   const live = c.trends.some((t) => t.end === null || (t.end ?? 0) >= now - DAY);
   const recent = live || ev.lastT >= now - 4 * DAY;
   if (!demand || !recent) return false;
@@ -1911,7 +1942,9 @@ function lists(p, now, ctxLex) {
     ev.redditWeek >= DRAMA_WEEK_RANK && ev.redditBest >= 3 && ev.youtube < 3) return false;
   // (nor the newest wave of a name the drama headlines lead with: its week's other coverage is no measure of it)
   // (nor a name a top-three post of the day is about where celebrities' drama is argued: "Ms. Rachel backlash")
-  if (unsearched && !noun.wave && noun.count < PRESS_NOUN_SHARE * ev.rows.length && ev.youtube < 3 && ev.redditWeek >= REDDIT_WEEK_RANK && ev.redditBest >= 3) return false;
+  // (and a drama name's noun its newest wave says is judged by that wave: a noun its newest wave repeats is no aside for being a small
+  // share of a busy week. Collector only, 2026-10-28)
+  if (unsearched && !noun.wave && !p.waveHeld && noun.count < PRESS_NOUN_SHARE * ev.rows.length && ev.youtube < 3 && ev.redditWeek >= REDDIT_WEEK_RANK && ev.redditBest >= 3) return false;
   // a name only the drama headlines gave is titled with a claim against it only when its line leads with it: the claim is that name's,
   // never someone else's in the same headline ("Olivia Dean song accused of copying Bill Withers classic" is no "Bill Withers allegations")
   // (or names it as the one the claim is made against, however late in the line: "Future's ex, Gorgeous Doll, alleges Kai Cenat paid
@@ -1927,6 +1960,66 @@ function lists(p, now, ctxLex) {
 }
 
 const PRESS_NOUN_SHARE = 0.15;
+/**
+ * A drama name's newest wave and a family: its headlines of the last WAVE_DAYS (no uploads), and how many of them name it and say the
+ * family's word of it (never a word they give to someone else). Collector only, 2026-10-28.
+ */
+function waveSaid(ev, f, near, now) {
+  const last = near.split(' ').slice(-1)[0];
+  const rows = ev.rows.filter((r) => !r.youtube && now - r.t < WAVE_DAYS * DAY);
+  return { said: rows.filter((r) => mentions(hay(r.title), last) && TN.says(r.title, f) && !TN.othersSaid(r.title, f, near)).length, n: rows.length };
+}
+/** Whether a family holds a drama name's newest wave: WAVE_MIN of its headlines say it, and at least `share` of them. */
+const waveHolds = (ev, f, near, now, share) => { const w = waveSaid(ev, f, near, now); return w.said >= WAVE_MIN && w.said >= share * w.n; };
+/**
+ * Collector only, 2026-10-28. A drama name's noun when only its first headlines tell its story: a headline of the last WAVE_DAYS (no
+ * post, no upload, no blocked outlet) that leads with the name, LEAD_NAME_AT words in at most ("Influencer <name>", "Korean YouTuber
+ * <name>"), and says a drama family's word (or its death) LEAD_GAP words after it at most ("<name> banned", "<name> sends
+ * cease-and-desist"); never a noun someone else owns, nor a claim the name makes ("<name> accuses <other> of ..."). The family most such
+ * headlines say, each counted once; or null.
+ */
+function leadNoun(ev, near, now, fams = LEAD_FAMS) {
+  const nw = near.split(' ');
+  const by = new Map();
+  for (const r of ev.rows) {
+    if (r.blocked || r.youtube || r.fam === 'reddit' || r.fam === 'bluesky' || now - r.t > WAVE_DAYS * DAY) continue;
+    const t = TN.withoutSpeech(TN.cleanHeadline(r.title, r.outlet));
+    const at = TN.nameAt(words(t), near)[0];
+    if (at === undefined || at > LEAD_NAME_AT) continue;
+    // (the word right after the name tells it, never a later one: "<name> banned after controversial stream" is a ban, not a backlash)
+    // (never one the name only watches, answers or mourns: "<name> reacts to arrest of <other>", "<name> witnesses stabbing", "<name>
+    // condemns attack on fans", TN.onlooker; and a thing only rumoured is the rumour's, about the name alone: "<name> reacts to arrest
+    // rumours" is "<name> arrest rumors". Collector only, 2026-10-28: one such headline made a row stating the thing of the name)
+    const x = TN.familiesIn(t).map((y) => ({ ...y, gap: y.at - (at + nw.length) }))
+      .map((y) => (y.f.key === 'rumors' || !TN.rumoured(t, y) ? y : fams.has('rumors') && !LEAD_RUMOUR_OF.test(t.slice(y.index + y.surface.length)) ? { ...y, f: TN.FAMILY.get('rumors'), noun: `${y.f.noun(y.surface)} rumors` } : null))
+      .filter((y) => y && fams.has(y.f.key) && y.gap >= 0 && y.gap <= LEAD_GAP && !TN.othersNoun(t, y, near) && !TN.onlooker(t, y, near) && !(y.f.key === 'allegations' && LEAD_MAKES.test(y.surface)) &&
+        !LEAD_LABEL.test(t.slice(y.index + y.surface.length)))
+      .sort((a, b) => a.gap - b.gap || b.f.w - a.f.w || a.f.key.localeCompare(b.f.key))[0];
+    if (!x) continue;
+    const b = by.get(x.f.key) || { f: x.f, noun: x.noun || x.f.noun(x.surface), n: 0, newest: 0 };
+    by.set(x.f.key, { ...b, n: b.n + 1, newest: Math.max(b.newest, r.t) });
+  }
+  const best = [...by.values()].sort((a, b) => b.n * b.f.w - a.n * a.f.w || b.newest - a.newest || a.f.key.localeCompare(b.f.key))[0];
+  return best ? { f: best.f, noun: best.noun, count: best.n, share: best.n / Math.max(1, ev.rows.length), explained: 0, lead: true, leadT: best.newest } : null;
+}
+/**
+ * Collector only, 2026-10-28. A creator's story its own headline broke in the last LEAD_EARLY_DAYS, the name leading it and a drama
+ * word right after ("Influencer <name> banned by two airlines", leadNoun): demand enough on one outlet, the early story the list is
+ * for, before a second outlet writes it. Never a celebrity's (three outlets) and never a death.
+ */
+const earlyLead = (c, noun, now) => !!c.drama && !!c.creator && !c.parent && !!noun && !!noun.lead && !!noun.f && TN.DRAMA_FAMS.has(noun.f.key) &&
+  now - (noun.leadT || 0) <= LEAD_EARLY_DAYS * DAY;
+const LEAD_EARLY_DAYS = 2;
+const LEAD_NAME_AT = 3;
+const LEAD_ROWS_MAX = 6;
+const LEAD_GAP = 2;
+const LEAD_FAMS = new Set([...TN.DRAMA_FAMS, 'death']);
+const LEAD_DEATH = new Set(['death']);
+const LEAD_MAKES = /^(?:accuses|accusing|alleges|alleging)$/i;
+// (a rumour about someone else: "arrest rumours about <other>")
+const LEAD_RUMOUR_OF = /^[’'"”]?\s+\S+\s+(?:about|of|surrounding|involving|around)\s/i;
+// (a label, never a sentence: "<name> allegations live updates: ...", "<name> arrest: what we know")
+const LEAD_LABEL = /^['’]?s?\s*(?:live\b|[:|–—]|-\s)/i;
 /**
  * Collector only (ios/IDEAS-FEED.md C3, "two creator-native signals alone"). The kinds of creator-native signal that tell a creator's
  * story with its own noun: a post on a creators' board (`post`), a creator's upload or a clip on a chart of the day (`made`), what
@@ -2124,7 +2217,11 @@ function build(ctx) {
   if (ctx.debug) for (const p of all.slice(0, 50)) ctx.debug(`${p.score.toFixed(2)} ${p.title} | ${p.c ? `${p.c.from} ${p.c.key} ${JSON.stringify(Object.fromEntries(Object.entries(p.parts).map(([k, v]) => [k, +v.toFixed(2)])))} out=${p.ev.outlets} yt=${p.ev.youtube} n=${p.noun ? `${p.noun.noun}:${p.noun.count}` : '-'}` : 'word'}`);
   // (the list's first LIST_MAX by heat, and the people-drama cards just under the cut: the one list leads with them)
   // (the creators' own first among them: a small streamer's story has its turn under "Show more" before a celebrity's aside)
-  const under = all.slice(LIST_MAX).filter((p) => p.out.drama && p.out.heat >= DRAMA_EXTRA_HEAT);
+  // (and, collector only, 2026-10-28: a creator's death the creators' world talks about, and a creator's story its own headline broke in
+  // the last two days at any heat: one outlet's first report is small by nature, earlyLead)
+  const extraOf = (p) => (p.out.drama && (p.out.heat >= DRAMA_EXTRA_HEAT || (!!p.c && earlyLead(p.c, p.noun, ctx.now)))) ||
+    (p.out.tier === 'creator' && !!p.noun && !!p.noun.f && p.noun.f.key === 'death' && p.out.heat >= DRAMA_EXTRA_HEAT);
+  const under = all.slice(LIST_MAX).filter(extraOf);
   const extra = new Set([...under.filter((p) => p.out.tier === 'creator'), ...under.filter((p) => p.out.tier !== 'creator')].slice(0, DRAMA_EXTRA));
   const listed = [...all.slice(0, LIST_MAX), ...under.filter((p) => extra.has(p))];
   // (every card's line printed the card's way: curly quotes, "and" for "&")
@@ -2179,7 +2276,7 @@ function lookupNamesAll(ctx) {
 const MEME_LOOKUP_AT = 20;
 const MEME_LOOKUP_MAX = 6;
 
-module.exports = { build, lists, nativePair, postNoun, postLine, candidates, relatedCandidates, lookupNames: lookupNamesAll, dramaLookupNames: (ctx) => TC.dramaLookupNames({ ...ctx, items: hayed(ctx.items) }), recentNames, evidenceOf, pointOf, leadName, wordPoints, momentPoints, crazePoints, crazeTitle, WINDOW_DAYS,
+module.exports = { build, lists, nativePair, postNoun, postLine, leadNoun, candidates, relatedCandidates, lookupNames: lookupNamesAll, dramaLookupNames: (ctx) => TC.dramaLookupNames({ ...ctx, items: hayed(ctx.items) }), recentNames, evidenceOf, pointOf, leadName, wordPoints, momentPoints, crazePoints, crazeTitle, WINDOW_DAYS,
   wikiDaysIndex, wikiCurveOf, momentumOf, makesClaim, quotedRun, hoaxOf, POST_PLAY, POST_HEDGE,
   // (the collector's own rules, held by test/honesty.test.js)
   arrestStated, arrestGiven, arrestOf, whoseArrest, claimedOf, admissionNoun, eventText, dropKicker, ARREST_OVER };

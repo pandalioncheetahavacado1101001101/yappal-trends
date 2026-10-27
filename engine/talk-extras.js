@@ -138,6 +138,10 @@ const LINE_FILLER = [[/\bremixable\s+/gi, ''], [/\bmeme and trend\b/gi, 'meme'],
 const LINE_PARTICIPLE = /^((?:An?|The)\s+(?:[\p{L}\p{N}-]+\s+){1,4}?)(showing|featuring|depicting|capturing)\b/u;
 const LINE_FINITE = { showing: 'shows', featuring: 'features', depicting: 'depicts', capturing: 'captures' };
 const LINE_PLURAL_BASED = /^(\p{Lu}[\p{L}]+s)\s+(based on|inspired by|taken from|made from)\b/u;
+// (a cut that leaves a verb waiting for its object is no line: "... a photo of themselves and reveals." of "... and reveals, through each
+// slide, that ...". The verb and its "and" go when the rest still says enough, else the line runs on to a later comma. 2026-10-28)
+const LINE_DANGLING = /(?:^|\s)(?:and|then|also|who|which|that|to)\s+(?:reveals?|revealing|shows?|showing|shares?|sharing|says?|saying|finds?|finding|discovers?|discovering|learns?|learning|realizes?|realises?|realizing|realising|notices?|noticing|explains?|explaining|admits?|admitting|claims?|claiming|announces?|announcing|confirms?|confirming|tells?|telling|asks?|asking|adds?|adding|includes?|including|features?|featuring|depicts?|depicting|captures?|capturing|uses?|using|makes?|making|gets?|getting|gives?|giving|takes?|taking|puts?|putting|brings?|bringing|receives?|receiving|posts?|posting|creates?|creating|describes?|describing|displays?|displaying|exposes?|exposing|highlights?|highlighting|presents?|presenting|reports?|reporting|mentions?|mentioning|suggests?|suggesting)$/i;
+const LINE_DANGLING_TAIL = /,?\s+(?:and|then|also)\s+\S+$/i;
 const count = (x, re) => (x.match(re) || []).length;
 const quotesClosed = (x) => count(x, /“/g) === count(x, /”/g) && count(x, /‘/g) <= count(x, /’/g) && count(x, /"/g) % 2 === 0;
 function plainLine(name, text) {
@@ -170,6 +174,15 @@ function plainLine(name, text) {
     n = cut < 0 ? n : cut + 1;
   }
   let out = upTo(n);
+  if (n < kept.length && LINE_DANGLING.test(out)) {
+    const shorter = out.replace(LINE_DANGLING_TAIL, '');
+    if (shorter !== out && shorter.split(' ').length >= LINE_MIN_WORDS) out = shorter;
+    else {
+      const later = kept.findIndex((_, i) => i >= n && quotesClosed(upTo(i + 1)) && !LINE_DANGLING.test(upTo(i + 1)));
+      n = later < 0 ? kept.length : later + 1;
+      out = upTo(n);
+    }
+  }
   // (how it is used ends the line when there is room: what a creator does with it)
   if (usage && `${out}, ${usage}`.split(' ').length <= LINE_USAGE_MAX_WORDS && quotesClosed(out)) out = `${out}, ${usage}`;
   out = out.replace(LINE_PARTICIPLE, (m, lead, verb) => `${lead}${LINE_FINITE[verb.toLowerCase()]}`).replace(LINE_PLURAL_BASED, '$1 are $2');

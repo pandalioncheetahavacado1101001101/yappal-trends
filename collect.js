@@ -480,7 +480,7 @@ async function runCycle(opts) {
       // Clavicular and a GTA 6 leaker were all in the store, unsearched, two hours after a cold start)
       const beatKeys = beatNames(store, nowMs);
       const beatFirst = (keys) => [...keys.filter((k) => beatKeys.has(k)), ...keys.filter((k) => !beatKeys.has(k))];
-      const picked = B.pickNames({ fresh: beatFirst([...byKey.keys()].filter(isNew)), backlog: beatFirst([...byKey.keys()].filter((key) => !isNew(key))), rows: lastRows.map((r) => ({ ...r, name: TS.talkKey(r.name) })), searchedAt, now: nowS });
+      const picked = B.pickNames({ ...NDESK.ride({ fresh: beatFirst([...byKey.keys()].filter(isNew)), backlog: beatFirst([...byKey.keys()].filter((key) => !isNew(key))) }, { drama: wanted.drama.map(TS.talkKey), store, nowMs }), rows: lastRows.map((r) => ({ ...r, name: TS.talkKey(r.name) })), searchedAt, now: nowS });
       const keep = (names) => { if (names.length) meta.set('namesWanted', [...new Set(names.map((n) => TS.talkKey(n)))].slice(0, NAMES_WANTED_KEPT)); };
       keep(wantedNames);
       const nameOf = (key) => byKey.get(key) || (lastRows.find((r) => TS.talkKey(r.name) === key) || {}).name || key;
@@ -696,6 +696,12 @@ async function runCycle(opts) {
     try {
       nativeRows = NDESK.rowsOf(peopleListed, { t, audiences: opts.audiences, taken, rankFrom: Object.fromEntries(opts.audiences.map((a) => [a, Math.max(NATIVE_RANK_FROM, 1 + edited[a].rows.reduce((m, r) => Math.max(m, r.engineRank || 0), 0))])) });
     } catch (e) { log(`[native] no rows made: ${e.message}`); }
+    // (counts only, never a name: this line and the summary reach the job's public log. lib/native-desk.js census)
+    let voiced = null;
+    try {
+      voiced = NDESK.census(peopleListed, { t, taken, rows: nativeRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || [], store, nowMs });
+      log(`[native] two voices: ${voiced.voiced} stories, ${voiced.creators} of creators; of those ${voiced.listed} listed, ${voiced.stored} unlisted with headlines, ${voiced.rows} rows (${voiced.fast} fast, ${voiced.paged} on the page)`);
+    } catch (e) { log(`[native] voices not counted: ${e.message}`); }
     const withNative = (a) => { try { return [...NDESK.attach(edited[a].rows, peopleListed, listedIndex, t), ...(nativeRows[a] || [])]; } catch (e) { log(`[native] ${a}: nothing attached: ${e.message}`); return edited[a].rows; } };
     const nativeByAudience = Object.fromEntries(opts.audiences.map((a) => [a, withNative(a)]));
     // the platform, word and craze sources (lib/platform-desk.js): a sound with its count, a format a roundup dates, a word a
@@ -905,7 +911,7 @@ async function runCycle(opts) {
       native: { people: [...peopleListed.values()].filter((p) => Object.keys(p.kinds).length).length, corroborated: [...peopleListed.values()].filter((p) => NDESK.corroborated(p.kinds, t)).length,
         rows: (nativeRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || []).map((r) => r.title), attached: [...new Set(Object.values(rowsByAudience).flat().filter((r) => !r.native && r.meta && r.meta.native).map((r) => r.title))],
         // (who was sent for a search is a count here: status.json is published, and a bare name there would say nothing true of anyone)
-        fresh: nativeStats.fresh, research: nativeStats.research.length },
+        fresh: nativeStats.fresh, research: nativeStats.research.length, voiced },
       // (the platform, word and craze sources, M: the rows made of them by kind, what the ledger holds, what was new by observation,
       // this cycle's hourly file and GDELT slot)
       platform: (() => { const made = platformRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || [];

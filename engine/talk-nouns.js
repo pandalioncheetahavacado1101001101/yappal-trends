@@ -22,12 +22,18 @@ const FAMILIES = [
     noun: () => 'death' },
   { key: 'arrest', w: 1.0, sensitive: 'crime', re: /\b(?:arrest|arrests|arrested|charged|charges|booked|mugshot|jailed|out of jail|in custody|indicted|tased)\b/i,
     noun: (s) => (/^(?:charged|charges|indicted)$/i.test(s) ? 'charges' : 'arrest') },
-  { key: 'allegations', w: 1.0, sensitive: 'crime', re: /\b(?:allegations?|alleges|accus(?:es|ed|ing|ation|ations|er|ers)|grooming|groomed)\b/i,
+  // (and someone exposed for or by something: the exposé is a claim about them, never a leak. Collector only, 2026-10-28: "<creator> exposed
+  // for faking ..." was titled "leak". Only exposed for, by or as, or someone getting exposed with nothing after it: "exposed skin" and
+  // "was exposed to toxic mold" are nobody's claim)
+  { key: 'allegations', w: 1.0, sensitive: 'crime', re: /\b(?:allegations?|alleges|accus(?:es|ed|ing|ation|ations|er|ers)|grooming|groomed|exposed (?:for|by|as)|(?:gets|got|getting|been|being|was|were) exposed(?!\s+(?:to|in|on|at|after|during)\b))\b/i,
     noun: () => 'allegations' },
   // (a suit only weighed or threatened is no lawsuit yet: "Chris Hansen considers legal action against A24" stays a feud)
   { key: 'lawsuit', w: 0.8, sensitive: 'crime', re: /\b(?:lawsuits?|sues|sued|suing|(?<!(?:considers?|considering|weighs?|weighing|mulls?|mulling|threatens?|threatening|eyes|explores?|exploring|plans?|planning|vows?|could take|may take|might take|seeks?) )legal action|court|trial)\b/i,
     // (a court on its own is a case, not a trial: "Prince Andrew court case", the police he took to the High Court)
     noun: (s) => (/trial/i.test(s) ? 'trial' : /court/i.test(s) ? 'court case' : 'lawsuit') },
+  // (a lawyer's letter that demands someone stop is its own step, never a lawsuit: nothing was filed. A cease-and-desist had no family, so
+  // its headlines made no card. Collector only, 2026-10-28)
+  { key: 'desist', w: 0.8, re: /\b(?:cease[- ]and[- ]desist|cease & desist|c&d letter)s?\b/i, noun: () => 'cease-and-desist' },
   // the outcomes that replace a trial or a charge once they land ("Caleb Flynn guilty verdict", not "Caleb Flynn trial"); a sentencing
   // only once handed down ("sentenced to 25 years", not "ahead of sentencing"); a trial that ended with no verdict is a mistrial,
   // never a guilty verdict ("Lindsay Clancy mistrial": "judge denies request to find her not guilty after mistrial")
@@ -38,8 +44,9 @@ const FAMILIES = [
   { key: 'reunion', w: 0.95, re: /\b(?:(?:secret|long-lost|long lost|biological|estranged|\d+-year-old) (?:son|daughter|child)|love child|(?:reunit\w*|reconnect\w*|meets?|finds?|found) (?:with )?(?:his |her |their )?(?:(?:long-lost|biological|secret|\d+-year-old) )?(?:son|daughter)\b(?! of)|(?:son|daughter|child) (?:he|she|they) (?:placed|put|gave) (?:up )?for adoption|(?:placed|put|given) (?:up )?for adoption)\b/i,
     // (a child given up and found is long-lost; "secret" only where the line says so: a love child, a secret son)
     noun: (s) => `${/secret|love child/i.test(s) ? 'secret' : 'long-lost'} ${/daughter/i.test(s) ? 'daughter' : /child/i.test(s) ? 'child' : 'son'}` },
-  { key: 'sentencing', w: 1.0, sensitive: 'crime', re: /\bsentenced to(?: life)?\b|\b(?:gets|given|handed|receives) (?:a )?life (?:sentence|in prison|without parole)\b/i,
-    noun: (s) => (/life/i.test(s) ? 'life sentence' : 'sentencing') },
+  // (and a suspended sentence handed down is one: "<singer> given 8-month suspended sentence over nightclub attack". Collector only, 2026-10-28)
+  { key: 'sentencing', w: 1.0, sensitive: 'crime', re: /\bsentenced to(?: life)?\b|\b(?:gets|given|handed|receives) (?:a )?life (?:sentence|in prison|without parole)\b|\bsuspended (?:prison |jail )?sentence\b/i,
+    noun: (s) => (/life/i.test(s) ? 'life sentence' : /suspended/i.test(s) ? 'suspended sentence' : 'sentencing') },
   { key: 'stabbing', w: 1.0, sensitive: 'violence', re: /\b(?:stabbed|stabbing|stabs|knifed)\b/i, noun: () => 'stabbing' },
   // (a streamer set upon in the street: "German streamer Benjamool pelted with rocks by kids in Cairo")
   { key: 'attack', w: 0.95, sensitive: 'violence', re: /\b(?:(?<!\b(?:panic|heart|asthma|anxiety) )attack|(?<!\b(?:panic|heart|asthma|anxiety) )attacks|attacked|assault|assaulted|assaults|pelted|mobbed|ambushed|mass shooting|shooting (?:at|in|near|leaves|kills|suspect|victims?)|shot dead|gunman|open(?:s|ed)? fire)\b/i,
@@ -65,7 +72,8 @@ const FAMILIES = [
     noun: (s) => (/beef/i.test(s) ? 'beef' : /diss/i.test(s) ? 'diss' : 'feud') },
   { key: 'backlash', w: 0.85, re: /\b(?:backlash|slammed|blasted|criticism|criticized|criticised|outrage|boycott\w*|under fire|controvers\w*|sparks? (?:\w+ ){0,2}debate)\b/i,
     noun: (s) => (/controvers/i.test(s) ? 'controversy' : 'backlash') },
-  { key: 'leak', w: 0.8, re: /\b(?:leak|leaks|leaked|exposed|exposes|exposing)\b/i, noun: () => 'leak' },
+  // (someone exposed to a danger has leaked nothing: "<name> says she was exposed to toxic mold". 2026-10-28)
+  { key: 'leak', w: 0.8, re: /\b(?:leak|leaks|leaked|exposed(?!\s+to\b)|exposes|exposing)\b/i, noun: () => 'leak' },
   // (collector only, 2026-10-11: a creator breaking down on camera is a clip everyone reacts to and had no noun, so three beat
   // headlines about a streamer in tears made no card at all)
   { key: 'tears', w: 0.75, re: /\b(?:(?:breaks?|broke|breaking) down (?:in tears|crying)|in tears|(?:cries|cried|crying|sobs|sobbing) on (?:stream|camera|live|air)|tearful(?:ly)?|tears up)\b/i, noun: () => 'tears' },
@@ -73,9 +81,16 @@ const FAMILIES = [
   { key: 'remarks', w: 0.75, re: /\b(?:comments|remarks)\b(?! section)/i, noun: () => 'comments' },
   // (never one refused: "Jeremy Strong won't apologize for ...")
   // (nor a word that only looks like one: "an apologist for Adolf Hitler" apologises for nothing. Collector only, 2026-10-12)
-  { key: 'apology', w: 0.8, re: /\b(?<!(?:won['’]t|will not|not|never|refuses to|refused to|no) )apolog(?!ists?\b|ia\b|etics?\b)\w+\b/i, noun: () => 'apology' },
-  { key: 'split', w: 0.9, re: /\b(?:split|splits|breakup|break up|broke up|divorce|divorced|divorces|divorcing|separated|separation)\b/i,
+  // (and one said in two words: "<name> says sorry to fans". Collector only, 2026-10-28)
+  { key: 'apology', w: 0.8, re: /\b(?<!(?:won['’]t|will not|not|never|refuses to|refused to|no) )(?:apolog(?!ists?\b|ia\b|etics?\b)\w+|(?:says|said|saying) sorry)\b/i, noun: () => 'apology' },
+  // (a couple calling it quits has split, never quit: "<name> and <partner> call it quits". Anyone else calling it quits has quit: a career,
+  // a season, a stream. really() tells them apart, coupleQuits)
+  { key: 'split', w: 0.9, re: /\b(?:split|splits|breakup|break up|breaks up|breaking up|broke up|divorce|divorced|divorces|divorcing|separated|separation|(?:calls?|calling|called) it quits)\b/i,
     noun: (s) => (/divorc/i.test(s) ? 'divorce' : 'split') },
+  // (a partner cheated on is a claim about who cheated: "<name> accused of cheating on <partner>", "<name> cheating rumours". Never a
+  // game's cheat: "cheated on" a person, or the cheating called a scandal, claims or rumours. Collector only, 2026-10-28)
+  { key: 'cheating', w: 0.85, re: /\b(?:cheat(?:s|ed|ing)? on (?!(?:a |the |his |her |their )?(?:test|exam|game|diet|taxes))|cheating (?:scandal|allegations?|claims?|rumou?rs?|accusations?|reports?)|(?:accused of|caught) cheating|unfaithful|infidelity)\b/i,
+    noun: () => 'cheating claims' },
   { key: 'romance', w: 0.8, re: /\b(?:dating|romance|engaged|engagement|wedding|marries|pregnant|pregnancy|affair)\b/i,
     noun: (s) => ({ dating: 'dating rumors', romance: 'romance', engaged: 'engagement', engagement: 'engagement', wedding: 'wedding', marries: 'wedding',
       pregnant: 'pregnancy', pregnancy: 'pregnancy', affair: 'affair' }[s.toLowerCase()] || 'romance') },
@@ -104,7 +119,8 @@ const FAMILIES = [
   { key: 'tribute', w: 0.8, re: /\b(?:tribute|tributes|honou?rs|remembers|memorial)\b/i, noun: () => 'tribute' },
   { key: 'injury', w: 0.55, re: /\b(?:injur\w+|hospitali[sz]ed|hospital)\b/i, noun: (s) => (/hospital/i.test(s) ? 'hospitalization' : 'injury') },
   // (a person cancelled, not a concert: "Ed Sheeran concerts cancelled because of bad weather" is no ban)
-  { key: 'quit', w: 0.85, re: /\b(?:quits|quit|quitting|banned|ban|(?<!(?:concerts?|shows?|tour|gigs?|dates?|events?|series|season|games?|match|flights?|tickets?)\s(?:(?:gets?|got|is|was|were|are|been|being)\s)?)cancell?ed|fired|suspended|suspends|suspension|removed|dropped by|steps down|stepping down|disqualified|disqualification|defaulted|ejected)\b/i,
+  // (a couple calling it quits split; a platform that bans the name bans it: "Kick bans <streamer>". Collector only, 2026-10-28)
+  { key: 'quit', w: 0.85, re: /\b(?:quits|quit|quitting|banned|bans|ban|(?<!(?:concerts?|shows?|tour|gigs?|dates?|events?|series|season|games?|match|flights?|tickets?)\s(?:(?:gets?|got|is|was|were|are|been|being)\s)?)cancell?ed|fired|suspended|suspends|suspension|removed|dropped by|steps down|stepping down|disqualified|disqualification|defaulted|ejected)\b/i,
     noun: (s) => (/quit|step/i.test(s) ? 'exit' : /disqualif|defaulted/i.test(s) ? 'disqualification' : /ejected/i.test(s) ? 'ejection' : /fir(?:ed|ing)|removed|dropped/i.test(s) ? 'firing' : /suspen/i.test(s) ? 'suspension' : /cancel/i.test(s) ? 'cancellation' : 'ban') },
   // (collector only, 2026-10-12: a retirement announced is what a name's week is about and had no noun: twenty headlines of a creator
   // retiring from the ring made no card. Its own family: off the field for a creator or a celebrity, sports news for an athlete)
@@ -132,11 +148,11 @@ const SPORTS_TALK = new Set(['allegations', 'arrest', 'death', 'stabbing', 'atta
 // the nouns people argue about, the kind the list leads with when they are a person's (IDEAS-SPEC "Top 20": "Kai Cenat allegations"): a
 // claim, an arrest, a lawsuit, a feud, a backlash, an apology, a split, a leak, a fight, a blowup, a rumour, a ban or a firing
 const DRAMA_FAMS = new Set(['allegations', 'arrest', 'lawsuit', 'feud', 'backlash', 'apology', 'split', 'leak', 'fight', 'attack', 'stabbing', 'argument', 'rumors', 'quit',
-  'threats', 'scam', 'remarks', 'hoax', 'tears', 'retirement']);
+  'threats', 'scam', 'remarks', 'hoax', 'tears', 'retirement', 'desist', 'cheating']);
 // families whose card adds the denial when a title carries one
-const DENIABLE = new Set(['allegations', 'rumors', 'lawsuit', 'arrest', 'attack', 'leak', 'fight', 'stabbing', 'threats']);
+const DENIABLE = new Set(['allegations', 'rumors', 'lawsuit', 'arrest', 'attack', 'leak', 'fight', 'stabbing', 'threats', 'cheating']);
 // families that are claims about a person: the "what" must report them ("accused", "allegations", "claims", "reportedly")
-const CLAIMS = new Set(['allegations', 'rumors', 'attack', 'stabbing', 'fight', 'leak', 'threats', 'scam']);
+const CLAIMS = new Set(['allegations', 'rumors', 'attack', 'stabbing', 'fight', 'leak', 'threats', 'scam', 'cheating']);
 // a line that reports its claim: a word that hedges it ("accused of", "alleged", "claims", "reportedly", a denial, an investigation), or
 // who says so at its end or its start (", lawsuit says", ", police say", "Fans say ..."). Someone answering, the police or an arrest somewhere in the line hedge
 // nothing: "Kai Cenat punched a fan at mall, responds to critics" states the punch.
@@ -192,7 +208,7 @@ const DEATH_HOAXED = /\b(?:hoax\w*|death rumou?rs?|rumou?rs? of (?:his|her|their
 const DEATH_NEAR = /\b(?:not|almost|nearly|near|nearly-|could have|could['’]ve|thought (?:he|she|they) (?:was|were))[\s-]+$/i;
 const DEATH_FIGURE = /^\s+(?:it\b|wrong\b|serious\b|last\b|tired\b|set on\b|giveaway\b|ringer\b|heat\b|air\b|end\b|silent\b|center\b|even\b)/i;
 // what was done to the name, never what the name did or a figure of speech: "fired back", "fired off", "fired up", "fired shots"
-const QUIT_DONE = /^(?:fired|banned|removed|suspended|suspends|cancell?ed)$/i;
+const QUIT_DONE = /^(?:fired|banned|bans|removed|suspended|suspends|cancell?ed)$/i;
 const QUIT_FIGURE = /^\s+(?:back|off|up|shots?|a shot)\b/i;
 // an apology asked for is none given: "demands apology from Adin Ross"
 const APOLOGY_ASKED = /\b(?:demands?|demanded|demanding|wants?|wanted|owed|owes?|deserves?|expects?|awaits?|seeks?|seeking|calls? for|called for|calling for|asks? for|asked for|asking for|waiting (?:for|on))\s+(?:[\p{L}\p{N}’'.-]+\s+){0,3}$/iu;
@@ -214,18 +230,50 @@ function really(s, f, m) {
   if (f.key === 'arrest') return !NOT_SO.test(before) && !UNDONE.test(after) && !(/^arrests?$/i.test(m[0]) && /(?:cardiac|heart|respiratory|cardiopulmonary)\s+$/i.test(before));
   if (f.key === 'death') return !DEATH_HOAXED.test(s) && !DEATH_NEAR.test(before) && !(/^(?:killed|dead)$/i.test(m[0]) && DEATH_FIGURE.test(after));
   // (a suspended fine or sentence is no suspension: "Xhaka handed suspended fine". Collector only)
-  if (f.key === 'quit') return !(QUIT_DONE.test(m[0]) && QUIT_FIGURE.test(after)) && !(/^suspended$/i.test(m[0]) && /^\s+(?:\S+\s+)?(?:fine|sentence|jail|prison|term)(?![\p{L}\p{N}])/iu.test(after));
+  // (and a couple calling it quits has split, the split family's: coupleQuits)
+  if (f.key === 'quit') {
+    const call = /^quits$/i.test(m[0]) ? before.match(CALL_IT) : null;
+    return !(QUIT_DONE.test(m[0]) && QUIT_FIGURE.test(after)) && !(/^suspended$/i.test(m[0]) && /^\s+(?:\S+\s+)?(?:fine|sentence|jail|prison|term)(?![\p{L}\p{N}])/iu.test(after)) &&
+      !(call && coupleQuits(s, before.slice(0, call.index), after, call[0]));
+  }
   // (a clash is a feud between two people, never a fixture: "Haaland fit for Anfield clash". Said with who it is with, or of two
   // names joined by "and". Collector only)
   if (f.key === 'feud') return !(/^clash(?:es)?$/i.test(m[0]) && !/^\s+(?:with|between)(?![\p{L}\p{N}])/iu.test(after) && !/(?<![\p{L}\p{N}])and\s+(?:[\p{L}’'.-]+\s+){1,3}$/iu.test(before));
   if (f.key === 'apology') return !APOLOGY_ASKED.test(before);
+  // (a prison avoided, spared or escaped is none: "<singer> avoids prison time". Collector only, 2026-10-28)
+  if (f.key === 'prison') return !NOT_SO.test(before);
+  // (a group divided is no breakup: "Democrats split over <name>'s event", an event that "splits the party", a split decision.
+  // Collector only, 2026-10-28: a streamer's event that divided a party was titled "<streamer> split")
+  // (nor one denied, withdrawn, dismissed or only rumoured: "<name> says 'divorce' has no place in his household", "<name>'s wife withdrew
+  // her divorce plea", "<couple>'s divorce dismissed", "divorce rumours")
+  // (and calling it quits is a split only when a couple is named; else a career, a season or a stream ended: coupleQuits. 2026-10-28: a
+  // retirement and the end of a stream were titled "<name> split")
+  if (f.key === 'split') return !(/^splits?$/i.test(m[0]) && (SPLIT_GROUP.test(before) || SPLIT_OBJECT.test(after))) && !SPLIT_UNDONE_BEFORE.test(before) && !SPLIT_UNDONE_AFTER.test(after) && !/[‘'"“]$/.test(before) &&
+    !(CALLS_QUITS.test(m[0]) && !coupleQuits(s, before, after, m[0]));
   // (a figure of speech is no fight: "Matthew Lillard says he still has to fight for acting jobs", "fights back tears", "fighting to
   // keep her show". Collector only: the card read "Matthew Lillard fight")
   if (f.key === 'fight') return !(/^fight(?:s|ing)?$/i.test(m[0]) && FIGHT_FIGURE.test(after));
   return true;
 }
 const FIGHT_FIGURE = /^[’'"”]?\s+(?:for|to|back|off|against\s+(?:cancer|addiction|depression|the\s+odds|time|stigma|misinformation|claims?|rumou?rs?|allegations?))(?![\p{L}\p{N}])/iu;
-const CHECKED_FAMS = new Set(['verdict', 'sentencing', 'arrest', 'death', 'quit', 'apology', 'fight', 'feud']);
+// (who is split: a party, voters, fans, the internet, opinion; and what is split: the party, the vote, fans, a decision, a screen)
+const SPLIT_GROUP = /(?<![\p{L}\p{N}])(?:democrats|republicans|dems|gop|dfl|party|parties|voters|fans|fanbase|internet|viewers|critics|community|lawmakers|leaders|officials|members|board|council|jury|justices|court|opinions?|reactions?|experts|analysts|users|netizens|people|audiences?|social media|the left|the right|congress|senate|cabinet|government|church|union|league|owners|players|team|staff|family|families)\s+(?:(?:are|were|is|was|remain|remains|appear|appears|seem|seems|stand|stands)\s+)?(?:(?:deeply|sharply|bitterly|evenly|largely|still)\s+)?$/iu;
+const SPLIT_OBJECT = /^[’'"”]?\s+(?:the\s+|a\s+|an\s+|his\s+|her\s+|its\s+|their\s+)?(?:(?:[\p{L}]{2,}\s+)?part(?:y|ies)\b|vote\b|votes\b|voters\b|fans\b|fanbase\b|internet\b|opinions?\b|viewers\b|critics\b|room\b|audiences?\b|community\b|democrats\b|republicans\b|gop\b|dfl\b|congress\b|decision\b|screen\b|second\b|bill\b|check\b|difference\b|pot\b|ticket\b|personality\b)/iu;
+const SPLIT_UNDONE_BEFORE = /(?<![\p{L}\p{N}])(?:no|not|never|won['’]t|without|withdr[ae]w|withdraws|withdrawn|withdrawing|withdrawal of|dismiss(?:es|ed)?|drops?|dropped|denies|denied|deny|rules? out|ruled out|calls? off|called off|halts?|halted|pauses?|paused)\s+(?:(?:her|his|their|the|a|an|its)\s+)?$/iu;
+const SPLIT_UNDONE_AFTER = /^[’'"”]?\s+(?:(?:plea|petition|filing|case|proceedings)\s+)?(?:(?:is|was|has been|have been|gets?|got)\s+)?(?:withdrawn|dismissed|dropped|called off|tossed|thrown out|rumou?rs?|speculation|doesn['’]t|does not|has no|isn['’]t|is not|won['’]t|not happening|unlikely|denied)\b/iu;
+// (calling it quits: a couple named, as two people joined before a plural "call it quits" ("<A> and <B> call it quits", "<A>, <B> have
+// called it quits"), a partner it is called with or on ("calls it quits with his wife", "on their marriage"), or a couple's word anywhere in
+// the line (a marriage, a relationship, a divorce). A singular "calls it quits" has one subject: a pair before it is no couple)
+const CALLS_QUITS = /^(?:calls?|calling|called) it quits$/i;
+const CALL_IT = /(?:calls?|calling|called) it\s+$/i;
+const COUPLE_NAME = String.raw`\p{Lu}[\p{L}\p{N}’'.-]*(?:\s+\p{Lu}[\p{L}\p{N}’'.-]*){0,2}`;
+const COUPLE_PARTNER = String.raw`(?:(?:his|her|their|His|Her|Their)\s+)?(?:${COUPLE_NAME}|wife|husband|girlfriend|boyfriend|fianc[eé]e?|partner|spouse)`;
+const COUPLE_PAIR = new RegExp(String.raw`${COUPLE_NAME}(?:\s+(?:and|And|AND|&)\s+|,\s+)${COUPLE_PARTNER}\s+(?:(?:have|has|had|officially|reportedly|finally|quietly|seemingly|Have|Has|Officially|Reportedly|Finally)\s+){0,2}$`, 'u');
+const COUPLE_WITH = /^\s+(?:with|from|on)\s+(?:(?:his|her|their)\s+)?(?:(?:\d+-year|long-?time)\s+)?(?:wife|husband|girlfriend|boyfriend|fianc[eé]e?|partner|spouse|marriage|relationship|romance|engagement)(?![\p{L}\p{N}])/iu;
+const COUPLE_WORD = /(?<![\p{L}\p{N}])(?:marriage|married|marital|relationship|romance|romantic|couple(?!\s+of(?![\p{L}\p{N}]))|lovebirds|engagement|divorc\w*|breakup|break-up)(?![\p{L}\p{N}])/iu;
+/** Whether "call(s) it quits" in a text is said of a couple (before: the text up to the verb; verb: "call it quits", "calls it", ...). */
+const coupleQuits = (s, before, after, verb) => COUPLE_WORD.test(s) || COUPLE_WITH.test(after) || (!/^calls\b/i.test(verb) && COUPLE_PAIR.test(before));
+const CHECKED_FAMS = new Set(['verdict', 'sentencing', 'arrest', 'death', 'quit', 'apology', 'fight', 'feud', 'prison', 'split']);
 /** A family's first match in a text that is the thing itself (see `really`), as `text.match(f.re)` gives it; or null. */
 function saidIn(text, f) {
   const s = String(text || '');
@@ -267,15 +315,83 @@ function othersNoun(title, x, name) {
   // faces backlash over Mara Voss ties" is Tobin Hale's backlash, and Mara Voss is only mentioned. Never a word of the name's own)
   const faces = before.match(/(\p{Lu}[\p{L}\p{N}’'.-]*)\s+(?:faces?|facing|faced|sparks?|sparked|sparking|draws?|drew|drawing|gets?|got|getting|receives?|received|hit with|met with|under)\s+(?:[\p{Ll}-]+\s+){0,2}$/u);
   if (faces && !own(faces[1].replace(/[’']s$/, ''))) return true;
-  const owner = OWNED.has(x.f.key) ? before.match(/(\p{Lu}[\p{L}\p{N}.-]*)[’']s\s+(?:[\p{Ll}-]+\s+){0,2}$/u) : null;
+  // (a cheating claim's possessive is who makes it, never who cheated: "<name> on wife <other>'s cheating claims" is a claim about the name)
+  const owner = OWNED.has(x.f.key) && !(x.f.key === 'cheating' && CLAIM_NOUN.test(x.surface)) ? before.match(/(\p{Lu}[\p{L}\p{N}.-]*)[’']s\s+(?:[\p{Ll}-]+\s+){0,2}$/u) : null;
   if (owner && !own(owner[1])) return true;
   // (what the name did to someone else: "Kai Cenat banned a viewer", "Sabrina Carpenter cancelled her Paris shows")
   if (x.f.key === 'quit' && QUIT_DONE.test(x.surface) && own(words(before).slice(-1)[0] || '') && !/[,:;]\s*$/.test(before) && DID_TO.test(after)) return true;
+  // (a claim the name makes is about someone else: "<name> alleges someone is influencing his wife", "<name> accuses <other> of lying"
+  // tell no claim against the name. Never "accused of" or "alleged to": those are about it. Collector only, 2026-10-28: a line where the
+  // name made the claim stood under "<name> allegations")
+  const lastBefore = words(before.replace(/\s+(?:now|also|publicly|reportedly|then|later)\s*$/i, ' ')).slice(-1)[0] || '';
+  // (a ban the name hands out is never its own: "Kick bans <streamer>" is the streamer's, "<street> bans traffic" no ban of the street's.
+  // Collector only, 2026-10-28)
+  if (x.f.key === 'quit' && /^bans$/i.test(x.surface) && own(lastBefore) && !/[,:;]\s*$/.test(before)) return true;
+  if (x.f.key === 'allegations' && MAKES_CLAIM.test(x.surface) && own(lastBefore) && !/[,:;]\s*$/.test(before) &&
+    (!/^(?:accused|alleged)$/i.test(x.surface) || MADE_AGAINST.test(after))) return true;
   return /ed$/i.test(x.surface) && OF_THEIRS.test(after);
 }
-const OWNED = new Set(['arrest', 'death', 'apology', 'split', 'lawsuit', 'sentencing', 'verdict', 'injury', 'quit', 'romance']);
+const CLAIM_NOUN = /\b(?:claims?|allegations?|accusations?|rumou?rs?|reports?)$/i;
+const MAKES_CLAIM = /^(?:alleges|alleging|alleged|accuses|accusing|accused)$/i;
+// (whom an active "accused" or "alleged" is made against: "<name> accused her ex of ...", never "accused of", "accused by")
+const MADE_AGAINST = /^\s+(?![Oo]f\b|[Bb]y\b|[Ii]n\b|[Tt]o\b|[Oo]ver\b|[Aa]fter\b|[Aa]mid\b|[Aa]s\b|OF\b|BY\b)(?:him|her|them|his|their|the|a|an|someone|people|fans|\p{Lu}[\p{L}\p{N}’'.-]*)/u;
+const OWNED = new Set(['arrest', 'death', 'apology', 'split', 'lawsuit', 'sentencing', 'verdict', 'injury', 'quit', 'romance', 'cheating']);
 const DID_TO = /^\s+(?:an?|the|his|her|their|its|him|them|two|three|several|some|all|every|\d+|\p{Lu}[\p{L}\p{N}’'.-]*)\b/u;
 const OF_THEIRS = /^\s+(?:\p{L}+[’']s\s+)?(?:friend|brother|sister|father|mother|dad|mom|son|daughter|wife|husband|cousin|uncle|aunt|ex|fan|man|woman|teen)\b/iu;
+
+// ---- a name that only watches, answers or mourns a family's thing (collector only, 2026-10-28) ----
+// "<name> reacts to arrest of <other>", "<name> witnesses stabbing outside venue", "<name> condemns attack on fans", "<name> mourns death
+// of friend": the thing is someone else's, and a title "<name> arrest" states it of the wrong person. Who only watches it (witnesses,
+// mourns, condemns, pays tribute) never owns it; who talks of it or reacts to it owns it only when it is a claim made of them, a ban, a
+// suit, a feud or a split they answer ("<name> responds to allegations", "<name> addresses ban")
+const ONLOOKER = /(?<![\p{L}\p{N}])(?:witness(?:es|ed|ing)?|saw|sees|seeing|watch(?:es|ed|ing)?|condemn(?:s|ed|ing)?|mourn(?:s|ed|ing)?|griev(?:es|ed|ing)|honou?r(?:s|ed|ing)|pa(?:ys|id|ying) tribute|prais(?:es|ed|ing)|back(?:s|ed|ing)|support(?:s|ed|ing)|pray(?:s|ed|ing) for|send(?:s|ing)? (?:love|prayers|condolences)|sent (?:love|prayers|condolences))(?![\p{L}\p{N}])/iu;
+const REACTS = /(?<![\p{L}\p{N}])(?:react(?:s|ed|ing)?|respond(?:s|ed|ing)?|address(?:es|ed|ing)?|speak(?:s|ing)?|spoke|talk(?:s|ed|ing)?|discuss(?:es|ed|ing)?|comment(?:s|ed|ing)?|weigh(?:s|ed|ing)? in|break(?:s|ing)? down|broke down|recall(?:s|ed|ing)?|remember(?:s|ed|ing)?|reflect(?:s|ed|ing)?|defend(?:s|ed|ing)?|slam(?:s|med|ming)?|blast(?:s|ed|ing)?|call(?:s|ed|ing)? out|mock(?:s|ed|ing)?|criticiz(?:es|ed|ing)|criticis(?:es|ed|ing)|hit(?:s|ting)? back|open(?:s|ed|ing)? up|shar(?:es|ed|ing)|jok(?:es|ed|ing)|tweet(?:s|ed|ing)?|post(?:s|ed|ing)?)(?![\p{L}\p{N}])/iu;
+const ANSWERED = new Set(['allegations', 'backlash', 'rumors', 'cheating', 'scam', 'threats', 'quit', 'desist', 'lawsuit', 'feud', 'split', 'leak']);
+// the family's word as a noun (after a small word) with someone else after it: "arrest of fellow streamer <other>", "death of his manager",
+// "attack on fans", "ban of <other>". Never "accused of fraud" (a verb's), nor "allegations of abuse" (what the claim says)
+const AS_NOUN = /(?<![\p{L}\p{N}])(?:to|the|a|an|on|about|over|after|amid|following|into|at|by|in|of|his|her|their|its)\s+(?:[\p{Ll}-]+\s+)?$/iu;
+const OF_OTHER = /^[’'"”]?\s+(?:of|on|against|involving|targeting|toward|towards)\s+(?:(?:his|her|their|its|a|an|the|His|Her|Their|A|An|The)\s+)?(?:(?:fellow|former|ex|longtime|long-time|late|beloved|close|best|old|young|own|Fellow|Former|Longtime|Long-Time|Late|Beloved|Close|Best|Old|Young|Own)[-\s]+)*([\p{L}\p{N}’'.-]+)/u;
+const OTHER_PERSON = /^(?:friends?|managers?|colleagues?|co-?stars?|co-?hosts?|hosts?|streamers?|rappers?|singers?|actors?|actress(?:es)?|teammates?|rivals?|moderators?|mods?|employees?|staffers?|assistants?|bodyguards?|fans?|viewers?|followers?|subscribers?|creators?|youtubers?|influencers?|players?|coach(?:es)?|members?|bandmates?|producers?|directors?|stars?|men|man|women|woman|teens?|girls?|boys?|child(?:ren)?|kids?|suspects?|drivers?|officers?|crew|security|family|partner|spouse|father|mother|dad|mom|brother|sister|son|daughter|wife|husband|ex|girlfriend|boyfriend|cousin|uncle|aunt|people|protesters?|strangers?|someone|man’s|woman’s)$/i;
+/** Whether the word after "of" or "on" names someone else: a person's role or relation, a pronoun's someone, or a capitalised name. */
+function someoneNamed(word, titleCase) {
+  const w = String(word || '').replace(/[’']s$/i, '').replace(/[^\p{L}\p{N}-]+$/gu, '');
+  if (!w) return false;
+  if (OTHER_PERSON.test(w)) return true;
+  if (!/^\p{Lu}/u.test(w)) return false;
+  // (in a Title Case headline every word is capitalised: a capitalised word is a name only when no dictionary spells it)
+  return !titleCase || !W.inDict(w.toLowerCase());
+}
+/**
+ * Whether a family's word in a text (x: { f, surface, index }) is one the name only watches, answers or mourns, never its own: a
+ * watching verb between the name and the word ("<name> witnesses stabbing"); a reacting verb there when the family is no claim the name
+ * answers ("<name> reacts to arrest of ..."); or the word, said as a noun, of someone else ("arrest of fellow streamer <other>",
+ * "attack on fans"). False when the name is not before the word in its clause.
+ */
+function onlooker(text, x, name) {
+  if (!text || !x || !Number.isFinite(x.index) || !name) return false;
+  const s = String(text);
+  const before = s.slice(0, x.index);
+  const after = s.slice(x.index + String(x.surface || '').length);
+  const last = String(name).split(' ').filter(Boolean).slice(-1)[0];
+  if (!last) return false;
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])${last.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:[’']s)?(?![\\p{L}\\p{N}])`, 'giu');
+  const hits = [...before.matchAll(re)];
+  const named = hits.length ? hits[hits.length - 1] : null;
+  const own = new Set(String(name).toLowerCase().split(' '));
+  const ofOther = AS_NOUN.test(before) && !/ed$/i.test(String(x.surface || '')) && (() => {
+    const m = after.match(OF_OTHER);
+    return !!m && !own.has(m[1].toLowerCase().replace(/[’']s$/, '')) && someoneNamed(m[1], titleCased(s)); // (titleCased: the line pick's, below)
+  })();
+  if (!named) return ofOther;
+  const between = before.slice(named.index + named[0].length);
+  if (/[,;:—–|]/.test(between)) return false;
+  if (ONLOOKER.test(between)) return true;
+  // (a reaction to one's own: "<name> reacts to his arrest")
+  if (REACTS.test(between) && !ANSWERED.has(x.f.key) && !/(?<![\p{L}\p{N}])(?:his|her|their)\s+(?:[\p{L}-]+\s+)?$/iu.test(before)) return true;
+  return ofOther;
+}
+/** Whether a family's word in a text is only rumoured, claimed or reported ("arrest rumours", "death reports"): the thing is not said. */
+const rumoured = (text, x) => !!x && Number.isFinite(x.index) && /^[’'"”]?\s+(?:rumou?rs?|claims?|reports?|speculation|hoax(?:es)?|theor(?:y|ies))(?![\p{L}\p{N}])/iu.test(String(text).slice(x.index + String(x.surface || '').length));
 /**
  * Whether a text gives a family's noun to someone other than the name (othersNoun, on the family's first real match): a line that
  * says "<Other> faces backlash over <name> ties" or "allegations facing <Other>" is no line of the name's "<name> backlash" card.
@@ -391,7 +507,7 @@ const personLike = (name, lex) => {
 // families where the noun happens to one person, who may not be the trend's name ("Ken Urker dies" under "gypsy rose"; "Taylor Swift
 // crashes Dakota Johnson's SNL monologue" under "dakota johnson"); an allegation, a lawsuit or a feud is between two and stays the trend's
 const SWITCHABLE = new Set(['death', 'arrest', 'stabbing', 'cameo', 'injury', 'romance', 'split', 'look', 'speech', 'performance', 'quit', 'apology',
-  'reveal', 'execution']);
+  'reveal', 'execution', 'cheating']);
 /**
  * Who the noun is about: the trend's own name, unless another person named around it (its related queries, its titles) is the name
  * closest before the noun word in clearly more of the family's titles.
@@ -874,6 +990,24 @@ const CLEAN_LEAD = /^(?:watch|exclusive|breaking|update|video|new|report|listen|
 // a source tag after the line ("'Saved by the Bell' actor Dennis Haskins dies: TMZ")
 const SOURCE_TAG = /\s*[:|-]\s*(?:tmz|page six|people|variety|deadline|report|reports|sources?|exclusive|insider|daily mail|the sun|us weekly|e! news)\s*$/i;
 const SOUNDBITE_LEAD = /^(?:["“]([^"”]{8,160})["”]|[‘']((?:[^‘’']|[’'](?=\p{L}))+)[’'])[,.]?:\s+(?=["“‘']?\p{Lu})/u;
+// (collector only, 2026-10-28: the line pick reads a headline without the soundbite it opens or ends on when the soundbite is someone
+// speaking, Title Case or not: "'I Just Don't Listen Very Well': Influencer <name> Banned by Two Airlines ...", "<name> Apologizes After
+// ...: 'First and Last Time It Will Ever Happen'". Speech says I, we, you, my or a contraction, or asks or shouts; a work's name, "'East
+// of Eden': ...", does none of these and stays)
+const SPEECH = /(?:^|[\s‘'“"])(?:i|i['’]m|i['’]ve|i['’]ll|i['’]d|we|we['’]re|you|you['’]re|my|me|our|don['’]t|can['’]t|won['’]t|didn['’]t|isn['’]t|wasn['’]t|it['’]s|that['’]s|he['’]s|she['’]s|they['’]re)(?=[\s,.!?’'”"]|$)|[!?]/i;
+const SOUNDBITE_TAIL = /:\s+(?:["“]([^"”]{8,160})["”]|[‘']((?:[^‘’']|[’'](?=\p{L}))+)[’'])[.!?]?\s*$/u;
+const BITE_WORDS = 3;
+const BITE_REST_WORDS = 8;
+/** A headline without a soundbite of someone speaking at its start or end (`SPEECH`), when what is left still tells the story. */
+function withoutSpeech(line) {
+  let s = String(line || '');
+  const lead = s.match(SOUNDBITE_LEAD);
+  const said = lead ? lead[1] || lead[2] || '' : '';
+  if (lead && said.split(/\s+/).length >= BITE_WORDS && SPEECH.test(said)) s = s.slice(lead[0].length);
+  const tail = s.match(SOUNDBITE_TAIL);
+  if (tail && s.slice(0, tail.index).split(/\s+/).length >= BITE_REST_WORDS) s = s.slice(0, tail.index);
+  return s;
+}
 // ---------- it says what happened (IDEAS-FEED G3 rule 10; collector only) ----------
 // what only says there was a reaction: "stirs controversy", "sparks backlash", "faces criticism", "under fire", "goes viral", "breaks
 // silence", "responds", "reacts", "speaks out"
@@ -1000,7 +1134,7 @@ function pronounOf(rows, subject) {
  * allegations and says a lawsuit is coming" -> "he denies it and says he is suing"); null when the line has no denial by the subject.
  * pron: "he" or "she" when the titles say so clearly, else the clause names the subject.
  */
-function denialClause(line, subject, pron, name, near = DENIAL_NEAR) {
+function denialClause(line, subject, pron, name, near = DENIAL_NEAR, { kin = false } = {}) {
   const m = line.match(DENIAL);
   if (!m) return null;
   // (the subject named just before the denial: "RaKai denies claims" under Kai Cenat is someone else's)
@@ -1008,6 +1142,11 @@ function denialClause(line, subject, pron, name, near = DENIAL_NEAR) {
   const last = subject.split(' ').slice(-1)[0];
   const at = pre.lastIndexOf(last);
   if (at < 0 || pre.length - at > near) return null;
+  // (and the subject itself, not someone of theirs: "<Name>'s half-brother fires back at dad's denial" is the brother's, and "dad <Other
+  // given> <Name> denies" a relative's who shares the surname. 2026-10-28: a line put the father's denial in his daughter's mouth.
+  // kin: a denial by the subject's own family still counts as the claim's denial on record, for the line rules that ask whether a line
+  // keeps the denial its sources carry (lib/line-rules.js rule 9) and never to word one in the subject's name)
+  if (!kin && relativeLed(line.slice(0, m.index), subject)) return null;
   // (and the subject is the one denying: nobody else named, no new clause between the name and the denial, "Kai Cenat allegations:
   // Twitch denies it ignored reports"; unless the subject is quoted saying it, "Kai Cenat says Gorgeous Doll is lying")
   const between = textBetween(line, last, m.index) || '';
@@ -1028,6 +1167,25 @@ function denialClause(line, subject, pron, name, near = DENIAL_NEAR) {
 }
 
 const DENIAL_NEAR = 6;
+/**
+ * Whether the subject's surname nearest before a denial is someone else's: a possessive ("<Name>'s <noun> ...", the denial its noun's),
+ * or after another given name ("<Other> <Surname>", a relative who shares it). The subject's own given name before it is the subject.
+ */
+function relativeLed(pre, subject) {
+  const sw = subject.split(' ');
+  const last = sw[sw.length - 1];
+  const toks = String(pre || '').split(/\s+/).filter(Boolean);
+  const bareOf = (t) => t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}’']+$/gu, '');
+  for (let i = toks.length - 1; i >= 0; i--) {
+    const b = bareOf(toks[i]);
+    const k = b.replace(/[’']s$/i, '').replace(/s[’']$/i, 's').toLowerCase();
+    if (k !== last) continue;
+    if (/[’']s$/i.test(b) || /s[’']$/i.test(b)) return true;
+    const prev = i > 0 ? bareOf(toks[i - 1]) : '';
+    return sw.length > 1 && /^\p{Lu}\p{Ll}/u.test(prev) && !sw.includes(prev.toLowerCase()) && !W.inDict(prev.toLowerCase()) && !/[,:;]$/.test(toks[i - 1]);
+  }
+  return false;
+}
 const DENIAL_NOT = /\b(?:no longer|not|never|doesn['’]t|didn['’]t|won['’]t|refuses to|declines to|stops short of)\s+(?:[\p{L}-]+\s+){0,2}$/iu;
 const CLAIM_NAMED = 1.5;
 /** Capitalised single words mid-line that no dictionary spells and that are not the subject's ("Reggie", "RaKai"): who else is in the line. */
@@ -1155,7 +1313,7 @@ const WHAT_FOR_BONUS = 0.75;
  */
 // what a card's line never is: a call to look, a "here's", a review's verdict, a promo's hype ("See her look", "the wildest movie in
 // years", "officially kicks off a whole new era")
-const NOT_A_LINE = /\b(?:and more )?promotes?\b[^.]*\b(?:series|film|movie|show|album)\b|\bon the red carpet\b|\bwatch live\b|\bhow (?:you can |to )watch\b|\bfor free\b|\bwhere to (?:watch|stream)\b|\bsee (?:her|his|their|the) (?:look|outfit|photos?|pics?)\b|^here['’]s\b|\bhere['’]s (?:the|a|an|every)\b|\bexplained\b|\bwasn['’]t right\b|\bmakes it worse\b|\bwildest\b|\bthe ultimate\b|\bofficially kicks off\b|\bwhole new era\b|\bmust[- ](?:see|watch)\b|\byou need to\b|\bisn['’]t the same as\b/i;
+const NOT_A_LINE = /\b(?:and more )?promotes?\b[^.]*\b(?:series|film|movie|show|album)\b|\bon the red carpet\b|\bwatch live\b|\bhow (?:you can |to )watch\b|\bfor free\b|\bwhere to (?:watch|stream)\b|\bsee (?:her|his|their|the) (?:look|outfit|photos?|pics?)\b|^here['’]s\b|\bhere['’]s (?:the|a|an|every|all)\b|\blive (?:updates?|blog)\b|\bexplained\b|\bwasn['’]t right\b|\bmakes it worse\b|\bwildest\b|\bthe ultimate\b|\bofficially kicks off\b|\bwhole new era\b|\bmust[- ](?:see|watch)\b|\byou need to\b|\bisn['’]t the same as\b/i;
 const REACTION = /\b(?:backs|slams|reacts?|reacted|weighs in|speaks out|defends|calls out|praises|blasts|mocks|responds|criticiz(?:es|ed))\b/i;
 // (a relative's or namesake's line: the subject's surname after another given name, the subject's own given name nowhere: "Son of
 // ex-president Jair Bolsonaro takes election lead" under Flavio Bolsonaro)
@@ -1196,7 +1354,7 @@ function whatOf(rows, subject, family, peakT, lex, context = [], { rumor = false
   const newestT = Math.max(0, ...usable.map((r) => r.t));
   const acts = new Set(usable.filter((r) => OFFICIAL_ACT.test(r.title)).map((r) => String(r.outlet || '').toLowerCase()));
   const scored = usable.map((r) => {
-    const head = caseHeading(cleanHeadline(r.title, r.outlet), subject, family);
+    const head = caseHeading(withoutSpeech(cleanHeadline(r.title, r.outlet)), subject, family);
     const bare = TL.plainLine(head, null, subject, null);
     const line = TL.fullNames(bare, names, subject, { nameRuns, ROLE, nameSurface });
     // (its length as the outlet wrote it: a surname given to a bare first name is no padding; its case as the outlet wrote it)
@@ -1218,7 +1376,9 @@ function whatOf(rows, subject, family, peakT, lex, context = [], { rumor = false
     // response) are the same story
     // (and a backlash over the noun is the noun's own story: "Eminem fans threaten boycott after Christian album collab")
     // (never beside a death or a crime: "Altered football photo invoking Nolan Wells' death sparks outrage" is a side story)
-    const sides = claim ? new Set(['response', 'lawsuit', 'allegations', 'arrest']) : new Set(['response', ...(family && !family.sensitive ? ['backlash'] : [])]);
+    // (and a claim's outcome in court is its own story: "<singer> given suspended jail sentence for nightclub altercation" under a fight.
+    // Collector only, 2026-10-28)
+    const sides = claim ? new Set(['response', 'lawsuit', 'allegations', 'arrest', 'sentencing', 'verdict']) : new Set(['response', ...(family && !family.sensitive ? ['backlash'] : [])]);
     s -= 0.75 * fams.filter((x) => !own || (x.f.key !== family.key && !sides.has(x.f.key) && x.f.w >= 0.8)).length;
     // (a claim its line states flat is told as reported, and a line that already reports it is the better one)
     const flat = statesClaim(line, family, last) && !REPORTED.test(line);
@@ -1380,7 +1540,8 @@ function whatOf(rows, subject, family, peakT, lex, context = [], { rumor = false
     // (a person the line already names whole is named again by the surname: "Kai Cenat responds to ...; Cenat denies it")
     const name = personLike(subject, null) && subject.split(' ').length >= 2 && contains(words(best.line).join(' '), subject) ? name0.split(' ').slice(-1)[0] : name0;
     // (a line that already carries a denial gets no second one; a threat to sue alone still gets one)
-    if (STRICT_DENIAL.test(best.line)) denied = !!denialClause(best.line, subject, pron, name, DENIAL_NEAR_OWN);
+    // (the line's own denial, in its outlet's words: whoever of the subject's makes it, it is on record. kin)
+    if (STRICT_DENIAL.test(best.line)) denied = !!denialClause(best.line, subject, pron, name, DENIAL_NEAR_OWN, { kin: true });
     else {
       for (const x of scored) {
         if (x === best || x.s <= -5) continue;
@@ -1469,6 +1630,6 @@ module.exports = { SAID_FAMS, SAID_RE, saidTopic, postTopic, RECALL, REVIEWS, ME
   // nounOf's answer holds the family itself, kept, and plain values, copied. engine/memo.js)
   nounOf: MEMO.memo('nounOf', nounOf, { copy: (r) => (r ? { ...r } : r) }), nameRuns, personLike, subjectOf, relationOf, personalNear,
   titleWords, caseTitle: MEMO.memo('caseTitle', caseTitle), caseMap, nameSurface, cleanHeadline, whatOf: MEMO.memo('whatOf', whatOf), recaseName, DENIAL, ROLE, WRONGDOING, MAJOR, REPORTED, reported,
-  saidIn, says: saysIt, HOAX, POST_CLAIM, statesClaim, reportedClaim, denialClause, capLine, sentenceLine,
+  saidIn, says: saysIt, withoutSpeech, onlooker, rumoured, ANSWERED, coupleQuits, HOAX, POST_CLAIM, statesClaim, reportedClaim, denialClause, capLine, sentenceLine,
   // (collector only: whose a death or an arrest is, read from the headline itself)
-  whoseDeath, ownRelation, spanAfter, actsBefore, LIVING, RELATION_HER, RELATION_HIS, onlyReaction, REACTION_SAID };
+  whoseDeath, ownRelation, spanAfter, actsBefore, PERSONAL, LIVING, RELATION_HER, RELATION_HIS, onlyReaction, REACTION_SAID };
