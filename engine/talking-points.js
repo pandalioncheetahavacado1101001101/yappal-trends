@@ -604,9 +604,15 @@ function whoOf(c, ev, subject, kind, lex, roster = null) {
   // (and a company's or its boss's dispute is business news, weighed like politics: "Sam Altman splits with Anthropic over AI regulation")
   const business = own.length >= 4 && count(BUSINESS) >= OFFICE_SHARE * own.length;
   // (a company is no creator, whichever board argues about it: "OpenAI safety leader quits ..." is business news)
-  const corporate = business && !listed && !TN.personLike(subject, lex);
-  const creator = !corporate && (TC.CREATOR_ROLE.test(subject) || ev.creatorSub || !!c.creator || c.related.some((q) => TC.CREATOR_ROLE.test(q)) || listed ||
-    (called >= CREATOR_CALLED_MIN && called >= CREATOR_SHARE * own.length));
+  // (nor is a company's stock anybody, however a Title Case headline capitalises it: "<Company> Stock leak" read as a person's drama.
+  // A stock's row once filled page one as a celebrity's leak)
+  const corporate = (business && !listed && !TN.personLike(subject, lex)) || stockName(subject, own);
+  // (a creator only by a board's post, never called one, listed or searched as one, is the person their own headlines and their page
+  // say: a royal family's member or an actress a snark board follows is a celebrity. A royal's row once led page one as a
+  // creators' story)
+  const boardOnly = !TC.CREATOR_ROLE.test(subject) && !listed && !c.related.some((q) => TC.CREATOR_ROLE.test(q)) && called === 0;
+  const creator = !corporate && !(boardOnly && knownOtherwise(subject, own, c.wiki)) && (TC.CREATOR_ROLE.test(subject) || ev.creatorSub || !!c.creator ||
+    c.related.some((q) => TC.CREATOR_ROLE.test(q)) || listed || (called >= CREATOR_CALLED_MIN && called >= CREATOR_SHARE * own.length));
   const first = subject.split(' ')[0];
   const roleLed = own.filter((r) => { const ws = words(r.title); const at = ws.indexOf(first); return at > 0 && TN.ROLE.has(ws[at - 1]); }).length >= ROLE_LED_MIN;
   // (a person, never an institution or a case the lexicon lists like a name: "Cornell 7", "Madonna University", "RAF Fairford incident")
@@ -628,6 +634,48 @@ function whoOf(c, ev, subject, kind, lex, roster = null) {
   return { person, tier };
 }
 const CREATOR_CALLED_MIN = 2;
+// a stock or its shares, by its name ("<company> stock") or by the exchange ticker its own headlines print right after it ("<Company> (NASDAQ:XYZ)")
+const STOCK_TAIL = /\s(?:stocks?|shares)$/;
+const TICKER_AFTER = '\\s*\\((?:nasdaq|nyse|nyse american|amex|otc|lse|tsx|tsxv|asx)\\s*:\\s*[a-z.]{1,6}\\)';
+/** Whether a name is a company's stock: "<word> stock" whose first word is no given name, or one whose own headlines print an exchange ticker right after its first word. */
+function stockName(subject, own) {
+  const first = subject.split(' ')[0];
+  if (W.isFirstName(first)) return false;
+  if (STOCK_TAIL.test(subject)) return true;
+  const ticker = new RegExp(`(?<![\\p{L}\\p{N}])${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${TICKER_AFTER}`, 'iu');
+  return own.some((r) => ticker.test(String(r.title || '')));
+}
+// what a person is besides a creator: a royal family's member (their page says so, or ROYAL_SAID_MIN of their own headlines and
+// ROYAL_SAID_SHARE of them say the family's words), a page that gives another public role and no creator's, or another trade's word
+// right before the name in ROLE_LED_MIN headlines ("actress <name>", never "TikTok star <name>")
+const ROYAL_SAID = /\b(?:royals?|royal family|duchess|duke|sussex|palace|prince|princess|king charles|monarchy)\b/i;
+const ROYAL_DESC = /\b(?:royal family|royal|duchess|duke|prince|princess|queen consort|monarch)\b/i;
+const OTHER_DESC = /\b(?:actor|actress|singer|rapper|musician|comedian|presenter|dancer|songwriter|band)\b/i;
+const CREATOR_DESC = /\b(?:streamer|youtuber|tiktoker|influencer|internet personality|internet celebrity|social media personality|online personality|content creator|vlogger|podcaster|twitch|kick|onlyfans)\b/i;
+const OTHER_ROLE = new Set(['rapper', 'singer', 'actor', 'actress', 'comedian', 'musician', 'presenter', 'player', 'coach', 'director', 'producer', 'model']);
+const PLATFORM_WORD = /^(?:tiktok|youtube|twitch|kick|instagram|onlyfans|snapchat|social|internet|online)$/;
+const ROYAL_SAID_MIN = 3;
+const ROYAL_SAID_SHARE = 0.2;
+// (or named as a royal's other half or by a royal title of their own in ROYAL_PAIR_MIN headlines: "<Prince> <Given> and <name>", "<name> and
+// <Prince> <Given>", "<Duchess> <name>", "<name>, <Duchess> of ...". A royal's own headlines can say the family's
+// words in only a few of them and still pair the name with a royal title)
+const ROYAL_TITLE = '(?:prince|princess|king|queen|duke|duchess)';
+const ROYAL_PAIR_MIN = 2;
+function royalPair(subject) {
+  const name = subject.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`)).join('\\s+');
+  const free = (re) => `(?<![\\p{L}])${re}(?![\\p{L}])`;
+  return new RegExp([`${ROYAL_TITLE}\\s+[\\p{L}'’-]+\\s*(?:,|and|&)\\s*${free(name)}`, `${free(name)}\\s*(?:,|and|&)\\s*${ROYAL_TITLE}\\s+\\p{L}`,
+    `${ROYAL_TITLE}\\s+${free(name)}`, `${free(name)},?\\s+(?:the\\s+)?${ROYAL_TITLE}\\s+of\\b`].join('|'), 'iu');
+}
+function knownOtherwise(subject, own, wiki = []) {
+  if (wiki.some((w) => { const d = String(w.desc || ''); return !CREATOR_DESC.test(d) && (ROYAL_DESC.test(d) || OTHER_DESC.test(d) || R.ATHLETE.test(d)); })) return true;
+  const royal = own.filter((r) => ROYAL_SAID.test(String(r.title || ''))).length;
+  if (royal >= ROYAL_SAID_MIN && royal >= ROYAL_SAID_SHARE * own.length) return true;
+  const pair = royalPair(subject);
+  if (own.filter((r) => pair.test(String(r.title || ''))).length >= ROYAL_PAIR_MIN) return true;
+  const first = subject.split(' ')[0];
+  return own.filter((r) => { const ws = words(r.title); const at = ws.indexOf(first); return at > 0 && OTHER_ROLE.has(ws[at - 1]) && !(at > 1 && PLATFORM_WORD.test(ws[at - 2])); }).length >= ROLE_LED_MIN;
+}
 const ROYAL = /^(?:prince|princess|king|queen|duke|duchess) \S/;
 const NOT_A_PERSON = /\d|\b(?:university|college|school|academy|institute|incident|police|department|airlines?|airways|airport|church|court|company|corp|inc|group|foundation|council|committee|association|league|club|fc|united|city|county|state|base|raf|hospital|festival|awards?|election|recall|movie|film|show|series|protests?|riots?)\b/;
 const CREATOR_SHARE = 0.15;
@@ -736,8 +784,11 @@ function heatOf(c, ev, noun, now, extra = {}) {
   const creatorsWorld = ev.creatorSub || c.related.some((q) => CREATOR_REL.test(q)) || ev.press.filter((r) => TC.CREATOR_PRESS.test(r.outlet || '')).length >= CREATOR_PRESS_MIN;
   // (and a name only the drama headlines gave, that no outlet the audience reads, no creators' subreddit and no upload carries, is
   // another region's story whatever its outlets are called: "Surat influencer Simran Patel arrested ...")
-  const unknownAtHome = c.from === 'drama' && !creatorsWorld && ev.youtube === 0 && !ev.press.some((r) => !r.blocked && (R.ENT_PUBLISHER.test(r.outlet || '') || TN.MAJOR.test(r.outlet || '')));
-  const regional = (ev.press.length >= 5 && blocked >= share * ev.press.length && usVolume < 50000 && !creatorsWorld) || unknownAtHome ? REGIONAL_MULT : 1;
+  // (never one the drama step tied to the audiences' world: the creators' roster, a headline that places it at home or on Twitch or Kick,
+  // a home outlet or board post that prints it, talk-candidates.js `home`. Collector only, 2026-10-29: a headline that placed a
+  // creator at home ("<city> influencer <name> ...") told only by far-region outlets was flagged another region's story and fell under the cut)
+  const unknownAtHome = c.from === 'drama' && !c.home && !creatorsWorld && ev.youtube === 0 && !ev.press.some((r) => !r.blocked && (R.ENT_PUBLISHER.test(r.outlet || '') || TN.MAJOR.test(r.outlet || '')));
+  const regional = (ev.press.length >= 5 && blocked >= share * ev.press.length && usVolume < 50000 && !creatorsWorld && !(c.from === 'drama' && c.home)) || unknownAtHome ? REGIONAL_MULT : 1;
   // British and Irish press only, and no search at home: regional to an audience outside Britain (the moments sink these too)
   const named = ev.press.filter((r) => !r.blocked && !r.youtube && !R.REHOST.test(r.outlet || ''));
   const uk = named.filter((r) => R.UK_OUTLET.test(r.outlet || '')).length;
@@ -1043,7 +1094,11 @@ function pointOf(c, ctx) {
   // (only while its headlines are few: a name in the news all week has nouns of its own, and one headline's word is no story of a
   // week of many headlines)
   // (a searched person no drama headline or creator's beat names is named this way by a death alone: one headline's claim is no title)
-  if ((!noun0 || !noun0.f) && leadable && titles.length <= LEAD_ROWS_MAX) noun0 = leadNoun(ev, near, now, dramaName || ev.rows.some((r) => TC.calledCreator(r.title, near)) ? LEAD_FAMS : LEAD_DEATH) || noun0;
+  // (and over a noun only its searches type, no headline of it says, for a drama name: a typed "<creator> <other noun>" the day its own
+  // headline says a cease-and-desist would leave the card no line and no row. Collector only, 2026-10-29: a drama name found early was
+  // searched early, and its completions' noun took the row away)
+  const typedOnly = !!noun0 && !!noun0.f && noun0.count === 0 && dramaName;
+  if ((!noun0 || !noun0.f || typedOnly) && leadable && titles.length <= LEAD_ROWS_MAX) noun0 = leadNoun(ev, near, now, dramaName || ev.rows.some((r) => TC.calledCreator(r.title, near)) ? LEAD_FAMS : LEAD_DEATH) || noun0;
   // (a cease-and-desist sent over claims about the name is the claims' story, the letter its answer: "<name> sends cease-and-desist to
   // ex-friend over videos accusing him", told as "<name> allegations" once two of its newest headlines say the claims are about it)
   if (noun0 && noun0.f && noun0.f.key === 'desist' && dramaName) {
@@ -2225,7 +2280,8 @@ function build(ctx) {
   const extra = new Set([...under.filter((p) => p.out.tier === 'creator'), ...under.filter((p) => p.out.tier !== 'creator')].slice(0, DRAMA_EXTRA));
   const listed = [...all.slice(0, LIST_MAX), ...under.filter((p) => extra.has(p))];
   // (every card's line printed the card's way: curly quotes, "and" for "&")
-  return listed.map((p) => ({ ...p.out, what: p.out.what ? TL.tidyLine(p.out.what) : p.out.what,
+  // (and never a clause's own stop before the line's: "... in her apartment;." ends "... in her apartment.". Collector only, 2026-10-29)
+  return listed.map((p) => ({ ...p.out, what: p.out.what ? TL.tidyLine(p.out.what).replace(/\s*[;:,]\s*([.!?])$/, '$1') : p.out.what,
     ...(p.out.latest ? { latest: { ...p.out.latest, text: TL.tidyLine(p.out.latest.text) } } : {}) }));
 }
 
@@ -2256,7 +2312,8 @@ const DRAMA_EXTRA_HEAT = 12; // (a small creators' story still has its row under
  */
 function recentNames(ctx) {
   const items = hayed(ctx.items);
-  const cands = candidates({ ...ctx, items });
+  // (never a `late` drama name: searched once it lists, talk-candidates.js lookupNames. Collector only, 2026-10-29)
+  const cands = candidates({ ...ctx, items }).filter((c) => !c.late);
   // (and a person trending for the first time today: the last two days are the whole story, "andrew mountbatten-windsor")
   return [...cands.filter((c) => c.fresh).slice(0, RECENT_FRESH),
     ...cands.filter((c) => c.related.some((q) => CREATOR_REL.test(q)) || c.reddit.some((r) => r.sub === 'livestreamfail' || r.sub === 'youtubedrama')).slice(0, RECENT_NAMES)]
@@ -2279,4 +2336,6 @@ const MEME_LOOKUP_MAX = 6;
 module.exports = { build, lists, nativePair, postNoun, postLine, leadNoun, candidates, relatedCandidates, lookupNames: lookupNamesAll, dramaLookupNames: (ctx) => TC.dramaLookupNames({ ...ctx, items: hayed(ctx.items) }), recentNames, evidenceOf, pointOf, leadName, wordPoints, momentPoints, crazePoints, crazeTitle, WINDOW_DAYS,
   wikiDaysIndex, wikiCurveOf, momentumOf, makesClaim, quotedRun, hoaxOf, POST_PLAY, POST_HEDGE,
   // (the collector's own rules, held by test/honesty.test.js)
-  arrestStated, arrestGiven, arrestOf, whoseArrest, claimedOf, admissionNoun, eventText, dropKicker, ARREST_OVER };
+  arrestStated, arrestGiven, arrestOf, whoseArrest, claimedOf, admissionNoun, eventText, dropKicker, ARREST_OVER,
+  // (who a name is: a company's stock, a creator only by a board's post, test/page-one.test.js)
+  stockName, knownOtherwise };

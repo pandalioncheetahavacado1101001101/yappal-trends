@@ -81,6 +81,7 @@ const BING = require('./lib/sources/bing');
 const PS = require('./lib/platform-signals');
 const PDESK = require('./lib/platform-desk');
 const SDESK = require('./lib/search-desk');
+const RDESK = require('./lib/release-desk');
 const TTS = require('./lib/sources/tts');
 const ROUNDUPS = require('./lib/sources/roundups');
 const REELS = require('./lib/sources/reels');
@@ -135,7 +136,9 @@ const HOST_NAMES = { 'news.google.com': 'google-news', 'trends.google.com': 'goo
   // (the platform, word and craze sources, M)
   'trendingtiktoksongs.com': 'trending-tiktok-songs', 'later.com': 'later', 'www.ramd.am': 'ramdam', 'creatordb.app': 'creatordb-reels-audio', 'www.shazam.com': 'shazam', 'kworb.net': 'kworb',
   'dumps.wikimedia.org': 'wikipedia-hourly', 'storage.googleapis.com': 'gdelt', 'trends.pinterest.com': 'pinterest-trends', 'rss.marketingtools.apple.com': 'apple-top-free', 'itunes.apple.com': 'apple-photo-video',
-  'apis.roblox.com': 'roblox', 'games.roblox.com': 'roblox-games', 'api.steampowered.com': 'steam' };
+  'apis.roblox.com': 'roblox', 'games.roblox.com': 'roblox-games', 'api.steampowered.com': 'steam',
+  // (the release calendars: lib/release-desk.js)
+  'api.tvmaze.com': 'tvmaze' };
 // (a native row is never "on the page" by where it was put: it sits past the page until the series tags it. lib/native-desk.js)
 const NATIVE_RANK_FROM = 21;
 // every adapter id of the keyless drama sources (L): what IDEAS_SOURCES_OFF names to switch them off, one or all
@@ -341,7 +344,10 @@ async function runCycle(opts) {
     // (and the size step's share of the Wikimedia Action API, freed just before it: the dictionary lookups fill the group's cap)
     let sizeHold = 0;
     try { sizeHold = real ? SIZE.actionShare({ db, now: nowS, agent: B.userAgent(env) }) : 0; } catch (e) { log(`[size] its share was not kept back: ${e.message}`); }
-    const budget = B.createBudget({ cap: opts.offline ? 0 : opts.maxRequests, hosts, now: nowS, off, reserve: { 'news.google.com': THIRD_ROUND_NEWS, ...(sizeHold ? { wikimedia: sizeHold } : {}) } });
+    // (and one Wikimedia request a day for the year's film list, lib/release-desk.js: the rounds fill the group's cap, M6)
+    let filmHold = 0;
+    try { filmHold = off.has('releases') || !(real || opts.replay) ? 0 : RDESK.wikiHold(meta.get('releases', null), nowS, opts.replay ? path.join(opts.replay, String(t)) : null); } catch (e) { log(`[releases] the film page's share was not kept back: ${e.message}`); }
+    const budget = B.createBudget({ cap: opts.offline ? 0 : opts.maxRequests, hosts, now: nowS, off, reserve: { 'news.google.com': THIRD_ROUND_NEWS, ...(sizeHold + filmHold ? { wikimedia: sizeHold + filmHold } : {}) } });
     const skews = [];
     const transport = opts.offline ? null : opts.transport || (opts.replay ? replayTransport(opts.replay, t) : F.netTransport(env));
     const fetchDeadline = started + Math.min(B.FETCH_DEADLINE_SECONDS, opts.deadlineSeconds) * 1000;
@@ -619,6 +625,19 @@ async function runCycle(opts) {
       meta.set('rosterWatch', { cursor: watch.cursor, carried });
       // the trends' size over their lives (D4 `size`): its share kept back from the rounds before, by rank, kept in the state (lib/size/cycle.js)
       budget.release('wikimedia');
+      // the release calendars (lib/release-desk.js): last but for the size step, so they take no request from the rounds; the year's film page
+      // takes the Wikimedia request kept back for it (`wikiHold`), once a day. A replay asks only what its day recorded
+      if (real || opts.replay) {
+        try {
+          const rel = await RDESK.step({ cache: meta.get('releases', null), nowS, wikiLists: TS.wikiTopLists(paths.wiki),
+            send: (requests) => F.send(opts.replay ? RDESK.recordedOnly(requests, path.join(opts.replay, String(t))) : requests, { budget, hosts, clock, deadlineMs: fetchDeadline, transport, ...(opts.replay ? { gap: () => 0 } : {}) }) });
+          meta.set('releases', rel.cache);
+          for (const r of rel.results) {
+            outcome.sent += r.tried; outcome.byHost[r.request.host] = (outcome.byHost[r.request.host] || 0) + r.tried; if (r.status === 200) outcome.ok += 1; putFetch.run(cycle, r.request.id, r.request.host, t, r.status, r.bytes, r.ms); saveHost(r.request.host);
+            if (opts.record) { fs.mkdirSync(path.join(opts.record, String(t)), { recursive: true }); fs.writeFileSync(path.join(opts.record, String(t), encodeURIComponent(r.request.id)), r.text || ''); recorded[r.request.id] = { status: r.status, kind: r.request.kind, host: r.request.host, bytes: r.bytes }; }
+          }
+        } catch (e) { log(`[releases] the calendars were not read, the rows keep what the state held: ${e.message}`); }
+      }
       if (real) {
         try {
           await SIZE.step({ db, now: nowS, agent: B.userAgent(env), log, send: (requests) => F.send(requests, { budget, hosts, clock, deadlineMs: fetchDeadline, transport }),
@@ -722,7 +741,10 @@ async function runCycle(opts) {
     // (what people are searching now that no row tells yet, lib/search-desk.js: a row of its own, after everything else made)
     const searchNews = [...recent, ...[...store.rows.values()].filter((r) => r.fam === 'trends' && Number.isFinite(r.t) && nowMs - r.t < THREAD_BACK_MS).map((r) => ({ t: r.t, title: r.title, outlet: r.publisher || r.label || null }))];
     const resolved = new Map([...store.trends.values()].filter((tr) => tr.headline).map((tr) => [tr.key, tr.headline]));
-    const withSearch = (a) => { const rows = withPlatform(a); try { return SDESK.add(rows, { trends: [...(store.talkTrends || new Map()).values()], resolved, news: searchNews, lookups: store.lookups, t, audience: a }); } catch (e) { log(`[search] ${a}: no rows made: ${e.message}`); return rows; } };
+    // (what comes out in the next days, lib/release-desk.js: before the searches, so a search the calendar's row tells is no row of its own)
+    const releases = off.has('releases') ? null : meta.get('releases', null);
+    const withRelease = (a) => { const rows = withPlatform(a); try { return RDESK.add(rows, { cache: releases, wikiLists: inputs.wikiLists, t, audience: a }); } catch (e) { log(`[releases] ${a}: no rows made: ${e.message}`); return rows; } };
+    const withSearch = (a) => { const rows = withRelease(a); try { return SDESK.add(rows, { trends: [...(store.talkTrends || new Map()).values()], resolved, news: searchNews, lookups: store.lookups, t, audience: a }); } catch (e) { log(`[search] ${a}: no rows made: ${e.message}`); return rows; } };
     const sensed = Object.fromEntries(opts.audiences.map((a) => {
       const rows = withSearch(a);
       if (!SENSE.on(env)) return [a, { rows, notes: [], counts: null }];
@@ -730,6 +752,7 @@ async function runCycle(opts) {
     }));
     const rowsByAudience = Object.fromEntries(opts.audiences.map((a) => [a, sensed[a].rows]));
     for (const n of sensed[opts.audiences.includes('US') ? 'US' : opts.audiences[0]].notes) log(`[sense] "${n.title}": ${n.did}`);
+    try { const c = RDESK.census(releases, rowsByAudience[mainAudience] || []); log(`[releases] ${c.days} schedule days, ${c.films} films, ${c.seasons} shows' seasons held; ${c.rows} rows (${c.tv} TV, ${c.film} film)`); } catch (e) { log(`[releases] not counted: ${e.message}`); }
     for (const r of platformRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || []) log(`[platform] ${r.platform.sub} "${r.title}"${r.platform.status ? ` (${r.platform.status})` : ''}${r.platform.page ? ' [page]' : ''}: ${r.line}`);
     for (const r of nativeRows[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || []) log(`[native] "${r.title}": ${Object.keys(r.meta.native.kinds).join(' + ')} | ${r.line}`);
     const deskNotes = (edited[opts.audiences.includes('US') ? 'US' : opts.audiences[0]] || { notes: [] }).notes;
@@ -794,7 +817,7 @@ async function runCycle(opts) {
     };
     // (and what keeps each row of page one there, from the audience's last layout: the page's tally below, counts only)
     const keptBy = {};
-    const orderOf = (a, rows) => { try { keptBy[a] = new Map(); return DESK.order(rows, { statusOf, startedOf, seriesOf, sink: PSINK.on(env), now: t, keptBy: keptBy[a] }); } catch (e) { log(`[desk] ${a}: order failed, the engine's order stands: ${e.message}`); return rows; } };
+    const orderOf = (a, rows) => { try { keptBy[a] = new Map(); return RDESK.place(DESK.order(rows, { statusOf, startedOf, seriesOf, sink: PSINK.on(env), now: t, keptBy: keptBy[a] }), { log }); } catch (e) { log(`[desk] ${a}: order failed, the engine's order stands: ${e.message}`); return rows; } };
     // (the writer asks for the rows a reader meets first: the page as it will be laid out, not as the engine ranked it)
     const laidOut = Object.fromEntries(Object.entries(rowsByAudience).map(([a, rows]) => [a, orderOf(a, rows)]));
     let lined = { lines: new Map(), casing: new Map(), stats: { asked: 0, calls: 0, passed: 0, failedCheck: 0, unanswered: 0, shown: 0, headlinesChanged: 0, off: null } };

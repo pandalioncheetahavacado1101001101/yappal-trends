@@ -28,9 +28,11 @@ const FAMILIES = [
   { key: 'allegations', w: 1.0, sensitive: 'crime', re: /\b(?:allegations?|alleges|accus(?:es|ed|ing|ation|ations|er|ers)|grooming|groomed|exposed (?:for|by|as)|(?:gets|got|getting|been|being|was|were) exposed(?!\s+(?:to|in|on|at|after|during)\b))\b/i,
     noun: () => 'allegations' },
   // (a suit only weighed or threatened is no lawsuit yet: "Chris Hansen considers legal action against A24" stays a feud)
-  { key: 'lawsuit', w: 0.8, sensitive: 'crime', re: /\b(?:lawsuits?|sues|sued|suing|(?<!(?:considers?|considering|weighs?|weighing|mulls?|mulling|threatens?|threatening|eyes|explores?|exploring|plans?|planning|vows?|could take|may take|might take|seeks?) )legal action|court|trial)\b/i,
+  // (and what a suit costs the one in it: "<name> says she still owes <amount> in legal fees". Collector only, 2026-10-29: a story
+  // of what a suit cost had no noun of its own, so no card)
+  { key: 'lawsuit', w: 0.8, sensitive: 'crime', re: /\b(?:lawsuits?|sues|sued|suing|(?<!(?:considers?|considering|weighs?|weighing|mulls?|mulling|threatens?|threatening|eyes|explores?|exploring|plans?|planning|vows?|could take|may take|might take|seeks?) )legal action|court|trial|legal (?:fees|bills))\b/i,
     // (a court on its own is a case, not a trial: "Prince Andrew court case", the police he took to the High Court)
-    noun: (s) => (/trial/i.test(s) ? 'trial' : /court/i.test(s) ? 'court case' : 'lawsuit') },
+    noun: (s) => (/trial/i.test(s) ? 'trial' : /court/i.test(s) ? 'court case' : /legal/i.test(s) ? 'legal fees' : 'lawsuit') },
   // (a lawyer's letter that demands someone stop is its own step, never a lawsuit: nothing was filed. A cease-and-desist had no family, so
   // its headlines made no card. Collector only, 2026-10-28)
   { key: 'desist', w: 0.8, re: /\b(?:cease[- ]and[- ]desist|cease & desist|c&d letter)s?\b/i, noun: () => 'cease-and-desist' },
@@ -101,7 +103,9 @@ const FAMILIES = [
     noun: () => 'cameo' },
   { key: 'speech', w: 0.8, re: /\b(?:speech|acceptance speech)\b/i, noun: () => 'speech' },
   { key: 'performance', w: 0.7, re: /\b(?:performance|performs|performed|halftime show)\b/i, noun: () => 'performance' },
-  { key: 'flop', w: 1.2, re: /\b(?:flop|flops|flopped|bombs|bombed|box office bomb|lowest opening|worst opening|disappoint\w*)\b/i, noun: () => 'flop' },
+  // (never weapons in a list, or an f-bomb: "threatens to bring guns, bombs and tanks", "drops f-bombs". Collector only, 2026-10-29: a
+  // streamer's threat was titled a flop)
+  { key: 'flop', w: 1.2, re: /\b(?:flop|flops|flopped|(?<![-,]\s?|\b(?:and|or|with|of|truth|f)\s)bombs(?!\s*(?:,|and\b|or\b|&))|bombed|box office bomb|lowest opening|worst opening|disappoint\w*)\b/i, noun: () => 'flop' },
   { key: 'boxoffice', w: 0.5, re: /\b(?:box office|opening weekend|tops the box office)\b/i, noun: () => 'box office' },
   { key: 'ending', w: 0.8, re: /\b(?:ending|finale)\b/i, noun: (s) => (/finale/i.test(s) ? 'finale' : 'ending') },
   { key: 'reveal', w: 0.75, re: /\b(?:reveal|reveals|revealed|unmasked|admits)\b/i, noun: () => 'reveal' },
