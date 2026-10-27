@@ -28,6 +28,9 @@ function world() {
     else gt.push({ keyword: `${w} vantor`, start: listed - 2 * HOUR, volume: 50000 });
   });
   for (let i = 0; i < 4; i++) gt.push({ keyword: `qwertz ${i} gala`, start: S + 10 * HOUR, volume: 20000 });
+  // (what classes X's two entries, both started the day before: one in Google Trends' scope, one a sports search, which is not)
+  gt.push({ keyword: 'pelloran quade', start: S - 2 * HOUR, volume: 50000, categories: [4] });
+  gt.push({ keyword: 'zzyzx', start: S - 3 * HOUR, volume: 200000, categories: [17] });
   trends.push({ id: 'G1', title: 'Glimmerdoo dance', kind: 'word', sub: 'craze', firstSeen: S + 4 * HOUR, listed: S + 5 * HOUR });
   trends.push({ id: 'Q1', title: 'Quillo by Brindle', kind: 'sound', sub: 'sound', firstSeen: S, listed: S + HOUR });
   trends.push({ id: 'P1', title: 'Pelloran Quade feud', kind: 'talk', sub: 'drama', firstSeen: S + 2 * HOUR, listed: S + 3 * HOUR });
@@ -101,13 +104,16 @@ test('three mornings over one cache: the scored day\'s numbers, worked out by ha
   // (under 15 scope entries a day: counts, never a share)
   assert.deepEqual({ ...l.coverage.kym }, { n: 2, covered: 1, first: 0, via: 1, excluded: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 1 } });
   assert.deepEqual({ ...l.coverage.viral50 }, { n: 2, covered: 1, first: 0, via: 1, excluded: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 1 } }, 'charted from 00:00, listed at 01:00: via, as lead calls it late');
-  assert.deepEqual({ ...l.coverage.x }, { n: 2, covered: 1, first: 1, via: 0, excluded: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: null, unseen: null } }, 'the collector does not read X: what it read cannot be said');
+  // X (v4 scope): of the 2 entries in the snapshot's top, Google Trends classes both and only one is in its scope; that one we listed
+  assert.deepEqual({ ...l.coverage.x }, { n: 1, covered: 1, first: 1, via: 0, excluded: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: null, unseen: null }, top: 2, classed: 2 }, 'the collector does not read X: what it read cannot be said');
   // breadth, flow over flow: 20 page-one rows are 19 stories ("Amber Vantor feud" twice is one), all first on page one that day and
   // all shared, over 20 Google Trends scope starts; pooled over the 7 days (one scored day so far, the same numbers)
   assert.deepEqual({ ...l.breadth, pooled: undefined }, { pageStories: 19, newStories: 19, shared: 19, onlyHere: 0, onlyHereConfirmed: 0, stories: 19, gtStarts: 20, ratio: 0.95, status: 'ok', pooled: undefined });
   assert.deepEqual({ ...l.breadth.pooled }, { days: 1, stories: 19, gtStarts: 20, ratio: 0.95, status: 'ok' });
   assert.equal(l.precision.lists.length, 2);
-  for (const p of l.precision.lists) assert.deepEqual({ ...p, mark: undefined }, { mark: undefined, rows: 20, checked: true, live: 18, fading: 2, duplicates: 1, old: 1, gate: false });
+  // (the word and the sound have headlines a day on, so v3's rule and v4's agree here: 18, the two dead stories out)
+  for (const p of l.precision.lists) assert.deepEqual({ ...p, mark: undefined }, { mark: undefined, rows: 20, checked: true, live: 18, liveV3: 18,
+    kinds: { story: { rows: 18, live: 16 }, sound: { rows: 1, live: 1 }, word: { rows: 1, live: 1 } }, fading: 2, duplicates: 1, old: 1, gate: false });
   assert.equal(l.precision.gate, false, 'a duplicate on page one fails the gate');
   assert.deepEqual({ ...l.speed }, { runs: 96, published: 96, failed: 0, lagMedianMinutes: 10, lagP90Minutes: 10, meanAgeMinutes: 17.5, ageCoveredShare: 1, maxGapMinutes: 15, probeN: 96, probeMeanAgeMinutes: 10 });
   assert.deepEqual({ ...l.meets, coverage: undefined }, { lead: false, breadth: false, precision: false, coverage: undefined, speed: false });
@@ -117,7 +123,9 @@ test('three mornings over one cache: the scored day\'s numbers, worked out by ha
   assert.equal(latest.latest.day, D);
   assert.deepEqual({ ...latest.claim }, { consecutiveDays: 0, needed: 14, holds: false });
   assert.equal(latest.matcher.version, 3);
-  assert.equal(latest.spec.version, 3);
+  assert.equal(latest.spec.version, 4);
+  // (precision over the window's checked lists: page-one rows, live by v4's rule and by v3's beside it)
+  assert.deepEqual({ ...latest.rolling.precision }, { checkedDays: 1, gateDays: 0, lists: 2, rows: 40, live: 36, liveV3: 36 });
   // (the rolling window: shares only from minN entries; breadth on the window's stories over its Google Trends starts)
   assert.deepEqual({ ...latest.rolling.coverage.gt }, { days: 1, n: 20, covered: 16, first: 10, share: 0.8, firstShare: 0.625, status: 'ok', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 4 } });
   assert.deepEqual({ ...latest.rolling.coverage.kym }, { days: 1, n: 2, covered: 1, first: 0, share: null, firstShare: null, status: 'insufficient', stages: { listedLate: 0, outside: 0, notListed: 0, readOnly: 0, unseen: 1 } });

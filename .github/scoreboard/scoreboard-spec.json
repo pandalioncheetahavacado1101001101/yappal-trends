@@ -1,6 +1,6 @@
 {
   "name": "yappal-ideas-scoreboard",
-  "version": 3,
+  "version": 4,
   "registered": "2026-10-27",
   "rule": "Pre-registered (ios/IDEAS-SUPER.md 1). Every number on the scoreboard branch is computed by .github/scoreboard/*.js from the values in this file. Each published day carries one hash of this file and of the scoring code (comparators.js, history.js, match.js, metrics.js, ours.js, report.js, stats.js); a change to any value or any of those files changes the hash and restarts the 14-day clock.",
   "audience": "US",
@@ -257,7 +257,11 @@
       "read": "https://getdaytrends.com/united-states/",
       "depth": 50,
       "scope": {
-        "top": 20
+        "top": 20,
+        "classedBy": "gt",
+        "hoursBefore": 72,
+        "hoursAfter": 24,
+        "rule": "an entry of the snapshot top 20 is in scope when the matcher joins it to a Google Trends entry that started between hoursBefore before and hoursAfter after the snapshot and is in Google Trends scope (comparators.gt.scope: its categories and minVolume). An entry Google Trends does not hold, or holds only outside that scope (sports, politics, brands), is not in scope; the day counts the top read and how many were classed (top, classed)"
       },
       "own": null,
       "lead": false,
@@ -330,7 +334,47 @@
       "fromHours": 20,
       "toHours": 28,
       "n24Min": 1,
-      "interestShare": 0.5
+      "interestShare": 0.5,
+      "rule": "kind-aware (v4): a row is live a day on when its own home still carries it. Every kind: not ended by notEndedHours. story: a sample at fromHours-toHours with n24 >= n24Min or interest >= interestShare of its last reading in the 6 h before the list. sound: the story rule, or still on a TikTok chart (an item of chartSources with the sound id, or the scoreboard own Viral 50 read, seen at or after fromHours and first seen by toHours), or its TikTok count read at fromHours-toHours up growthShareADay a day on the last count read at or before the list (within countBeforeHours). word: the story rule, or an item of rankedSources with the row title (folded alike, or title cores the matcher joins) seen at or after fromHours and first seen by toHours, or a sighting of its own (the collector per-source sightings, less notPosts: kinds a list row carries forward) last dated at or after fromHours. A kind no group names is judged as a story. Published per list: live (this rule, the gate), liveV3 (the story rule for every kind, as v3 judged it) and kinds (rows and live of each group)",
+      "kinds": {
+        "story": {
+          "kinds": [
+            "talk",
+            "moment"
+          ]
+        },
+        "sound": {
+          "kinds": [
+            "sound"
+          ],
+          "chartSources": [
+            "tts"
+          ],
+          "viral50": true,
+          "growthShareADay": 0.015,
+          "countBeforeHours": 72
+        },
+        "word": {
+          "kinds": [
+            "word"
+          ],
+          "rankedSources": [
+            "tts",
+            "kworb",
+            "shazam",
+            "apps",
+            "roblox",
+            "pinterest",
+            "typed"
+          ],
+          "notPosts": [
+            "roundup",
+            "apps",
+            "games",
+            "wikt"
+          ]
+        }
+      }
     },
     "fading": "status fading on a measured series in the archived row",
     "duplicate": "a page-one row the matcher joins to a row ranked above it",

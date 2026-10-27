@@ -12,16 +12,17 @@ const S = require('../stats');
 const H = require('../history');
 const spec = require('../scoreboard-spec.json');
 
-// The spec and the scoring code as registered on 2026-10-27 (spec version 3: coverage's misses by stage, the searches the collector
-// tied to a trend read as its aliases, Know Your Meme's alternate titles; version 2 was e59adec9a786; the first v3 record, 12a32ff4b3cd, quoted a real name in match.js's
-// alternates comment, now an invented one). A change to any value of the spec or any line of
+// The spec and the scoring code as registered on 2026-10-27 (spec version 4: precision's live is kind-aware, a sound by a TikTok
+// chart or its growing count, a word by a ranking list or a new sighting of its own, a story as before, with v3's rule published
+// beside it as liveV3; X's scope is its top 20 as Google Trends classes them. Version 3 was 4b9feb14a703 and never scored a day;
+// version 2 was e59adec9a786). A change to any value of the spec or any line of
 // comparators, history, match, metrics, ours, report or stats .js changes this hash and restarts the 14-day clock (ios/IDEAS-SUPER.md
 // 1): update it here only on purpose, with the reason in the commit.
-const REGISTERED = '4b9feb14a703';
+const REGISTERED = '012e34e60c54';
 
 test('the spec and the scoring code are the ones registered: the hash, the minimum n, the matcher threshold, the list depth, the scoring lag', () => {
   assert.equal(R.specHash(spec, R.scoringCode()), REGISTERED);
-  assert.equal(spec.version, 3);
+  assert.equal(spec.version, 4);
   assert.equal(spec.minN, 15);
   assert.equal(spec.matcher.jaccardMin, 0.6);
   assert.equal(spec.ours.listDepth, 80);

@@ -12,7 +12,11 @@
  *   reads      what our own read of a comparator showed whether or not anything was made of it: Google Trends, the store's Trends rows
  *              of the audience's country (talkTrends, by folded keyword); Know Your Meme and the Viral 50 as their sightings
  *   lists      the archived US lists (09:00 and 18:00 US time), whole
- *   series     a trend's samples between two instants (precision and breadth read them)
+ *   series     a trend's samples between two instants (precision and breadth read them): its interest, headlines, outlets and the
+ *              TikTok count the collector read for it (tt_videos: a sound's chart or page count, a hashtag's)
+ *   seen       each trend's per-source sightings as the collector keeps them (info.seen: { kind: { first, last } }, epoch s)
+ *   ranked     the items of the ranking lists the collector reads (spec precision.live.kinds: platform_items of those sources), each
+ *              with the sound id or the title it is listed by and when the collector first and last saw it on that list
  * Everything returned is per trend and stays in memory: none of it is ever printed, written or cached.
  */
 const fs = require('node:fs');
@@ -29,6 +33,32 @@ const NOT_OWN_READ = 4 | RESEEDED_FLAG;
 const parse = (text, fallback) => { try { return text ? JSON.parse(text) : fallback; } catch { return fallback; } };
 const urlKey = (u) => String(u || '').replace(/[?#].*$/, '').replace(/\/$/, '');
 const hasTable = (db, name) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+const hasColumn = (db, table, column) => hasTable(db, table) && db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+
+/** A trend's per-source sightings as the collector keeps them (info.seen), only the well-formed ones: { kind: { first, last } }. */
+function seenOf(seen) {
+  const out = {};
+  for (const [k, v] of Object.entries(seen && typeof seen === 'object' ? seen : {})) if (v && Number.isFinite(v.first) && Number.isFinite(v.last)) out[k] = { first: v.first, last: v.last };
+  return out;
+}
+
+/**
+ * The items of the ranking lists the collector reads (spec precision.live.kinds sound.chartSources and word.rankedSources), as
+ * [{ source, id (a TikTok chart's sound id, else null), title (what the list names it by: a completion's term, else the item's
+ * title), first, last (epoch s: when the collector first and last saw it on that list) }]. [] for a state without the table.
+ */
+function rankedItems(db, spec) {
+  const kinds = spec.precision.live.kinds || {};
+  const sources = [...new Set([...((kinds.sound && kinds.sound.chartSources) || []), ...((kinds.word && kinds.word.rankedSources) || [])])];
+  if (!sources.length || !hasTable(db, 'platform_items')) return [];
+  const rows = db.prepare(`SELECT source, key, title, who, data, first_seen, last_seen FROM platform_items WHERE source IN (${sources.map(() => '?').join(', ')})`).all(...sources);
+  return rows.map((r) => {
+    const d = parse(r.data, {}) || {};
+    const id = /^\d{5,25}$/.test(String(d.id || '')) ? String(d.id) : null;
+    const title = typeof d.term === 'string' && d.term.trim() ? d.term : r.title || null;
+    return { source: r.source, id, title, first: r.first_seen, last: r.last_seen };
+  }).filter((x) => Number.isFinite(x.first) && Number.isFinite(x.last) && (x.id || x.title));
+}
 
 /** The archived lists of an audience: [{ name ("2026-10-11-0900"), day ("2026-10-11", US time), mark ("0900"), t (built), items }], oldest first. */
 function readLists(archiveDir, audience, marks) {
@@ -97,7 +127,7 @@ const firstRanked = (fromSamples, column) => (Number.isFinite(fromSamples) ? Mat
 /**
  * Opens a state folder read-only. feedItems: the published US list's rows (v1/us.json items), for the people it names; optional.
  * Returns { firstCycleAt, coldEnd, lastSampleAt, trends: Map(id -> trend), lists, sightings: { gt: Map(trend id -> s), kym: Map(address
- * -> s), viral50: Map(sound id -> s) }, series(id, from, to), close() }.
+ * -> s), viral50: Map(sound id -> s) }, ranked: [{ source, id, title, first, last }], series(id, from, to), close() }.
  */
 function readState(stateDir, spec, { feedItems = [] } = {}) {
   const audience = spec.audience;
@@ -119,7 +149,7 @@ function readState(stateDir, spec, { feedItems = [] } = {}) {
     trends.set(r.id, { id: r.id, kind: r.kind, sub: r.sub, titles: [r.title].filter(Boolean), aliases: Array.isArray(info.keys) ? [...info.keys] : [], searched, people: [], tags: [],
       subject: typeof info.name === 'string' ? info.name : null,
       listed: firstRanked(listedAt.get(r.id), parse(r.first_listed_at, {})[audience]), firstPage: firstRanked(pagedAt.get(r.id), parse(r.first_page_at, {})[audience]),
-      firstSeen: r.first_seen, endedAt: r.ended_at, reseeded: !!info.reseeded, cold: r.first_seen <= coldEnd });
+      firstSeen: r.first_seen, endedAt: r.ended_at, reseeded: !!info.reseeded, cold: r.first_seen <= coldEnd, seen: seenOf(info.seen) });
   }
   for (const r of db.prepare('SELECT key, trend_id FROM aliases').all()) { const tr = trends.get(r.trend_id); if (tr) tr.aliases.push(r.key); }
   for (const r of db.prepare('SELECT DISTINCT trend_id, title FROM texts WHERE title IS NOT NULL').all()) { const tr = trends.get(r.trend_id); if (tr && !tr.titles.includes(r.title)) tr.titles.push(r.title); }
@@ -146,12 +176,15 @@ function readState(stateDir, spec, { feedItems = [] } = {}) {
   const kym = kymSightings(null, store);
   const reads = { gt: gtReads(store, audience), kym: new Set(kym.keys()), viral50: new Set(viral50.keys()) };
 
-  const seriesStmt = db.prepare(`SELECT t, interest, n24, outlets FROM samples WHERE trend_id = ? AND t >= ? AND t <= ? AND (COALESCE(flags, 0) & ${RESEEDED_FLAG}) = 0 ORDER BY t`);
+  // (a state older than the TikTok count column reads it as null)
+  const count = hasColumn(db, 'samples', 'tt_videos') ? 'tt_videos' : 'NULL AS tt_videos';
+  const seriesStmt = db.prepare(`SELECT t, interest, n24, outlets, ${count} FROM samples WHERE trend_id = ? AND t >= ? AND t <= ? AND (COALESCE(flags, 0) & ${RESEEDED_FLAG}) = 0 ORDER BY t`);
+  const listItems = rankedItems(db, spec);
   return {
-    firstCycleAt, reseedAt, coldEnd, lastSampleAt, trends, lists, sightings: { gt, kym, viral50 }, reads,
+    firstCycleAt, reseedAt, coldEnd, lastSampleAt, trends, lists, sightings: { gt, kym, viral50 }, reads, ranked: listItems,
     series: (id, from, to) => seriesStmt.all(id, from, to),
     close: () => db.close(),
   };
 }
 
-module.exports = { readState, readLists, kymSightings, gtReads, searchNames, urlKey, firstRanked };
+module.exports = { readState, readLists, kymSightings, gtReads, searchNames, urlKey, firstRanked, seenOf, rankedItems };

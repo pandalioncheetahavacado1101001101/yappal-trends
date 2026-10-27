@@ -15,12 +15,14 @@ const iso = (s) => new Date(s * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
 
 /**
  * Writes a state folder. trends: [{ id, kind, sub, title, firstSeen, listed, rank (at its first listing: 10 unless given), ended,
- * aliases, info }]; samples: [{ id, t, sv_us, interest, n24, outlets, r_us, flags }]; lists: [{ name ("2026-10-17-0900"), t, items }];
- * kym: [{ url, seenFirst (s) }]; viral: [{ id, firstSeen }] (platform_items, optional); talkTrends: the store's Trends rows (optional). As the collector does, a trend's first listing
+ * aliases, info }]; samples: [{ id, t, sv_us, interest, n24, outlets, r_us, flags, tt_videos }]; lists: [{ name ("2026-10-17-0900"), t, items }];
+ * kym: [{ url, seenFirst (s) }]; viral: [{ id, firstSeen }] (platform_items, optional); platform: [{ source, key, title, who, data,
+ * firstSeen, lastSeen }] (more platform_items, optional); noCount: a samples table without tt_videos (a state older than it);
+ * talkTrends: the store's Trends rows (optional). As the collector does, a trend's first listing
  * is a sample ranking it (r_us) at `listed`, and every archived list's row a sample ranking it at the list's time; first_listed_at and
  * first_page_at are the first of those ranked at all and ranked 1 to 20.
  */
-function writeState({ firstCycleAt, trends = [], samples = [], lists = [], kym = [], viral = null, meta = {}, talkTrends = null }) {
+function writeState({ firstCycleAt, trends = [], samples = [], lists = [], kym = [], viral = null, platform = null, noCount = false, meta = {}, talkTrends = null }) {
   const dir = tmp('state');
   fs.mkdirSync(path.join(dir, 'engine'), { recursive: true });
   const db = new DatabaseSync(path.join(dir, 'collector.db'));
@@ -28,7 +30,7 @@ function writeState({ firstCycleAt, trends = [], samples = [], lists = [], kym =
     CREATE TABLE trends (id TEXT PRIMARY KEY, natural_key TEXT, kind TEXT, sub TEXT, first_seen INTEGER, ended_at INTEGER, first_listed_at TEXT, first_page_at TEXT, title TEXT, info TEXT);
     CREATE TABLE aliases (key TEXT PRIMARY KEY, trend_id TEXT NOT NULL);
     CREATE TABLE texts (trend_id TEXT, t INTEGER, title TEXT, line TEXT, PRIMARY KEY (trend_id, t));
-    CREATE TABLE samples (trend_id TEXT, t INTEGER, res INTEGER, sv_us INTEGER, interest REAL, n24 INTEGER, outlets INTEGER, r_us INTEGER, flags INTEGER, PRIMARY KEY (trend_id, t, res));`);
+    CREATE TABLE samples (trend_id TEXT, t INTEGER, res INTEGER, sv_us INTEGER, interest REAL, n24 INTEGER, outlets INTEGER, r_us INTEGER, flags INTEGER${noCount ? '' : ', tt_videos INTEGER'}, PRIMARY KEY (trend_id, t, res));`);
   db.prepare('INSERT INTO meta VALUES (?, ?)').run('firstCycleAt', JSON.stringify(firstCycleAt));
   for (const [k, v] of Object.entries(meta)) db.prepare('INSERT INTO meta VALUES (?, ?)').run(k, JSON.stringify(v));
   // (the ranked samples the collector writes when it lists a trend, then the given ones; at one instant the given values win)
@@ -50,11 +52,12 @@ function writeState({ firstCycleAt, trends = [], samples = [], lists = [], kym =
       JSON.stringify(paged !== null ? { US: paged } : {}), t.title, JSON.stringify(t.info || {}));
     for (const a of t.aliases || []) db.prepare('INSERT INTO aliases VALUES (?, ?)').run(a, t.id);
   }
-  const ps = db.prepare('INSERT INTO samples VALUES (?, ?, 900, ?, ?, ?, ?, ?, ?)');
-  for (const s of merged.values()) ps.run(s.id, s.t, s.sv_us ?? null, s.interest ?? null, s.n24 ?? null, s.outlets ?? null, s.r_us ?? null, s.flags ?? 0);
-  if (viral) {
+  const ps = db.prepare(`INSERT INTO samples VALUES (?, ?, 900, ?, ?, ?, ?, ?, ?${noCount ? '' : ', ?'})`);
+  for (const s of merged.values()) ps.run(s.id, s.t, s.sv_us ?? null, s.interest ?? null, s.n24 ?? null, s.outlets ?? null, s.r_us ?? null, s.flags ?? 0, ...(noCount ? [] : [s.tt_videos ?? null]));
+  if (viral || platform) {
     db.exec('CREATE TABLE platform_items (source TEXT, key TEXT, t INTEGER, first_seen INTEGER, last_seen INTEGER, fresh INTEGER, title TEXT, who TEXT, data TEXT, PRIMARY KEY (source, key))');
-    for (const v of viral) db.prepare("INSERT INTO platform_items VALUES ('tts', ?, NULL, ?, ?, 0, NULL, NULL, NULL)").run(`viral:${v.id}`, v.firstSeen, v.firstSeen);
+    for (const v of viral || []) db.prepare("INSERT INTO platform_items VALUES ('tts', ?, NULL, ?, ?, 0, NULL, NULL, NULL)").run(`viral:${v.id}`, v.firstSeen, v.firstSeen);
+    for (const p of platform || []) db.prepare('INSERT INTO platform_items VALUES (?, ?, NULL, ?, ?, 0, ?, ?, ?)').run(p.source, p.key, p.firstSeen, p.lastSeen ?? p.firstSeen, p.title ?? null, p.who ?? null, p.data ? JSON.stringify(p.data) : null);
   }
   db.close();
   for (const l of lists) {

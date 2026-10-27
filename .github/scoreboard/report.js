@@ -23,7 +23,9 @@ const KEYS = new Set(['schema', 'name', 'spec', 'version', 'hash', 'generatedAt'
   'latest', 'rolling', 'from', 'to', 'gateDays', 'checkedDays', 'targets', 'ciLowAbove', 'liveMin', 'duplicatesMax', 'fadingMax',
   'speedMeanAgeMinutes', 'claim', 'consecutiveDays', 'needed', 'holds', 'minN', 'matcher', 'audit', 'audited', 'wrong', 'rate',
   // (coverage's misses by stage, metrics.js coverageOf: counts only)
-  'stages', 'outside', 'notListed', 'readOnly', 'unseen']);
+  'stages', 'outside', 'notListed', 'readOnly', 'unseen',
+  // (v4: precision's kind-aware live beside v3's rule, by kind group; X's scope as classed by Google Trends: counts only)
+  'liveV3', 'kinds', 'story', 'sound', 'word', 'top', 'classed']);
 
 /** Throws unless every key and value of `doc` is aggregate (see above). Returns doc. */
 function assertAggregate(doc, where = 'doc') {
@@ -167,6 +169,13 @@ function stagesOf(rows) {
 }
 const STAGES = ['listedLate', 'outside', 'notListed', 'readOnly', 'unseen'];
 
+/** The checked lists of day lines summed: rows on page one, live (the gate's rule) and liveV3 (v3's rule beside it); a line before v4 has no liveV3 and adds none. */
+function precisionSums(lines) {
+  const ls = lines.flatMap((l) => (l.precision.lists || []).filter((x) => x.checked));
+  const sum = (k) => ls.reduce((a, x) => a + (Number.isFinite(x[k]) ? x[k] : 0), 0);
+  return { lists: ls.length, rows: sum('rows'), live: sum('live'), liveV3: sum('liveV3') };
+}
+
 /** latest.json: the newest line, the rolling window, the targets, the claim, the matcher's audited false-match rate. history gives the pooled 14-day lead. */
 function latestOf({ lines, history, hash, at, spec, audit = null }) {
   const newest = lines[lines.length - 1];
@@ -192,7 +201,7 @@ function latestOf({ lines, history, hash, at, spec, audit = null }) {
     latest: newest,
     rolling: { days: window.length, from: window.length ? window[0].day : null, to: newest.day, lead, coverage,
       breadth: { days: br.length, stories, gtStarts, ratio: brOk ? round(stories / gtStarts, 2) : null, status: brOk ? 'ok' : spec.insufficient },
-      precision: { checkedDays: checked.length, gateDays: checked.filter((l) => l.precision.gate).length },
+      precision: { checkedDays: checked.length, gateDays: checked.filter((l) => l.precision.gate).length, ...precisionSums(checked) },
       speed: { days: sp.length, meanAgeMinutes: round(mean(sp.map((s) => s.meanAgeMinutes)), 1), lagMedianMinutes: round(median(sp.map((s) => s.lagMedianMinutes)), 1) } },
     targets: { lead: t.lead, coverage: t.coverage, breadth: t.breadth, precision: t.precision, speedMeanAgeMinutes: t.speedMeanAgeMinutes },
     claim: { consecutiveDays: claimRun(lines, hash), needed: t.claim.days, holds: claimRun(lines, hash) >= t.claim.days },
@@ -200,7 +209,7 @@ function latestOf({ lines, history, hash, at, spec, audit = null }) {
   return assertAggregate(doc, 'latest');
 }
 
-module.exports = { stagesOf, STAGES, assertAggregate, SCORING_FILES, scoringCode, specHash, pooledLead, pooledBreadth, meetsOf, dayLine, readDays, withLine, claimRun, auditOf, latestOf, KEYS, ENUMS };
+module.exports = { precisionSums, stagesOf, STAGES, assertAggregate, SCORING_FILES, scoringCode, specHash, pooledLead, pooledBreadth, meetsOf, dayLine, readDays, withLine, claimRun, auditOf, latestOf, KEYS, ENUMS };
 
 // node .github/scoreboard/report.js --check <file>...   the guard alone, on files about to be published (exit 1 on anything not aggregate)
 if (require.main === module) {

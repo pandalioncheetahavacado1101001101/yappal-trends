@@ -136,8 +136,34 @@ function scopeOf(c, rows, history, { start, end }, spec) {
     const pick = [day, addDays(day, 1), addDays(day, -1)].find((d) => charts[d]);
     return pick ? charts[pick].slice(0, def.scope.top).map((k) => byKey.get(k)).filter(Boolean).map((r) => ({ ...r, anchor: start })) : null;
   }
-  const snap = (comp.snapshots || []).find((s) => s.t >= start && s.t < end);
-  return snap ? snap.keys.slice(0, def.scope.top).map((k) => byKey.get(k)).filter(Boolean).map((r) => ({ ...r, anchor: snap.t })) : null;
+  const snap = xSnapshot(history, { start, end });
+  return snap ? xClassed(snap, byKey, history, spec).kept.map((r) => ({ ...r, anchor: snap.t })) : null;
+}
+
+/** X's snapshot of the day: the scoreboard's first read inside it, or null. */
+const xSnapshot = (history, { start, end }) => ((history.comparators.x && history.comparators.x.snapshots) || []).find((s) => s.t >= start && s.t < end) || null;
+
+/**
+ * X's top entries of a snapshot classed by Google Trends (spec comparators.x.scope): each joined by the matcher to the Google Trends
+ * entries that started between hoursBefore before and hoursAfter after the snapshot; kept when the joined entry is in Google Trends
+ * scope (its categories and minVolume). Returns { top (entries read in the top), classed (joined to any Google Trends entry), kept }.
+ */
+function xClassed(snap, byKey, history, spec) {
+  const rule = spec.comparators.x.scope;
+  const gtScope = spec.comparators.gt.scope;
+  const top = snap.keys.slice(0, rule.top).map((k) => byKey.get(k)).filter(Boolean);
+  const gt = entriesOf(history, 'gt').filter((e) => Number.isFinite(e.own) && e.own >= snap.t - rule.hoursBefore * HOUR && e.own <= snap.t + rule.hoursAfter * HOUR);
+  const index = M.prepareOurs(gt.map((e) => ({ id: e.key, kind: 'talk', titles: [e.title], aliases: e.related || [], people: [], tags: [], subject: null, listed: null })), spec);
+  const byGt = new Map(gt.map((e) => [e.key, e]));
+  let classed = 0;
+  const kept = top.filter((r) => {
+    const hit = gt.length ? M.matchEntry({ title: r.e.title, related: [], t: snap.t }, 'x', index) : null;
+    const e = hit && byGt.get(hit.id);
+    if (!e) return false;
+    classed += 1;
+    return (e.categories || []).some((k) => gtScope.categories.includes(k)) && (e.volume || 0) >= gtScope.minVolume;
+  });
+  return { top: top.length, classed, kept };
 }
 
 /**
@@ -234,16 +260,85 @@ function breadthOf(lists, matched, ours, history, { start, end }, spec) {
     ratio: ok ? round(counted / gtStarts, 2) : null, status: gtStarts === null ? 'unmeasured' : statusOf(gtStarts, spec) };
 }
 
-/** Whether a page-one row was live a day after the list (spec precision.live), or null when the state does not reach that far. */
-function liveAfter(id, t, ours, live) {
-  if (!ours.lastSampleAt || ours.lastSampleAt < t + live.toHours * HOUR) return null;
-  const tr = ours.trends.get(id);
-  if (!tr) return false;
-  if (tr.endedAt !== null && tr.endedAt !== undefined && tr.endedAt <= t + live.notEndedHours * HOUR) return false;
+/**
+ * The story rule (spec precision.live, v3's for every kind): a sample at fromHours-toHours after the list with an own headline in its
+ * last 24 h (n24Min), or interest at least interestShare of the trend's last reading in the 6 h before the list.
+ */
+function storyLive(id, t, ours, live) {
   const before = ours.series(id, t - 6 * HOUR, t).filter((s) => Number.isFinite(s.interest)).pop();
   const base = before ? before.interest : null;
   return ours.series(id, t + live.fromHours * HOUR, t + live.toHours * HOUR)
     .some((s) => (s.n24 || 0) >= live.n24Min || (base > 0 && Number.isFinite(s.interest) && s.interest >= live.interestShare * base));
+}
+
+/** Whether a list's item was seen on it at a read at or after t + fromHours, having been on it by t + toHours. */
+const listedOn = (item, t, live) => item.last >= t + live.fromHours * HOUR && item.first <= t + live.toHours * HOUR;
+
+/**
+ * A sound still on a TikTok chart a day on (spec precision.live.kinds.sound): an item of a chart the collector reads with the sound's
+ * id, seen at or after t + fromHours; or the scoreboard's own Viral 50 read showing it at or after then (the entry first read by
+ * t + toHours).
+ */
+function soundCharted(soundId, t, ours, viral50, live) {
+  if (!soundId) return false;
+  const rule = live.kinds.sound;
+  if ((ours.ranked || []).some((i) => rule.chartSources.includes(i.source) && i.id === soundId && listedOn(i, t, live))) return true;
+  const e = rule.viral50 && viral50 ? viral50[soundId] : null;
+  return !!e && Number.isFinite(e.lastRead) && Number.isFinite(e.firstRead) && listedOn({ first: e.firstRead, last: e.lastRead }, t, live);
+}
+
+/**
+ * A count that still grows (spec precision.live.kinds.sound.growthShareADay): a TikTok count read at fromHours-toHours after the list
+ * up at least that share a day on the last count read at or before the list (inside countBeforeHours). A count carried forward
+ * unchanged never grows.
+ */
+function countGrows(id, t, ours, live) {
+  const rule = live.kinds.sound;
+  const c0 = ours.series(id, t - rule.countBeforeHours * HOUR, t).filter((s) => Number.isFinite(s.tt_videos) && s.tt_videos > 0).pop();
+  if (!c0) return false;
+  return ours.series(id, t + live.fromHours * HOUR, t + live.toHours * HOUR).some((s) => Number.isFinite(s.tt_videos) && s.tt_videos > c0.tt_videos
+    && (s.tt_videos - c0.tt_videos) / c0.tt_videos >= rule.growthShareADay * ((s.t - c0.t) / DAY));
+}
+
+/**
+ * A word still ranked or used a day on (spec precision.live.kinds.word): an item of a ranking list the collector reads with the row's
+ * title (folded alike, or title cores the matcher joins), seen at or after t + fromHours; or a sighting of its own (the collector's
+ * info.seen, less the kinds a list row carries forward: notPosts) last dated at or after then.
+ */
+function wordLive(x, tr, t, ours, m, live) {
+  const rule = live.kinds.word;
+  if (Object.entries(tr.seen || {}).some(([k, v]) => !rule.notPosts.includes(k) && v.last >= t + live.fromHours * HOUR)) return true;
+  const names = [x.title, tr.subject].filter(Boolean).map((n) => ({ whole: M.fold(n), core: M.coreOf(n, m) }));
+  if (!names.length) return false;
+  return (ours.ranked || []).some((i) => rule.rankedSources.includes(i.source) && i.title && listedOn(i, t, live) && (() => {
+    const whole = M.fold(i.title); const core = M.coreOf(i.title, m);
+    return names.some((n) => n.whole === whole || (n.core.size > 0 && core.size > 0 && M.jaccard(n.core, core) >= m.jaccardMin));
+  })());
+}
+
+/** The kind group a row is judged as (spec precision.live.kinds): story, sound or word; a kind no group names is judged as a story. */
+function kindGroup(kind, live) {
+  for (const g of ['sound', 'word', 'story']) if ((live.kinds[g].kinds || []).includes(kind)) return g;
+  return 'story';
+}
+
+/**
+ * Whether a page-one row was live a day after the list (spec precision.live): { v3 (the story rule for every kind, as v3 judged it),
+ * v4 (kind-aware: a sound on a chart or its count growing, a word still ranked or used, a story as v3; any row live under v3 is live
+ * under v4), group }, or null when the state does not reach that far. x: the archived row (its id, kind, title, sound id).
+ * viral50: the scoreboard's own Viral 50 entries (history), by sound id.
+ */
+function liveAfter(x, t, ours, spec, viral50 = null) {
+  const live = spec.precision.live;
+  if (!ours.lastSampleAt || ours.lastSampleAt < t + live.toHours * HOUR) return null;
+  const tr = ours.trends.get(x.id);
+  const group = kindGroup((tr && tr.kind) || x.kind, live);
+  if (!tr) return { v3: false, v4: false, group };
+  if (tr.endedAt !== null && tr.endedAt !== undefined && tr.endedAt <= t + live.notEndedHours * HOUR) return { v3: false, v4: false, group };
+  const v3 = storyLive(x.id, t, ours, live);
+  if (v3 || group === 'story') return { v3, v4: v3, group };
+  if (group === 'sound') return { v3, v4: soundCharted(x.sound && x.sound.id ? String(x.sound.id) : null, t, ours, viral50, live) || countGrows(x.id, t, ours, live), group };
+  return { v3, v4: wordLive(x, tr, t, ours, spec.matcher, live), group };
 }
 
 /** Rows that repeat a row ranked above them: the same story to the matcher (M.sameStory: the same title folded, or title cores it joins). */
@@ -259,17 +354,25 @@ function duplicatesOf(rows, spec) {
   return dup;
 }
 
-/** Precision for the day: each archived list's page one, checked 24 hours on. */
-function precisionOf(lists, ours, now, spec) {
+/**
+ * Precision for the day: each archived list's page one, checked 24 hours on. live is the kind-aware count (v4, the gate's), liveV3 the
+ * story rule's for every kind (v3's, beside it), kinds the rows and the live of each kind group.
+ */
+function precisionOf(lists, ours, now, spec, viral50 = null) {
   const p = spec.precision;
   const out = [];
   for (const l of lists) {
     const rows = pageOf(l, spec);
-    const checks = rows.map((x) => (now >= l.t + p.live.toHours * HOUR ? liveAfter(x.id, l.t, ours, p.live) : null));
+    const checks = rows.map((x) => (now >= l.t + p.live.toHours * HOUR ? liveAfter(x, l.t, ours, spec, viral50) : null));
     const checked = checks.every((v) => v !== null) && rows.length > 0;
     const old = rows.filter((x) => Date.parse(x.startedAt) / 1000 < l.t - p.oldDays * DAY && x.status !== 'rising' && !x.isEarly).length;
-    const res = { mark: l.mark, rows: rows.length, checked, live: checked ? checks.filter(Boolean).length : null,
-      fading: rows.filter((x) => x.status === 'fading' && x.statusMeasured).length, duplicates: duplicatesOf(rows, spec), old };
+    const kinds = {};
+    for (const g of ['story', 'sound', 'word']) {
+      const of = checks.filter((c, i) => (c ? c.group : kindGroup(rows[i].kind, p.live)) === g);
+      kinds[g] = { rows: of.length, live: checked ? of.filter((c) => c.v4).length : null };
+    }
+    const res = { mark: l.mark, rows: rows.length, checked, live: checked ? checks.filter((c) => c.v4).length : null, liveV3: checked ? checks.filter((c) => c.v3).length : null,
+      kinds, fading: rows.filter((x) => x.status === 'fading' && x.statusMeasured).length, duplicates: duplicatesOf(rows, spec), old };
     const liveMin = p.gate.liveMin - Math.max(0, spec.ours.page - rows.length);
     out.push({ ...res, gate: checked ? res.live >= liveMin && res.duplicates <= p.gate.duplicatesMax && res.fading <= p.gate.fadingMax : null });
   }
@@ -320,13 +423,17 @@ function scoreDay({ day, now, spec, history, ours, ledger = [] }) {
   for (const c of COMPARATORS) {
     const cov = coverageOf(scopeOf(c, matched.get(c), history, bounds, spec), ours, spec, { readable: readByUs(c, { title: '', key: '' }, ours) !== null });
     coverage[c] = cov || { status: 'unmeasured' };
+    // (X's scope as classed: how many of the top were read and how many Google Trends classed, beside the kept n)
+    const snap = c === 'x' && cov ? xSnapshot(history, bounds) : null;
+    if (snap) { const k = xClassed(snap, new Map(matched.get('x').map((r) => [r.key, r])), history, spec); coverage[c] = { ...cov, top: k.top, classed: k.classed }; }
   }
   const lists = ours.lists.filter((l) => l.day === day);
   const breadth = breadthOf(lists, matched, ours, history, bounds, spec) || { status: 'nolists' };
-  const precision = lists.length ? precisionOf(lists, ours, now, spec) : { lists: [], gate: null };
+  const viral50 = history.comparators.viral50 ? history.comparators.viral50.entries || {} : null;
+  const precision = lists.length ? precisionOf(lists, ours, now, spec, viral50) : { lists: [], gate: null };
   const speed = speedOf(ledger, bounds, spec) || { status: 'noledger' };
   const breadthStore = Number.isFinite(breadth.gtStarts) ? { stories: breadth.stories, gtStarts: breadth.gtStarts } : null;
   return { result: { day, lead, coverage, breadth, precision, speed }, store: { lead: leadStore, breadth: breadthStore } };
 }
 
-module.exports = { COMPARATORS, scoreDay, matchHistory, readByUs, leadOf, leadNumbers, scopeOf, coverageOf, storiesOf, breadthOf, precisionOf, duplicatesOf, liveAfter, speedOf, ownTime };
+module.exports = { COMPARATORS, scoreDay, matchHistory, readByUs, leadOf, leadNumbers, scopeOf, coverageOf, storiesOf, breadthOf, precisionOf, duplicatesOf, liveAfter, storyLive, soundCharted, countGrows, wordLive, kindGroup, xClassed, xSnapshot, speedOf, ownTime };
