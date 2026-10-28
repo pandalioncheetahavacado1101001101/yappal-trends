@@ -15,9 +15,12 @@
 #       is anything but "success": the collector failed, exit 3 or more, or the job hit its cap; the cron watchdog restarts the
 #       chain within a slot or two, which is the old cadence and safe, where a chain that went on would send a failing cycle's
 #       full round of requests ten or twelve times an hour with no end), when this run was not started by schedule or dispatch,
-#       when the repository variable IDEAS_CHAIN is "off", or when another run is already queued or in progress (that run
-#       carries the chain). The dispatch itself failing fails this job, so it shows: the next cron run that fires starts the
-#       chain again.
+#       when the repository variable IDEAS_CHAIN is "off", or when another DISPATCHED run is already queued or in progress (that
+#       run carries the chain). A watchdog run (the cron's) or a push run never carries it: a watchdog that finds this run in
+#       progress ends at its gate, and a push run dispatches nothing. (Before 2026-10-28 evening any other run counted: a watchdog
+#       that fired in the seconds before this run's dispatch saw this run and ended at its gate, this run saw the watchdog and
+#       dispatched nothing, and the chain stood for an hour, 13:59Z to 14:55Z on 2026-10-28, until the cron fired again.) The
+#       dispatch itself failing fails this job, so it shows: the next cron run that fires starts the chain again.
 #
 #   .github/scripts/chain.sh align   (the cycle job, after its restores and just before the collector runs; at most 2 minutes)
 #       The collector's slot is the quarter-hour its clock is in (lib/util.js slotOf). With no model to start (ios/IDEAS-SUPER.md
@@ -58,6 +61,14 @@ others() {
     --jq ".[] | select(.databaseId != $ME) | select(.status == \"queued\" or .status == \"in_progress\" or .status == \"waiting\" or .status == \"pending\" or .status == \"requested\") | \"\(.databaseId) \(.event) \(.status)\""
 }
 
+# Of those, the runs that carry a chain: dispatched ones (by the run before them or by hand). A watchdog run ends at its gate when
+# it finds this run, and a push run dispatches nothing, so "next" never stands down for either. Same return code as others().
+carriers() {
+  local list
+  list="$(others)" || return 1
+  printf '%s\n' "$list" | awk '$2 == "workflow_dispatch"'
+}
+
 gate() {
   if [ "${STARTED_BY:-}" != "schedule" ]; then
     echo "started by ${STARTED_BY:-dispatch}: the cycle goes on"
@@ -88,9 +99,9 @@ next() {
     *) echo "started by '${GITHUB_EVENT_NAME:-}': only a run started by schedule or dispatch dispatches the next one"; return 0 ;;
   esac
   if [ "${IDEAS_CHAIN:-}" = "off" ]; then echo "the repository variable IDEAS_CHAIN is off: no run dispatched (the cron goes on)"; return 0; fi
-  list="$(others)"; asked=$?
+  list="$(carriers)"; asked=$?
   if [ "$asked" -ne 0 ]; then echo "GitHub could not be asked for the runs in progress (gh exit $asked): dispatching anyway"; fi
-  if [ -n "$list" ]; then echo "another run is already queued or in progress, it carries the chain:"; echo "$list" | sed 's/^/  run /'; return 0; fi
+  if [ -n "$list" ]; then echo "another dispatched run is already queued or in progress, it carries the chain:"; echo "$list" | sed 's/^/  run /'; return 0; fi
 
   now="${CHAIN_NOW:-$(date +%s)}"
   slot=$(( (now / SLOT_SECONDS + 1) * SLOT_SECONDS ))
@@ -101,9 +112,9 @@ next() {
   if [ "$wait" -gt 0 ]; then
     echo "the next quarter-hour is $slot_at: sleeping $wait s, then dispatching"
     "$SLEEP" "$wait"
-    # (a run started by hand meanwhile carries the chain)
-    list="$(others)" || list=""
-    if [ -n "$list" ]; then echo "a run arrived meanwhile, it carries the chain:"; echo "$list" | sed 's/^/  run /'; return 0; fi
+    # (a run started by hand meanwhile carries the chain; a watchdog that fired meanwhile ends at its gate, so it never does)
+    list="$(carriers)" || list=""
+    if [ -n "$list" ]; then echo "a dispatched run arrived meanwhile, it carries the chain:"; echo "$list" | sed 's/^/  run /'; return 0; fi
   else
     echo "the next quarter-hour ($slot_at) is under $LEAD_SECONDS s away: dispatching at once"
   fi
