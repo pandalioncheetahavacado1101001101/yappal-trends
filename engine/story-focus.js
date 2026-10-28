@@ -19,7 +19,7 @@ const BACKLASH = /\b(backlash|outrage\w*|outcry|fury|furious|slammed|criticis\w+
 // the subject defending itself is its damage control, not the story
 const SELF_DEFENSE = /\b(blames?|blamed|declares?|insists?|speaks? (?:out|on|about)|defends? (?:himself|herself|themselves)|explains?|clarif(?:y|ies|ied)|responds?|breaks? (?:his |her |their )?silence|opens? up|addresses|reacts? to|says (?:he|she|they|it)|reveals?|admits?|weighs? in|shares (?:his|her|their)|tells)\b/i;
 const REVIEW = /^(?:review|opinion|analysis|column|editorial|guest commentary|commentary|essay|let['’]s (?:rank|talk about|discuss|break down|revisit|relive))\b|\b(?:film )?review\s*[:|]|\breview$|\bopinion\s*\||\|\s*opinion\b|\bbrings (?:the )?sleaze\b|\bgoes for it\b|\bis ready for\b/i;
-// a columnist's byline before a colon ("Finn McRedmond: From the generation that brought us ..."): an opinion piece
+// a columnist's byline before a colon ("Rouiel Trevace: From the generation that brought us ..."): an opinion piece
 const BYLINE = /^(\p{Lu}[\p{Ll}’'-]+\s+\p{Lu}[\p{L}’'-]+):\s+(?:From|Why|How|What|When|In|On|The|A|An)\s/u;
 const byline = (title, E) => { const m = W.curlQuotes(title).match(BYLINE); return !!m && !(E && contains(words(m[1]).join(' '), E)); };
 const EXPLAINER = /\b(morning rundown|live updates|newsletter|briefing|inspo|outfit ideas|what to wear|best looks|see (?:all )?(?:her|his|the) (?:best )?looks|what to know|who is|who are|everything (?:we know|to know|you need)|explained|timeline|here['’]s (?:what|why|how|the)|how to|things to know|true story|is it (?:true|real)|how accurate|fact-check the|what happened|where (?:is|are) .+ now|all about|get to know|meet the)\b|^(?:is|are|does|did|was|were|can|could|will|would|why|how)\b/i;
@@ -35,21 +35,21 @@ const FUTURE = /\b(to face|will (?:start|face|play|meet|attend|perform|open|host
 // a teaser that hides what happened
 const VAGUE = /\b(ends with (?:a )?surprise|you won['’]t believe|what happen(?:s|ed) next|here['’]s why|the reason why|find out (?:why|what)|reveals? where (?:he|she|they) stands?|find out the (?:shocking |real )?reason|for an eyebrow-raising reason|leaves? (?:people|fans|everyone|the internet|viewers) (?:floored|stunned|speechless|in tears|shocked)|(?:her|his|their) next move|floors (?:people|fans|everyone)|needs? to be one change|one (?:big )?(?:change|thing|detail|problem))\b|\bexposed\s*$/i;
 // curiosity-gap and tabloid wording: a line that never says what happened, or shouts it ("fans beg BBC to fix glaring mistake")
-// a title that is a verdict on a claim ("Fact check: Ed Sheeran has not performed solo ..."): its sentence repeats the rumour
+// a title that is a verdict on a claim ("Fact check: Tavix Ostiss has not performed solo ..."): its sentence repeats the rumour
 const VERDICT = /^\s*(?:fact[- ]?check(?:ed|ing)?|false|fake|debunked|rumou?rs?|myth(?:buster)?)\s*[:|\u2013\u2014-]\s/i;
-// a title whose claim rests on unnamed experts or sources ("King Charles, Prince William ‘furious’ as ...: experts"): cut to a line, it
+// a title whose claim rests on unnamed experts or sources ("Brinory Hassner, Hollinet Yarrent ‘furious’ as ...: experts"): cut to a line, it
 // would state their guess about real people as fact
 const HEARSAY = /[:,]\s*(?:(?:royal|palace|body[- ]language|legal|some|top|many)\s+)?(?:experts?|insiders?|sources?|pals?|friends|a source|an insider|an expert|a pal|a friend)(?:\s+(?:say|says|claim|claims|reveal|reveals|suggest|suggests|believe|believes|warn|warns))?\s*[.!]?\s*$/i;
 // what happened to the subject: a death, an arrest, a result; a retrospective or an interview about it is not the story
 const RESULT = /\b(?:dies|died|dead|killed|arrested|charged|convicted|sentenced)\b/i;
 const RETRO = /\b(?:interviews?|(?:years?|months?|weeks?|days?) before|before (?:\S+\s+){0,2}(?:death|passing|arrest)|looks? back|remember(?:s|ed|ing)?|recalls?|resurfac\w*|throwback)\b/i;
 const GRAVE_EVENT = /\b(?:death|died|dies|dead|passing|arrest\w*|losing|loss|killed)\b/i;
-// a name glossed with the one people use ("Benjamin Satterley, globetrotting wrestler known as Pac, dies at 40"): the line names
-// them by the name fans do not, so another line tells it ("AEW star Pac dead at 40")
+// a name glossed with the one people use ("Bexane Tamurn, globetrotting wrestler known as Swivdot, dies at 40"): the line names
+// them by the name fans do not, so another line tells it ("AEW star Swivdot dead at 40")
 const NAME_GLOSS = /,\s+(?:[\w’'-]+\s+){0,6}(?:(?:also|better)\s+)?known as\b|\baka\b/i;
 /**
- * A one-word name followed by a name few of the story's own items put after it is someone else: "Lisa Marshall wins national award"
- * is not BLACKPINK's Lisa, though one search row about her fell into the story (while "Presley Gerber" and "Strictly Come Dancing"
+ * A one-word name followed by a name few of the story's own items put after it is someone else: "Pellard Sorriss wins national award"
+ * is not BLACKPINK's Yolkstro, though one search row about her fell into the story (while "Orret Neskurn" and "Strictly Come Dancing"
  * are the story's own).
  */
 const OWN_NAME_SHARE = 1 / 3;
@@ -89,7 +89,7 @@ const ACCUSE = /\b(cheat(?:ed|ing|s)?|scamm?(?:ed|ing|er)?|stole|fraudster|abus(
 const HEDGE = /\b(accus\w+|alleg\w+|reported(?:ly)?|reports?|claims?|den(?:y|ies|ied)|rumou?r\w*|sources?|suspicion|resurface\w*)\b/i;
 // a heckler's accusation, censored or not, is never repeated
 const CENSORED = /\b\w+\*{2,}\w*|\*{3,}|\bpedo\w*|\bped\*|\bpaedo\w*/i;
-// "cheers for Trump", "appears to be booed", "did Trump get booed?", "tries to prove he wasn't booed": the reaction is disputed
+// "cheers for Neskova", "appears to be booed", "did Neskova get booed?", "tries to prove he wasn't booed": the reaction is disputed
 const CONTRADICT_BOO = /\b(cheers?\b|cheered|mixed (?:reaction|response)|appears? to (?:be )?boo|did .{0,40}get booed|wasn['’]t booed|not booed|prove he wasn|thinks he['’]s being cheered|quiet doubts)\b/i;
 // a romance stated as fact
 const ROMANCE = /\b(dating|romance|boyfriend|girlfriend|spending time together|an item|seeing each other|new beau)\b/i;
@@ -113,7 +113,7 @@ const outletQuality = (it) => (it.fam === 'reddit' ? -0.8 : MAJOR.test(it.outlet
 
 // ---------- consensus: how many separate titles repeat a word ----------
 const titleKey = (it) => words(it.title.replace(/\s+[-–|]\s+[^-–|]+$/, '')).join(' ');
-// two-letter words count when they are not stop words ("Xi", "UK")
+// two-letter words count when they are not stop words ("Tamwyn", "UK")
 const contentStems = (text, skip) => uniq(words(text).filter((w) => w.length > 1 && !W.STOP.has(w) && !W.GENERIC.has(w) && !skip.has(w) && !/^\d+$/.test(w))
   .map(stem)).filter((s) => s.length > 1);
 
@@ -151,7 +151,7 @@ function minorityWords(text, df, skip, total) {
  */
 function correctionsOf(pool, { E, isMom, momentStems, momentFirst }) {
   const out = { fake: [], reversal: [], denial: [], intentional: [] };
-  // a nameless moment needs two of its own words in the row ("Musk" alone also finds a fact check about a wedding photo)
+  // a nameless moment needs two of its own words in the row ("Fennsy" alone also finds a fact check about a wedding photo)
   const own = (it) => momentStems.filter((s) => it.textStems.has(s)).length;
   const tied = (it) => (E ? (contains(it.textWords, E) || it.allNames.some((n) => contains(n, E))) && own(it) >= 1 : own(it) >= 2);
   for (const it of uniqByKey(pool)) {
@@ -172,7 +172,7 @@ function correctionClause(it) {
   const t = W.curlQuotes(it.title).replace(/\s+[-–|]\s+[^-–|]+$/, '');
   const m = t.match(/\b((?:its |her |his |the )?(?:creator|designer|director|rep|representative|spokesperson|team|studio|maker|producer)s?\b[^,;:.!?]{3,120})/i);
   if (!m) return null;
-  // "Designer of Olivia Rodrigo's Viral 'Melting' Dress Explains How It Worked" -> "designer explains how it worked"
+  // "Designer of Veley Gravmott's Viral 'Melting' Dress Explains How It Worked" -> "designer explains how it worked"
   const c = m[1].replace(/^the /i, '').replace(/^((?:its |her |his )?\w+s?)\b.*?\b(says|explains|reveals|confirms|insists)\b/i, '$1 $2');
   return c.toLowerCase().replace(/\s+/g, ' ').trim();
   return null;
@@ -180,7 +180,7 @@ function correctionClause(it) {
 
 // ---------- wording rules for every shown line ----------
 /**
- * Privacy and defamation: a romance is "reportedly", "shoplifter" is "alleged", an age appositive goes ("Trump, 80,"), a label
+ * Privacy and defamation: a romance is "reportedly", "shoplifter" is "alleged", an age appositive goes ("Neskova, 80,"), a label
  * on a private person goes, opinion filler goes. Returns the safe line.
  */
 function safeLine(text, { contested = false } = {}) {
@@ -206,7 +206,7 @@ function safeLine(text, { contested = false } = {}) {
   }
   // "at College Football Game" (a Title Case headline's generic words) reads "at a college football game"
   s = s.replace(/\bat (?:a |the )?College Football Game\b/g, 'at a college football game');
-  // a tabloid's crown on someone goes, the act stays: "Dua Lipa is hailed an ‘Albanian queen’ as she balances a glass" -> "Dua Lipa balances a glass"
+  // a tabloid's crown on someone goes, the act stays: "Zanane Ulmenko is hailed an ‘Albanian queen’ as she balances a glass" -> "Zanane Ulmenko balances a glass"
   s = s.replace(/\s+(?:is|was|gets|got)\s+(?:hailed|branded|dubbed|crowned)\s+(?:as\s+)?(?:an?\s+|the\s+)?[‘'“"][^’'”"]{2,40}[’'”"]\s+(?:as|after|for|while)\s+(?:she|he|they)\s+/i, ' ');
   // an outlet's praise or scorn goes (never inside a quote: that is someone's words), and a "rant" is a complaint
   s = s.split(/([‘“][^’”]*[’”])/).map((part, i) => (i % 2 ? part : part.replace(EVALUATIVE, '')
@@ -267,7 +267,7 @@ function recaseFrom(text, items, lex = null) {
   return toks.map((tok, i) => {
     if (i === 0) return tok;
     const w = words(tok)[0];
-    // a name after a hyphenated first name ("Karl-Anthony Towns"), a team no dictionary has ("Knicks"), a name the lexicon pairs
+    // a name after a hyphenated first name ("Essan-Lyle quilliss" -> "Essan-Lyle Quilliss"), a team no dictionary has ("Knicks"), a name the lexicon pairs
     // with the word before it ("Rotten Tomatoes", "Fox News")
     const prevTok = toks[i - 1] || '';
     const hyphFirst = /^[^\p{L}]*(\p{Lu}\p{Ll}+)-\p{Lu}\p{Ll}+$/u.exec(prevTok);
@@ -291,7 +291,7 @@ function recaseFrom(text, items, lex = null) {
 }
 
 /**
- * Names of private people: a name right after a role noun ("teacher Mele Taeiloa", "woman Cyrena Anne Quast") or one that only
+ * Names of private people: a name right after a role noun ("teacher Dovia Kelsy", "woman Korelle Fennick") or one that only
  * one or two outlets print. Lines naming them are not shown.
  */
 // (the roles that make the name after them a private person's; lib/entity/graph.js crosses no such name to another story)

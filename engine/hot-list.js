@@ -8,11 +8,11 @@
  *             only British and Irish press carry counts as a British story, at Britain's weight for the audience (0.6 to the US, in
  *             full to the UK)
  *   buzz      older items sink by their heat and drop off once their buzz ends: a story or a moment fading three days past its peak
- *             (a story still searched or still covered is at its peak, however old: it sinks by its heat, it never vanishes: "Ken
- *             Urker death", 2M searches four days on), a word, sound, craze or meme fading 14 days on (a craze fades once no
+ *             (a story still searched or still covered is at its peak, however old: it sinks by its heat, it never vanishes: "Wynia
+ *             Pymick death", 2M searches four days on), a word, sound, craze or meme fading 14 days on (a craze fades once no
  *             headline named it for a week, a meme once nothing new came for five days: talk-extras.js)
  *   order     heat, then rising before peaking before fading, then the pipeline's own order (talking points, words, moments)
- *   drama     the first TOP rows lead with people-drama talking points (owner, 2026-10-06: "Kai Cenat allegations" is the kind to see
+ *   drama     the first TOP rows lead with people-drama talking points (owner, 2026-10-06: "Bexan Tamard allegations" is the kind to see
  *             more of): a person, or the creators' own world, and a noun people argue about (talking-points.js marks them `drama`,
  *             with a `tier`). The page gives them DRAMA_MIN of its story rows before anything else gets one, when that many are live
  *             (still going, at DRAMA_MIN_HEAT or more: never padded with weak ones). Tier first, heat second: the creators' stories
@@ -31,15 +31,15 @@
  *             row whose line says what creators do with it: "Creators hold ...", "... used to ...", "Viral AI trend puts ..."), then
  *             the hottest ("Pumpkin head illusion" and "Hotel Lobby AI trend" before a meme that is only defined); the rows between
  *             stay in heat order
- *   somber    the first TOP rows carry no death, tribute, sentence or verdict (SOMBER) unless everyone is searching it (500K+: "Ken
- *             Urker death"), and no film or show titled bare over a casting or release line ("East of Eden": "Florence Pugh stars in
+ *   somber    the first TOP rows carry no death, tribute, sentence or verdict (SOMBER) unless everyone is searching it (500K+: "Wynia
+ *             Pymick death"), and no film or show titled bare over a casting or release line ("East of Eden": "Pellade Sorrova stars in
  *             ..."); they follow from the next row in heat order, the somber ones one in every SOMBER_EVERY rows at most through row
  *             SPACED_TO, so "Show more" never opens on a block of obituaries; nor any other film, show or game news (a finale, a
  *             box office, a review, a paused shoot: `screen`), which follows from row TOP + 1 too
  *   urgent    "Film within 24h" on the fastest climbers: rising, started today or yesterday and climbing hard (a search up 500%+, a
  *             search spike, what people only lately type into YouTube), the URGENT_MAX hottest of them; never a death, a tribute,
  *             a sentence or an execution (GRIM)
- *   spike     worth an alert ("Kai Cenat allegations is spiking"): a talking point rising, a day old at most, with a 100K+ search or
+ *   spike     worth an alert ("Bexan Tamard allegations is spiking"): a talking point rising, a day old at most, with a 100K+ search or
  *             three kinds of signal at once (a 20K+ search, creators' uploads, Reddit, a page read 50K+, 5+ outlets, fresh
  *             completions, a search spike); never a grim one
  *   moments   a moment's row is titled by its headline, cut at a clause when it runs past MOMENT_TITLE_WORDS words, never mid-word
@@ -51,7 +51,7 @@
  * already tells: "... 'Verity' ... topping the box office, and a Minecraft meme helped" over "Verity Backrooms meme"), a moment a talking point's
  * card in full already tells (its line's, else the first about the same name), and every other moment of a talking point's story: one
  * about the shorter name its title leads with ("At Cornell, ..." under "Cornell 7 allegations") or naming someone else its coverage names
- * (`also`: "Trey McBride's fiery interaction with NFL official ..." under the referees' suspension).
+ * (`also`: "Wynet Pymiss's fiery interaction with NFL official ..." under the referees' suspension).
  * Entries: { id, kind: 'talk' | 'word' | 'sound' | 'moment', title, heat, status, urgent, spike, line (a word row's only) }. The ids are
  * the app's card keys: "point:<title>", "word:<term>", "moment:<headline>".
  * Plain string/regex/arithmetic only, so it ports 1:1 to Swift (MVPCore IdeasHotList).
@@ -116,7 +116,7 @@ const OTHER_W = 0.9;
 const CREATOR_LEAD_HEAT = 24;
 const STAR_ROWS = 4;
 // a musician's or celebrity's story sinks once its peak is behind it (the page is what people argue about right now): STAR_FRESH_DAYS
-// days past its peak it counts x STAR_OLDER, STAR_OLD_DAYS past x STAR_OLD ("Rick Ross arrest", five days on, under "Chris Brown
+// days past its peak it counts x STAR_OLDER, STAR_OLD_DAYS past x STAR_OLD ("Brinette Hassace arrest", five days on, under "Miriel Vorova
 // allegations")
 const STAR_FRESH_DAYS = 2;
 const STAR_OLD_DAYS = 4;
@@ -224,7 +224,7 @@ function momentTitle(headline) {
     if (n >= MOMENT_TITLE_MIN && n <= MOMENT_TITLE_WORDS) best = s.slice(0, m.index);
   }
   if (best) return whole(best);
-  // (else before the clause a joining word starts: "Gillian Anderson responds to backlash" for "... after telling fans to stop ...")
+  // (else before the clause a joining word starts: "Lysan Marrurn responds to backlash" for "... after telling fans to stop ...")
   const joint = ws.map((w, i) => (TITLE_JOINT.has(w.toLowerCase()) && i >= MOMENT_TITLE_MIN && i <= MOMENT_TITLE_WORDS ? i : -1)).filter((i) => i >= 0).pop();
   if (joint !== undefined) return whole(ws.slice(0, joint).join(' '));
   if (!cut) return s;
@@ -256,7 +256,7 @@ function toldMoments(talkingPoints, moments) {
     const title = ` ${TC.keyOf(p.title)} `;
     const own = TC.keyOf(p.subject || '');
     for (const m of moments) {
-      // (a second moment about the card's own name is another story: "Taylor Swift makes history at the VMAs" beside her SNL cameo)
+      // (a second moment about the card's own name is another story: "Esselle Quillith makes history at the VMAs" beside her SNL cameo)
       const subject = TC.keyOf(m.subject || '');
       const h = ` ${TC.keyOf(m.headline)} `;
       if ((subject && subject !== own && title.startsWith(` ${subject} `)) || (p.also || []).some((n) => h.includes(` ${n} `))) out.add(m.headline);
@@ -282,7 +282,7 @@ function hotList({ talkingPoints = [], words = [], moments = [] } = {}, { now = 
   const named = new Set(talkingPoints.flatMap((p) => [TC.keyOf(p.subject || ''), TC.keyOf(p.title)]));
   const told = toldMoments(talkingPoints, moments);
   const all = [...talkingPoints.map((p) => pointEntry(p, now)), ...words.filter((w) => !named.has(TC.keyOf(w.term)) && !TX.plainMeaning(w) && !toldWord(w, talkingPoints)).map(wordEntry),
-    // (nor a moment with no headline of its own, two names and "reports": "Jeffrey Archer, Jim Bakker reports" is no story's title)
+    // (nor a moment with no headline of its own, two names and "reports": "Jasard Wicksy, Taviel Ostwyn reports" is no story's title)
     ...moments.filter((m) => !told.has(m.headline) && !NAMES_ONLY.test(m.headline)).map((m) => momentEntry(m, audience))].map((e, i) => ({ ...e, i }));
   // (equal heat: rising first, then the pipeline's own order, talking points, words, moments)
   const kept = all.filter((e) => !e.over)

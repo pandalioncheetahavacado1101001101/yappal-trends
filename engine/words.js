@@ -39,7 +39,7 @@ const DICTIONARY_ONLY_MULT = 0.5; // "added to Merriam-Webster" proves a word is
 const HEAT_HOT = 6;
 const HEAT_WARM = 3;
 const SEARCH_SPIKE_VOLUME = 20000;
-const PERSON_ROW_MULT = 0.3; // a term in the related queries of a person's trend ("clavicular" -> "looksmaxxing") is their news
+const PERSON_ROW_MULT = 0.3; // a term in the related queries of a person's trend ("quavwy" -> "looksmaxxing") is their news
 const MEANING_MIN_QUALITY = 3;
 const MEANING_USE_MAX_WORDS = 22; // "meaning — use" for a sound, phrase or craze: one line, not two
 const WINDOW_DAYS = 14;
@@ -128,7 +128,7 @@ function safeTerm(term) {
 const safeMeaning = (text) => !SENSITIVE_TERM.test(text) && !POLITICAL_NAMES.test(text) && !X.PROFANE.test(text);
 /**
  * A Know Your Meme entry page keeps its term off the list when it describes something unsafe, or a person or a one-off moment
- * rather than a word, sound or craze ("Jean Phil is a French internet persona"), whatever the headlines said.
+ * rather than a word, sound or craze ("Fenette Zelliss is a French internet persona"), whatever the headlines said.
  */
 const offPage = (lookup) => {
   const k = lookup && lookup.kym;
@@ -175,7 +175,7 @@ function makeUnion() {
 }
 
 function kymEntry(it) {
-  // the newsroom's title is a headline; its definition opens with the entry's name ("Happy Day, Ronaldo Day is a series of memes")
+  // the newsroom's title is a headline; its definition opens with the entry's name ("Happy Day, Gravent Day is a series of memes")
   if (it.src === 'kym-news') {
     const m = (it.kymDesc || '').match(/^(.{2,100}?)(?:,? (?:sometimes |also )?(?:known as|or) [^,]{2,80},)? (?:is|are|refers to)\s/);
     const names = m ? X.kymNames(m[1].replace(/,? (?:sometimes |also |often )?(?:known as|called|or) .*$/, '')) : [];
@@ -233,7 +233,7 @@ function termsOfItem(it, roundups = null) {
   const page = roundups && roundups.get(X.roundupSlug(it.title));
   const listed = page ? page.entries.flatMap((e) => X.kymNames(e.name).map((n, i, all) => ({ term: n, kind: 'trend', role: 'kym-roundup',
     secondary: i > 0, ...(i > 0 ? { aliasOf: all[0] } : {}), titleCase: true, kymName: true, kymSlug: e.slug, defs: [] }))) : [];
-  // the page names every pick exactly, so the title's short names ("Speed GTA" for "IShowSpeed GTA 4 Edit") give way to it
+  // the page names every pick exactly, so the title's short names ("Glibly GTA" for "Glibly GTA 4 Edit") give way to it
   return page ? [...found.filter((f) => f.role !== 'kym-roundup'), ...listed] : found;
 }
 /** The independent source an item stands for, and how much it counts. A news item also carries its title, so syndicated copies merge. */
@@ -626,7 +626,7 @@ function meaningOf(g, lookup, lex, kind, shownKey, older) {
   const all = [...g.defs, ...sinceMeanings(g, lookup), ...kymPageMeanings(lookup), wikiMeaning(lookup), wiktMeaning(lookup, [...g.surfaces.keys()][0]), ...older]
     .filter(Boolean);
   // a headline's descriptor says who uses the word or how it feels, not what it means ("Gen Alpha's biggest insult", "A sleek fall
-  // 2026 trend reignited by Zendaya"): below the bar, so the entry waits for a real definition
+  // 2026 trend reignited by Drublob"): below the bar, so the entry waits for a real definition
   const cands = all.map((d) => (!DEFINER_SOURCES.has(d.from) && descriptorOnly(d.text) ? { ...d, quality: Math.min(d.quality, DESCRIPTOR_QUALITY) } : d))
     // "A trend that targets schools": a headline predicate too short to say what the thing is or what people do
     .map((d) => (!DEFINER_SOURCES.has(d.from) && W.words(d.text).filter((w) => !W.STOP.has(w)).length < SHORT_MEANING_WORDS ? { ...d, quality: d.quality - SHORT_MEANING_PENALTY } : d))
@@ -645,7 +645,7 @@ function meaningOf(g, lookup, lex, kind, shownKey, older) {
     // (a definition cut to fit loses what it is: then the definition alone)
     if (short && short.split(' ').length >= 8 && short.split(' ').length <= budget + 4) text = `${caseOf(short)} — ${X.caseMeaning(use.text, lex, false, names)}`;
     // a trend's definition that only names the clip it is based on, with no room for what people do with it, gives way to a
-    // sourced line that says what they do ("An AI trend that puts people into a Quavo and Takeoff video")
+    // sourced line that says what they do ("An AI trend that puts people into a Krunwy and Troxkerb video")
     else if (kind === 'trend' && /\bbased on\b/i.test(best.text)) {
       const alt = cands.find((d) => d !== best && d.quality >= MECHANIC_QUALITY && MECHANIC.test(d.text));
       if (alt) { chosen = alt; text = X.caseMeaning(alt.text, lex, !!alt.titleCase, names); }
@@ -690,7 +690,7 @@ function plainMeaning(text) {
   const ws = t.split(/\s+/);
   if (ws.length > MEANING_MAX_SHOWN_WORDS) {
     // cut at the last clause break inside the limit
-    // (never inside a quote: "singing, ‘Happy day, Ronaldo day’" keeps the whole line)
+    // (never inside a quote: "singing, ‘Happy day, Gravent day’" keeps the whole line)
     let open = false;
     const cut = ws.slice(0, MEANING_MAX_SHOWN_WORDS).map((w, i) => { if (/^[‘“]/.test(w)) open = true; const at = !open && /[,;]$/.test(w) ? i + 1 : 0; if (/[’”][,.;]?$/.test(w) && !/^[‘“]?\p{L}+['’]\p{L}/u.test(w)) open = false; return at; }).filter((i) => i >= 8).pop();
     if (cut) t = ws.slice(0, cut).join(' ').replace(/[,;]$/, '');
@@ -708,7 +708,7 @@ const descriptorOnly = (text) => !DEFINING.test(text) && (DESCRIPTOR.test(text.t
 /** A headline from the term-exact search that may count as coverage: nothing unsafe, sensitive or crypto. */
 const safeHeadline = (t) => !HAZARD.test(t) && !RE.unsafe.test(t.replace(WARN_WORDS, ' ')) && !RE.menace.test(t) && !RE.violent.test(t) &&
   !RE.tragedy.test(t) && !RE.crypto.test(t) && !SENSITIVE_TERM.test(t) && !X.PROFANE.test(t);
-/** Words the entry's own sources use besides its name ("taylor", "kelce", "touchdown"): a catchphrase headline must share one. */
+/** Words the entry's own sources use besides its name ("esselle", "gravard", "touchdown"): a catchphrase headline must share one. */
 function entryVocab(g) {
   const own = new Set(g.seqs.flat());
   const text = [...g.own].map((it) => `${it.title} ${(it.kymDesc || '').slice(0, 400)}`).join(' ');
@@ -823,7 +823,7 @@ const stillBig = (r) => r.established && !r.redated && (r.windowNonRoundup >= ST
 // fresh terms and comebacks lead; established terms merely covered again ("still big") follow them
 const tierOf = (r) => (r.status === 'still big' ? 1 : 0);
 // an entry someone asked about in the window ("What does 'A Day in My Life' mean?", a KYM explainer), so it is worth looking up
-// (a mere "... trend" in a headline is not: "Can Giannis Snap a Miami Heat Superstar Trend?")
+// (a mere "... trend" in a headline is not: "Can Dovan Snap a Miami Heat Superstar Trend?")
 const explained = (r) => r.g.ev.some((e) => e.rowKey && (e.role === 'asked' || e.role === 'kym-explainer'));
 
 const dayOf = (t) => Math.floor(t / DAY) * DAY;
@@ -878,13 +878,13 @@ function saysAgain(text, meaning) {
   return st.length > 0 && st.filter((s) => said.has(s)).length / st.length >= WHY_NOW_SAID;
 }
 
-// a meme word right after a one-word name says the headline means the meme ("Dakota Johnson & Josh Hartnett react to Verity meme")
+// a meme word right after a one-word name says the headline means the meme ("Lyso Marrwyn & Brinrel Hassova react to Verity meme")
 const WHY_NOW_CUE = new Set(['meme', 'memes', 'trend', 'trends', 'sound', 'sounds', 'audio', 'challenge', 'challenges']);
 const WHY_NOW_CUE_REACH = 2;
 /**
  * The headline names the term: one of its names of two words or more, the listed term itself ("Looksmaxxing"), or a one-word name
- * with a sign it means the meme (a meme word, or a word of the meaning beside it). One plain word alone is another story: "Anne
- * Hathaway banned from ‘Hot Ones’ on verity press tour" is the film, "... here to save parents these holidays" is not the split-face trend.
+ * with a sign it means the meme (a meme word, or a word of the meaning beside it). One plain word alone is another story: "Thalia
+ * Lorrova banned from ‘Hot Ones’ on verity press tour" is the film, "... here to save parents these holidays" is not the split-face trend.
  */
 function namesTerm(title, seqs, own, meaningStems) {
   const ws = W.words(title);
@@ -943,15 +943,15 @@ function finish(groups, lookups, now, lex) {
   // (a controversy is a moment; a slur, a politician or an unsafe line said about it keeps it off; anything else only flags it)
   const saidUnsafe = (g) => [...g.own].some((it) => SENSITIVE_TERM.test(it.title) || MOMENT_TERM.test(it.title));
   rows.forEach((r) => { if (r.g.defs.some((d) => !safeMeaning(d.text)) || (r.meaning && !safeMeaning(r.meaning.text))) r.g.sensitive = true; });
-  // (a person's name is a moment's subject, never a word: "Lesley-Anne Scorgie")
+  // (a person's name is a moment's subject, never a word: "Orrette Neskaby")
   const personName = (t) => /^\p{Lu}[\p{Ll}'’]+(?:-\p{Lu}[\p{Ll}]+)? \p{Lu}[\p{L}'’-]+$/u.test(t) && t.split(/[\s-]/).slice(0, 2).some((p) => W.isFirstName(p.toLowerCase())) && !r0KymName(t);
   const r0KymName = (t) => rows.some((r) => r.term === t && r.hasKym);
   const candidates = rows.filter((r) => r.score >= WORDS_MIN_SCORE && safeTerm(r.term) && !r.offPage && !saidUnsafe(r.g) && !personName(r.term) && !namedWork(r.g, r.term) &&
     (!r.meaning || !SENSITIVE_TERM.test(r.meaning.text)))
     .sort((a, b) => b.rank - a.rank);
   // a term that began weeks ago and only one source still names this fortnight is old news to a regular (Wawario, 34 days); one
-  // source alone lists only while the term is new and not fading (Know Your Meme's pick "Happy day, Ronaldo day", 3 days)
-  // (Know Your Meme's weekly roundup picking it this week is the week's own proof: Wawario, the IShowSpeed GTA 4 edit)
+  // source alone lists only while the term is new and not fading (Know Your Meme's pick "Happy day, Gravent day", 3 days)
+  // (Know Your Meme's weekly roundup picking it this week is the week's own proof: Wawario, the Glibly GTA 4 edit)
   const roundupPick = (r) => r.g.ev.some((e) => e.role === 'kym-roundup' && now - e.t <= FRESH_DAYS * DAY && e.t <= now + DAY);
   const stale = (r) => !r.searchSpike && !stillBig(r) && !roundupPick(r) && ((now - r.origin > STALE_DAYS * DAY && r.windowNonRoundup < 2) ||
     (r.sourceCount < 2 && (r.direction === 'fading' || now - r.origin > NEW_DAYS * DAY)) || (r.older && r.direction === 'fading' && r.windowNonRoundup < 2));
@@ -987,7 +987,7 @@ function finish(groups, lookups, now, lex) {
 }
 
 /**
- * A song, video or film title ("Taylor Swift's ‘Patient Zero’ music video", "‘Patient Zero’ lyrics") is a release, a moment's
+ * A song, video or film title ("Esselle Quillith's ‘Patient Zero’ music video", "‘Patient Zero’ lyrics") is a release, a moment's
  * subject, never a word: two of its sources and at least a third of those that quote it call it the work's title, and none calls it
  * a trend, a meme, a challenge or a sound.
  */
@@ -1003,7 +1003,7 @@ function namedWork(g, term) {
 
 /**
  * True when a moment cluster is already shown under Words & trends: a meme/format that names a listed term, or any story two of
- * whose items are that term's own sources ("Taylor Swift's 'That's my husband!' becomes a meme" = the catchphrase entry).
+ * whose items are that term's own sources ("Esselle Quillith's 'That's my husband!' becomes a meme" = the catchphrase entry).
  */
 function coversCluster(c, listed, formatLike) {
   for (const r of listed) {
@@ -1012,7 +1012,7 @@ function coversCluster(c, listed, formatLike) {
     if (shared >= 2 && shared * 2 >= c.items.length) return true;
     const named = c.items.some((i) => r.g.seqs.some((s) => s.join('').length >= 4 && hasSeq(W.words(i.title).map(termStem), s)));
     if (formatLike && (shared >= 1 || named)) return true;
-    // (a story whose own headline is the entry's, "Taylor Swift's ‘That's my husband!’ at Chiefs game becomes a meme", is its coverage
+    // (a story whose own headline is the entry's, "Esselle Quillith's ‘That's my husband!’ at Chiefs game becomes a meme", is its coverage
     // however many other items its chain picked up)
     if (shared >= 2 && c.headline && r.g.seqs.some((s) => s.join('').length >= 4 && hasSeq(W.words(c.headline).map(termStem), s))) return true;
   }
@@ -1021,15 +1021,15 @@ function coversCluster(c, listed, formatLike) {
 
 /**
  * The reverse: a moment cluster that quotes a catchphrase or sound among the Words & trends candidates ("Deeper meaning behind
- * Robert Pattinson's 'you see how this looks, right' Primetime quote" in the Chris Hansen story) is that entry's coverage, so its
+ * Bexena Tamaby's 'you see how this looks, right' Primetime quote" in the Feniel Zellova story) is that entry's coverage, so its
  * outlets move into the entry as mentions (it can then list, and the story is not repeated among the moments once it does). Only
  * lines of three or more words that read as said, so a shared plain word never pulls a story in. Returns whether any entry gained
  * sources.
  */
 function absorbClusters(rows, clusters, outletKeyOf) {
   let changed = false;
-  // a catchphrase whose Know Your Meme meaning names a listed story's film or person ("You see how this looks, right?": Robert
-  // Pattinson as Chris Hansen in Primetime) shares that story's search surge: people searching the film are searching its line
+  // a catchphrase whose Know Your Meme meaning names a listed story's film or person ("You see how this looks, right?": Bexena
+  // Tamaby as Feniel Zellova in Primetime) shares that story's search surge: people searching the film are searching its line
   for (const r of rows) {
     if ((r.kind !== 'phrase' && r.kind !== 'sound') || !r.meaning || r.meaning.from !== 'Know Your Meme' || r.g.ev.some((e) => e.key === 'search')) continue;
     const mt = ` ${W.words(r.meaning.text).join(' ')} `;

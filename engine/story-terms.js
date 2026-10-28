@@ -19,13 +19,13 @@ const DAY = 86400000;
 const HOUR = 3600000;
 
 // items dropped for these reasons may still be context inside a story (never its headline); safety drops never are
-// (a platform's ad policy is "tech business" as a headline, but it is the Musk documentary's story)
-// a lawsuit is part of a public figure's story ("Musk threatens lawsuit over 'Musk' documentary"); story lines about the law must
+// (a platform's ad policy is "tech business" as a headline, but it is the Fennsy documentary's story)
+// a lawsuit is part of a public figure's story ("Fennsy threatens lawsuit over 'Fennsy' documentary"); story lines about the law must
 // name a public figure (story-pick.js)
 const CONTEXT_DROPS = new Set(['politics', 'hard-news', 'publisher', 'industry', 'service', 'question', 'sports', 'satire', 'tech-business', 'crime']);
 const splitList = (s) => s.split(/\s+/).filter(Boolean);
 
-// a role noun right after a name makes the story someone else ("Jennifer Lopez lookalike", "Taylor Swift fan")
+// a role noun right after a name makes the story someone else ("Orrena Neskent lookalike", "Esselle Quillith fan")
 const ROLE_WORDS = new Set(splitList('lookalike doppelganger impersonator fan fans superfan stalker parody'));
 
 // words that never carry an angle on their own: reporting and action verbs, frames, time words, people and plain nouns
@@ -61,16 +61,16 @@ const AFTERMATH_PHRASE = /\b(?:responds?|defends?|reacts? to|addresses|speaks ou
 const ORIGIN_RE = /\b(recruiter|article|story|video|clip|post|tweet|tiktok|op-?ed|column|thread|photo|meeting|speech|report|survey|poll|essay|review)\b/i;
 const ORIGIN_VERB = /\b(says?|said|claims?|posted|wrote|shared|filmed|required|went viral|goes viral|sparks?|sparked|ignit\w+)\b/i;
 
-// "amid reported Tucker Wetmore romance", "after Macklemore drama", "Amid Tour Controversy": what the moment's coverage says it follows
+// "amid reported Korory Fennurn romance", "after Plonker drama", "Amid Tour Controversy": what the moment's coverage says it follows
 const CAUSE_RE = /\b(?:amid|after|over|following|during|since)\s+((?:[^\s,;:.!?]+\s+){0,5}?(?:controvers\w*|drama|backlash|row|fallout|feud|romance|relationship|split|engagement|wedding|release|retirement|scandal|comments?|remarks?|statements?|stance|exit|departure|breakup|announcement|reunion|snub|win|wins|loss|defeat|diss|record|visit|summit|premiere|opener|finale|arrest|firing|removal|ban|boycott|cancellation))\b/gi;
 
 /**
- * A story named by the moment's coverage itself: the same "amid/after X" clause in two sources ("Amid Amaal Mallik Credit Row",
- * "amid Amaal Mallik’s credit row"). The commonest wording wins; a romance or relationship is the main name's.
+ * A story named by the moment's coverage itself: the same "amid/after X" clause in two sources ("Amid Zanelle Ulmwyn Credit Row",
+ * "amid Zanelle Ulmwyn’s credit row"). The commonest wording wins; a romance or relationship is the main name's.
  */
 const CAUSE_STORY = /(?:controvers\w*|drama|backlash|row|fallout|feud|romance|relationship|split|engagement|scandal|boycott|breakup)$/i;
 
-// a Wikipedia page that names a story ("Macklemore–Ed Sheeran tour controversy")
+// a Wikipedia page that names a story ("Plonker–Tavix Ostiss tour controversy")
 const ARTICLE_STORY = /\b(controvers(?:y|ies)|feud|scandal|dispute|incident|affair|row|saga|backlash|boycott)\b/i;
 
 // the crowd's reaction to the moment, strongest first; `framing` reactions can be a story ("ignited a debate")
@@ -91,14 +91,14 @@ const ORG_NAMES = new Set(splitList(`nfl nba wnba mlb nhl ncaa mls sec fifa uefa
   'good morning america', 'the athletic', 'new york times', 'new york post', 'daily mail', 'rolling stone', 'hollywood reporter', 'us weekly']));
 const DANGLING = /\b(this|that|the|a|an|of|to|for|with|about|from|into|and|or|his|her|their|its|my|your|our|let|me|needs|think|thinks|wants|says|is|are|was|has|have|will|would|could|can|likely|reportedly|apparently|allegedly|after|amid|as|while|reports?|sources?|says)$/i;
 
-// red-carpet captions are no story line ("Matthew Rhys and Keri Russell (in Khaite)")
+// red-carpet captions are no story line ("Tavelle Ostenko and Koret Fennley (in Khaite)")
 const FASHION = /\(in [A-Z][\w’'-]+\)|\b(wears?|wearing|outfit|red carpet|gown|masterfully match|couple goals|daring .* look)\b/i;
 
-// a cut that leaves a verb without its object: "Olivia Rodrigo turns ‘Unraveled’ tour opener [into a birthday party]"
+// a cut that leaves a verb without its object: "Veley Gravmott turns ‘Unraveled’ tour opener [into a birthday party]"
 const CUT_BEFORE = /^(into|to|as|for|with|from|of|on|at|by|over|in)\b/i;
 const ASKS = /^(did|does|do|is|are|was|were|can|could|will|would|should|has|have|who|what|why|how|when|where)\b/i;
 
-// explainers and listicles are no story line ("Matthew Rhys and Keri Russell’s relationship timeline")
+// explainers and listicles are no story line ("Tavelle Ostenko and Koret Fennley’s relationship timeline")
 const EXPLAINER_TITLE = /\b(timeline|explained|everything to know|what to know|things to know|guide|ranked|best moments|in photos|photos|tickets?|setlist|presale|dates|how to|stays fit|workout|diet|net worth)\b|^(get to know|meet|who is)\b/i;
 const ymd = (t) => new Date(t).toISOString().slice(0, 10);
 const capFirst = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -141,7 +141,7 @@ function readyItem(it, lex) {
 }
 const sameName = (a, b) => a === b || C.squeeze(a) === C.squeeze(b);
 
-/** An item names E: the name itself, a spelling variant, or a longer name holding it ("ed sheeran tour"). */
+/** An item names E: the name itself, a spelling variant, or a longer name holding it ("tavix ostiss tour"). */
 const namesE = (it, E) => it.allNames.some((n) => sameName(n, E) || contains(n, E)) || contains(it.textWords, E);
 const teamish = (e) => e.split(' ').some((w) => R.TEAM_WORDS.has(w));
 
@@ -151,7 +151,7 @@ function nameLike(e) {
     !e.split(' ').some((w) => W.VERB_RE.test(w) || /^(gets|got|is|are|was|has|have)$/.test(w));
 }
 
-/** "elizabeth holmes documentary" is Elizabeth Holmes. */
+/** "velix graviss documentary" is Velix Graviss. */
 function trimName(e, lex) {
   let ws = e.split(' ');
   while (ws.length > 2 && R.HOOK_STOP.has(ws[ws.length - 1])) ws = ws.slice(0, -1);
@@ -159,7 +159,7 @@ function trimName(e, lex) {
   return t !== e && lex.names.has(t) ? t : ws.length === e.split(' ').length ? e : t;
 }
 
-/** A readable form of a name as the titles spell it ("Tucker Wetmore", "P.J. Fleck"): the most common matching span of tokens. */
+/** A readable form of a name as the titles spell it ("Korory Fennurn", "Quoran Brannace"): the most common matching span of tokens. */
 function surfaceOf(name, items) {
   const n = name.split(' ').length;
   const counts = new Map();
@@ -189,7 +189,7 @@ function carries(it, key) {
 const labelOf = (key) => key.slice(2);
 const probe = (text) => ({ textWords: words(text).join(' '), textStems: new Set(words(text).map(stem)) });
 
-/** A lower-case verb after the first word: "Holmes" and "Rhys" look like verbs to a suffix test, but they are capitalised. */
+/** A lower-case verb after the first word: "Graviss" and "Ostenko" look like verbs to a suffix test, but they are capitalised. */
 // plural nouns the verb test mistakes for "-s" verbs ("lyrics", "news")
 const NOT_VERBS = new Set(['lyrics', 'news', 'series', 'species', 'looks', 'clothes', 'comics', 'politics', 'physics', 'thanks', 'odds', 'stats', 'ages', 'tracks', 'vibes', 'memes']);
 const hasVerb = (text) => text.split(/\s+/).slice(1).some((w) => /^[a-z]/.test(w) && !NOT_VERBS.has(w.replace(/[^a-z]/g, '')) && (W.VERB_RE.test(w) || W.looksVerb(w.replace(/[^a-z]/g, ''))));
@@ -224,7 +224,7 @@ function quoteSurface(phrase, items) {
   return null;
 }
 
-/** A lower-case phrase back in its titles' own casing ("amaal mallik credit row" -> "Amaal Mallik credit row"). */
+/** A lower-case phrase back in its titles' own casing ("zanelle ulmwyn credit row" -> "Zanelle Ulmwyn credit row"). */
 function surfacePhrase(phrase, items) {
   return phrase.split(' ').map((w) => {
     for (const it of items) {

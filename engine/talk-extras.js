@@ -2,7 +2,7 @@
 /*
  * What joins the talking points at its own heat [talking-points.js]: the month's TikTok crazes (NewEngen's page), the listed words and
  * crazes of "Words & trends", the moments whose headline puts a talking-point noun after its subject, and Know Your Meme's memes of
- * the week (a meme entry, an explainer or a weekly roundup naming it, with a second signal: "Jean Phil", "Tony Stark looking").
+ * the week (a meme entry, an explainer or a weekly roundup naming it, with a second signal: "Fenette Zelliss", "Tony Stark looking").
  * Plain string/regex/arithmetic only, so it ports 1:1 to Swift.
  */
 const W = require('./wording');
@@ -81,9 +81,9 @@ function descriptive(name, meaning) {
   return false;
 }
 /**
- * A quote too long or too broken to search ("Verity's from Minecraft, he belongs to Backrooms", "Happy day, Ronaldo day": a comma, or
+ * A quote too long or too broken to search ("Verity's from Minecraft, he belongs to Backrooms", "Happy day, Gravent day": a comma, or
  * more than QUOTE_MAX_WORDS words) is named by the names in it: its first and last ("Verity Backrooms"), or the clause its one name is
- * in ("Ronaldo day"); null for a name that is fine as it is, or a quote with no name.
+ * in ("Gravent day"); null for a name that is fine as it is, or a quote with no name.
  */
 const QUOTE_MAX_WORDS = 4;
 function shortTerm(term) {
@@ -260,8 +260,8 @@ function crazeLine(c, title) {
   const re = new RegExp(`^(the\\s+)?${c.name.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+')}\\b`, 'i');
   // (after "The" the name keeps the title's case past its first letter: "The pumpkin head illusion", "The Ramalama costume walk")
   const out = best.replace(re, (m, the) => (the ? `${the}${/^\p{Lu}\p{Ll}+\s+\p{Ll}/u.test(name) && !/^\p{Lu}/u.test(m.slice(the.length + 1, m.length).replace(/^\S+\s*/, '')) ? name.charAt(0).toLowerCase() + name.slice(1) : name}` : name));
-  // ("It's Corbin Mims ... calmly explaining ...": whose audio it is, said as a sentence about the sound; a nickname in passing left
-  // out: "..., aka CorbinGPT, calmly explaining ...")
+  // ("It's Pelley Sorrsy ... calmly explaining ...": whose audio it is, said as a sentence about the sound; a nickname in passing left
+  // out: "..., aka Fremlo, calmly explaining ...")
   const told = out.replace(/^it['’]s\s+/i, 'The sound is ').replace(/,\s+(?:aka|a\.k\.a\.|also known as)\s+[^,]+,\s+/i, ' ');
   return told.charAt(0).toUpperCase() + told.slice(1);
 }
@@ -373,11 +373,11 @@ const wordStatusOf = (w) => (wordClimbs(w) && (w.daysAgo ?? 0) <= WORD_RISING_DA
 function wordPoints(listed, items = []) {
   return (listed || []).filter((w) => String(w.term || '').trim().split(/\s+/).length <= 5 && !plainSense(w)).map((w) => {
     const term0 = String(w.term || '').trim();
-    // (a quote too broken to search is named by its names, as a meme: "Happy day, Ronaldo day" -> "Ronaldo day meme")
+    // (a quote too broken to search is named by its names, as a meme: "Happy day, Gravent day" -> "Gravent day meme")
     const short = shortTerm(term0);
-    // a reaction clip of a person is searched as that person's reaction meme: "Katie Britt reaction meme", not "Shocked Katie Britt trend"
+    // a reaction clip of a person is searched as that person's reaction meme: "Zano Ulmsy reaction meme", not "Shocked Zano Ulmsy trend"
     const reaction = w.kind === 'trend' && REACTION_CLIP.test(String(w.meaning || ''));
-    // (and by the face its other name says, when it has one: "Katie Britt face meme", the press's "Schmitt face meme")
+    // (and by the face its other name says, when it has one: "Zano Ulmsy stare meme", the press's "Hassick stare meme")
     const face = reaction ? (w.alsoCalled || []).map((x) => String(x).trim()).find((x) => /^\S+(?:\s+\S+){0,2}\s+face$/i.test(x)) : null;
     const term = face ? face.replace(/\s+face$/i, ' face') : reaction ? term0.replace(EMOTION_LEAD, '') : term0;
     const ws = term.split(/\s+/);
@@ -408,8 +408,8 @@ function wordPoints(listed, items = []) {
 }
 
 /**
- * The moments list's cards whose headline puts a talking-point noun right after its subject ("Gillian Anderson responds to backlash"
- * -> "Gillian Anderson backlash"), at a heat from the moment's own heat and coverage. A response alone is no talking point.
+ * The moments list's cards whose headline puts a talking-point noun right after its subject ("Lysan Marrurn responds to backlash"
+ * -> "Lysan Marrurn backlash"), at a heat from the moment's own heat and coverage. A response alone is no talking point.
  */
 const MOMENT_HEAT = { rising: 1, 'second wave': 0.9, peak: 0.85, fading: 0.6 };
 const MOMENT_BASE = 5; // (a viral clip still rising, in eight outlets, ranks with a 50K search's story, not under every one of them)
@@ -425,7 +425,7 @@ function momentPoints(moments, lex) {
     if (!subject || !m.headline) continue;
     const hw = words(m.headline);
     const end = (TN.nameAt(hw, subject)[0] ?? -99) + subject.split(' ').length;
-    // (one name slamming another in a headline is a remark, not yet a feud: "Florence Pugh slams Instagram ...")
+    // (one name slamming another in a headline is a remark, not yet a feud: "Pellade Sorrova slams Instagram ...")
     const x = TN.familiesIn(m.headline).filter((y) => y.f.key !== 'response' && !REMARK.test(y.surface) && y.at - end >= 0 && y.at - end <= 2).sort((a, b) => b.f.w - a.f.w)[0];
     if (!x) continue;
     const noun = x.f.noun(x.surface);
@@ -442,9 +442,9 @@ function momentPoints(moments, lex) {
 }
 
 /**
- * Know Your Meme's memes of the week as talking points ("Jean Phil meme", "Tony Stark looking meme"): a meme entry of the last two
+ * Know Your Meme's memes of the week as talking points ("Fenette Zelliss meme", "Tony Stark looking meme"): a meme entry of the last two
  * weeks (the confirmed list, or a submission), Know Your Meme's own explainer this week ("What Is The 'Tony Stark Looking' Meme?"), a
- * weekly roundup naming it ("Malfoid, Ronaldo Day, Hotel Lobby AI And More"), outlets and Reddit posts naming it. Listed only with
+ * weekly roundup naming it ("Glimmerfoy, Gravent Day, Hotel Lobby AI And More"), outlets and Reddit posts naming it. Listed only with
  * two kinds of signal (one blog's word is not a talking point), at a heat from them, halving every four days past the newest; told
  * by the entry's own first sentence, or the plainest headline naming it. A word "Words & trends" lists for the same meme keeps its
  * card at the higher heat.
@@ -499,7 +499,7 @@ function kymMemes(items, now) {
       if (i.kymDesc && !m.desc) m.desc = i.kymDesc;
     }
   }
-  // (Know Your Meme's explainers and roundups as any outlet reprints them: Yahoo's "The Weekly Meme Roundup: Wawario, Jean Phil ...")
+  // (Know Your Meme's explainers and roundups as any outlet reprints them: Yahoo's "The Weekly Meme Roundup: Wawario, Fenette Zelliss ...")
   const reprints = (items || []).filter((i) => i.fam !== 'kym' && i.fam !== 'reddit' && i.t >= now - MEME_ENTRY_DAYS * DAY && i.t <= now + DAY &&
     (EXPLAINER_NAME.test(TN.cleanHeadline(i.title, i.outlet)) || ROUNDUP.test(TN.cleanHeadline(i.title, i.outlet))));
   for (const i0 of [...rows, ...reprints].filter((r) => now - r.t <= MEME_SIGNAL_DAYS * DAY)) {
@@ -513,14 +513,14 @@ function kymMemes(items, now) {
   return [...by.values()];
 }
 
-/** The name the press uses most of a meme's names, else its explainer's, else its entry's ("Jean Phil" for "Jean Philanthrope"). */
+/** The name the press uses most of a meme's names, else its explainer's, else its entry's ("Fenette Zelliss" for "Fenette Zellissander"). */
 function displayName(m, news) {
   const own = searchName(m);
   const used = [...m.forms.entries()].map(([k, form]) => ({ form, n: news.filter((r) => ` ${words(r.title).join(' ')} `.includes(` ${k} `)).length }))
     .filter((x) => x.n >= MEME_NAME_USED).sort((a, b) => b.n - a.n || (b.form === own) - (a.form === own) || a.form.length - b.form.length);
   return used.length ? used[0].form : own;
 }
-/** The name a meme is searched by: its explainer's, else a short form of its entry's name ("Jean Phil" of "Jean Philanthrope"), else the entry's. */
+/** The name a meme is searched by: its explainer's, else a short form of its entry's name ("Fenette Zelliss" of "Fenette Zellissander"), else the entry's. */
 const searchName = (m) => m.shown || [...m.forms.values()].find((f) => f.split(/\s+/).length >= 2 && f.length < m.name.length && m.name.toLowerCase().startsWith(f.toLowerCase())) || m.name;
 
 /** The entry's first sentence, its "also known as" clause out, as a plain line about the meme (plainLine). */
@@ -551,7 +551,7 @@ function memePoints({ items, lookups, now, lex, moments }) {
     const quoted = new RegExp(`[‘“"']\\s*(?:${keys.map((k) => k.split(' ').join('\\W+')).join('|')})\\W*[’”"']`, 'i');
     const fits = (t) => MEME_CONTEXT.test(String(t || '')) || quoted.test(String(t || '')) || words(t).some((w) => vocab.has(w));
     // (and every result of its own name search, which matched the article if not the headline: "Disturbing truth behind mysterious
-    // influencer" is a Jean Phil story)
+    // influencer" is a Fenette Zelliss story)
     const own = lookups ? lookups.get(`talk-${keyOf(searchName(m)).replace(/[^a-z0-9]/g, '')}`) : null;
     const ownRows = ((own && own.tpnews && own.tpnews.rows) || []).map((r) => ({ title: r.title, t: r.t, outlet: r.publisher }))
       .filter((r) => r.t >= now - MEME_SIGNAL_DAYS * DAY && r.t <= now + DAY && fits(TN.cleanHeadline(r.title, r.outlet)));
@@ -569,19 +569,19 @@ function memePoints({ items, lookups, now, lex, moments }) {
       (posts ? MEME_REDDIT : 0) + OWN_FRESH_W * Math.min(OWN_FRESH_MAX, typed.fresh) + OWN_CREATORS_W * Math.log2(1 + typed.uploads)) *
       Math.pow(0.5, age / MEME_HALF_LIFE);
     // (named as its sentence-case headlines print it mid-line: "Hotel Lobby AI"; a plain word past the first lowercase; a given name's
-    // surname stays a name: "Tony Stark looking"; the press's own name for it when it has one: "Jean Phil")
+    // surname stays a name: "Tony Stark looking"; the press's own name for it when it has one: "Fenette Zelliss")
     const nameWs = displayName(m, news).split(/\s+/);
     const shown = caseName(nameWs.join(' '), news.map((r) => r.title));
     // (what the press calls it: a trend where more of its headlines say so than say meme, "Hotel Lobby AI trend")
     // (a headline about the meme itself first, one that says what it is before one that only says it is talked about; the moments'
-    // own telling of it counts: "Viral AI trend puts celebrities ... inside Quavo and Takeoff's 'Hotel Lobby' colors performance" over
+    // own telling of it counts: "Viral AI trend puts celebrities ... inside Krunwy and Troxkerb's 'Hotel Lobby' colors performance" over
     // "... trend sparks debate")
     const tellings = (moments || []).filter((x) => names(x.headline || '') || names(x.moment || '') || names(x.story || '')).flatMap((x) => [x.moment, x.story, x.why]).filter(Boolean)
       .map((l) => (l.match(/^.*?[.!?](?=\s|$)/) || [l])[0].replace(/[.!]+$/, ''));
     const line = [...news.filter((r) => names(r.title)).map((r) => TN.cleanHeadline(r.title, r.outlet)), ...tellings.filter((l) => names(l))]
       .map((l, i) => ({ l, i })).sort((a, b) => MEME_WORD.test(b.l) - MEME_WORD.test(a.l) || EMPTY_LINE.test(a.l) - EMPTY_LINE.test(b.l) || a.l.split(/\s+/).length - b.l.split(/\s+/).length || a.i - b.i)
       // (and the headline that stands as the line says the meme or the trend beside the name: one that only quotes the name, "‘South
-      // Park’ new episode ignores Donald Trump, spoofs ‘Backrooms’", is news of the thing itself and no meme's line. With no entry
+      // Park’ new episode ignores Orrory Neskova, spoofs ‘Backrooms’", is news of the thing itself and no meme's line. With no entry
       // sentence and no such headline the meme has no line, and is a moment or nothing. Rule 3, 2026-10-19)
       .map((x) => x.l).find((l) => !/\?/.test(l) && !W.isTitleCase(l.split(/\s+/)) && l.split(/\s+/).length >= 6 && MEME_CONTEXT.test(l));
     const what = memeLine(m.desc, shown) || (line ? `${line.replace(/[.!]+$/, '')}.` : null);

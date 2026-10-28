@@ -4,7 +4,7 @@
 const sum = (xs) => xs.reduce((s, v) => s + v, 0);
 const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 const stripParen = (s) => (s || '').replace(/\s*\([^)]*\)\s*/g, ' ').trim();
-/** Whole-word containment on space-joined word lists: contains('taylor swift fans', 'taylor swift'). */
+/** Whole-word containment on space-joined word lists: contains('esselle quillith fans', 'esselle quillith'). */
 const contains = (hay, name) => (' ' + hay + ' ').includes(' ' + name + ' ');
 /** Syndicated copies (same normalised title) count once. */
 function uniqByKey(items) {

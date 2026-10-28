@@ -1,7 +1,7 @@
 'use strict';
 /*
- * Talking-point works [talking-points.js]: the film, show or documentary a name's coverage is about ("Unabomber movie", "Monster
- * Lizzie Borden", "Nathan Fielder Elizabeth Holmes doc"), and the crossover a reveal is ("Fortnite FNAF collab").
+ * Talking-point works [talking-points.js]: the film, show or documentary a name's coverage is about ("Quavrrb movie", "Monster
+ * Tavena Osturn", "Brinena Hassiss Velix Graviss doc"), and the crossover a reveal is ("Fortnite FNAF collab").
  * Plain string/regex/arithmetic only, so it ports 1:1 to Swift.
  */
 const W = require('./wording');
@@ -14,10 +14,10 @@ const { words } = W;
 const { keyOf, hay, mentions, LEAGUE_KW } = TC;
 
 /**
- * A film, show or documentary the name's coverage is about, when the name is read and searched for it ("Ted Kaczynski" for Netflix's
- * 'Unabomber'): { title words, noun } from a quoted work in a fifth of its titles ("Unabomber movie"; a work naming the subject,
- * "Monster: The Lizzie Borden Story", as "Monster Lizzie Borden"), or a person's take on the subject ("Nathan Fielder's Elizabeth
- * Holmes doc"); null when its titles name none.
+ * A film, show or documentary the name's coverage is about, when the name is read and searched for it ("Orro Neskith" for Netflix's
+ * 'Quavrrb'): { title words, noun } from a quoted work in a fifth of its titles ("Quavrrb movie"; a work naming the subject,
+ * "Monster: The Tavena Osturn Story", as "Monster Tavena Osturn"), or a person's take on the subject ("Brinena Hassiss's Velix
+ * Graviss doc"); null when its titles name none.
  */
 const SCREEN_WORD = /\b(movie|film|documentary|docuseries|doc|series|miniseries|show)\b/i;
 const SCREEN_NOUN = { movie: 'movie', film: 'movie', documentary: 'doc', docuseries: 'doc', doc: 'doc', series: 'series', miniseries: 'series', show: 'show' };
@@ -33,7 +33,7 @@ function workOf(subject, titles, lex) {
     for (const t of list) { const m = t.match(SCREEN_WORD); if (m) { const k = SCREEN_NOUN[m[1].toLowerCase()]; n.set(k, (n.get(k) || 0) + 1); } }
     return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
   };
-  // a person's take on a person: "Nathan Fielder's Elizabeth Holmes doc", under either name
+  // a person's take on a person: "Brinena Hassiss's Velix Graviss doc", under either name
   const NAME = `\\p{Lu}[\\p{L}.’'-]+(?: \\p{Lu}[\\p{L}.’'-]+){1,2}`;
   const subjRe = subj.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s.-]+');
   const screenAlt = SCREEN_WORD.source.slice(3, -3);
@@ -57,7 +57,7 @@ function workOf(subject, titles, lex) {
     return { ws: [...maker.split(' '), ...about.split(' '), kindOfWork(mk[1])], noun: kindOfWork(mk[1]), work: null, about: true, n: both.length };
   }
   // the work: a proper name (capitalised mid-line in the sentence-case titles) most of the screen titles carry, never the subject's own
-  // words, a platform or a person's name ("Unabomber" in Netflix's 'Unabomber' movie; "Primetime"; "Monster")
+  // words, a platform or a person's name ("Quavrrb" in Netflix's 'Quavrrb' movie; "Primetime"; "Monster")
   const proper = TN.caseMap(titles);
   const works = new Map();
   for (const t of screen) {
@@ -94,7 +94,7 @@ function workOf(subject, titles, lex) {
   const wk = keyOf(form);
   if (EVENT_WORK.test(wk)) return null;
   const kind = kindOfWork(ts);
-  // a work named for the subject: "Monster: The Lizzie Borden Story", 'Monster: Lizzie Borden' -> "Monster Lizzie Borden"
+  // a work named for the subject: "Monster: The Tavena Osturn Story", 'Monster: Tavena Osturn' -> "Monster Tavena Osturn"
   const named = new RegExp(`${form}[:\\s]+(?:the\\s+)?${subj.join('\\s+')}(?:\\s+story|['’”"])`, 'i');
   if (ts.filter((t) => named.test(t)).length >= 2) return { ws: [...wk.split(' '), ...subj], noun: kind, work: form, about: true, n: ts.length };
   return { ws: [...wk.split(' '), kind], noun: kind, work: form, n: ts.length };

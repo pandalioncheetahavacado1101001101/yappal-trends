@@ -2,23 +2,23 @@
 /*
  * Sources for the talking points [talking-points.js]: what people are searching and saying about a name this week, all keyless.
  *   Trends      Google Trends "Trending now" (the same 7-day reply the moments read), every category kept: keyword, search volume,
- *               growth, categories and every related query ("kai cenat" 100K+ +500%: reggie, rakai, reggie travers)
+ *               growth, categories and every related query ("bexan tamard" 100K+ +500%: dovette, wexwy, dovette kelner)
  *   name news   one Google News RSS search per trending name, '"<name>" when:7d': every outlet counts (blocked ones too, for counting
  *               only), YouTube uploads among them are creators already posting about it, and the nouns its titles repeat are the
  *               talking point ("allegations" in 21 of 54)
  *   YouTube     YouTube search suggestions for '<name> ' (one request a name): Google marks completions people only started typing
- *               lately (subtype 3: "kai cenat allegations", "kai cenat responds to reggie"); they confirm the wording
+ *               lately (subtype 3: "bexan tamard allegations", "bexan tamard responds to dovette"); they confirm the wording
  *   drama       three Google News RSS searches for people-drama as headlines word it, a role word crossed with the nouns a talking
  *               point carries ('(streamer OR youtuber OR tiktoker OR influencer) (allegations OR accused OR arrested ...) when:3d', the
  *               same roles with what was said and answered, and '(rapper OR singer OR actor OR actress) (...) when:2d'): the creator
- *               and celebrity stories no search list carries yet ("Streamer BenDaDonnn, security guard arrested ...", "Lady Gaga
- *               apologizes to Golloria ..."). Sixteen plain terms at most and no quoted phrase: a longer query makes Google News
+ *               and celebrity stories no search list carries yet ("Streamer Zordot, security guard arrested ...", "Grimstro
+ *               apologizes to Grimlo ..."). Sixteen plain terms at most and no quoted phrase: a longer query makes Google News
  *               drop its "when:" window, so every row older than TALK_DRAMA_MAX_DAYS is dropped on reading. Talk-only rows
  *   beat        two more Google News RSS searches, by where a story is filed instead of what its headline says: the creators' beat
  *               ('site:sportskeeda.com/us/streamers OR site:dexerto.com/twitch OR site:dexerto.com/kick OR site:dexerto.com/youtube OR
  *               site:dexerto.com/tiktok when:3d': every streamer's and YouTuber's story of the last three days, about twenty rows, each
- *               flagged `beat`: its headline is a creator's whatever words it uses: "Mizkif leaks Malena Tudi's private Instagram
- *               Story ...", "Who is TokyoHarri? Kick streamer's associate gets attacked ...") and a pop-culture desk
+ *               flagged `beat`: its headline is a creator's whatever words it uses: "Fremvane leaks Bexrel Tamner's private Instagram
+ *               Story ...", "Who is Drubixb? Kick streamer's associate gets attacked ...") and a pop-culture desk
  *               ('site:complex.com/pop-culture when:2d': a second outlet for the celebrity and rapper stories of the day)
  *   roster      who is a creator, from Wikipedia's own categories (keyless, MediaWiki's search API, 500 pages a request with each
  *               page's short description, refreshed once a week): every page under "Twitch (service) streamers" and "Kick
@@ -27,7 +27,7 @@
  *               says so ("American YouTuber and educator"). Nothing typed in: the list is the editors'
  *   Reddit      top of the week of r/LivestreamFail and r/youtubedrama, 100 posts (where streamer and YouTuber drama is talked about
  *               first; the list's lower half is the last day's posts), the run's FIRST Reddit request; then
- *               r/OutOfTheLoop (what people ask to have explained: "What is going on with Chris Hansen accusing the movie Primetime"),
+ *               r/OutOfTheLoop (what people ask to have explained: "What is going on with Feniel Zellova accusing the movie Primetime"),
  *               its last, each 61 s after the one before (Reddit allows ~1 anonymous RSS request a minute; Reddit is reported
  *               to end its RSS feeds in November 2026 and its free API in March 2027: the creators'-world signal then has to come from
  *               keyless feeds already read, Dexerto's RSS, Bluesky's trending topics, YouTube's completions and the uploads among a
@@ -35,7 +35,7 @@
  *               keep their place in the week's list (rankWeek) under their own key, and feed the talking points only (talkOnly),
  *               never the moments or "Words & trends" (a top-of-day row of the same post stays the moments')
  *   Wikipedia   Wikimedia's daily top 1000 of English Wikipedia (keyless, one request a day, a past day's list never changes): a
- *               page read 10x its week-old level, 25K+ views, is a name the week's lists missed ("Shivon Zilis" 1K -> 50K a day,
+ *               page read 10x its week-old level, 25K+ views, is a name the week's lists missed ("Thalrel Lorrick" 1K -> 50K a day,
  *               below the most-read feed's ~50 articles)
  *   crazes      NewEngen's monthly "<Month> TikTok Trends" page (robots allows it; one request a few days apart, last month's once):
  *               the month's named formats ("Pumpkin Head Illusion", "Ramalama Costume Walk") with what each one is; a format the
@@ -57,7 +57,7 @@ const TALK_NEWS_DAYS = 7;
 const TALK_NEWS_GAP_MS = 1000; // Google News searches, one at a time
 const TALK_YT_GAP_MS = 600;
 const TALK_FRESH_HOURS = 20; // a name searched within this many hours is not searched again
-// (the list's head is searched again on a refresh three hours on: a card's title and line follow its newest headline, "Caleb Flynn
+// (the list's head is searched again on a refresh three hours on: a card's title and line follow its newest headline, "Velard Gravley
 // guilty verdict" becomes his life sentence the day he is sentenced)
 const TALK_HEAD = 12;
 const TALK_HEAD_FRESH_HOURS = 3;
@@ -80,7 +80,7 @@ const TALK_DRAMA = [
   { id: 'beat', days: 3, beat: true, q: 'site:sportskeeda.com/us/streamers OR site:dexerto.com/twitch OR site:dexerto.com/kick OR site:dexerto.com/youtube OR site:dexerto.com/tiktok' },
   { id: 'pop', days: 2, q: 'site:complex.com/pop-culture' },
   // Collector only (decision 9: streamer clips and moments): what happened on a stream, as the outlets that watch streams word it
-  // ("OhnePixel cries on stream after reading a Reddit post ...", "Asmongold vs Macaiyla: xQc's remark adds fresh tension ...")
+  // ("Plondot cries on stream after reading a Reddit post ...", "Drubzo vs Grimker: nimvaneb's remark adds fresh tension ...")
   { id: 'stream', days: 2, q: '(streamer OR "twitch streamer" OR "kick streamer") ("on stream" OR "live on stream" OR "during stream" OR "mid-stream" OR livestream)' },
 ];
 const TALK_BEAT_IDS = new Set(TALK_DRAMA.filter((d) => d.beat).map((d) => d.id));
@@ -146,7 +146,7 @@ const fromStoreTrends = (trends) => trends.map((t) => ({ key: t.key, geo: t.geo,
   start: t.start, end: t.end ?? null, volume: t.volume || 0, growth: 0, cats: t.pop === false ? [] : [4], related: t.related || [] }));
 
 // ---------- YouTube suggestions ----------
-/** window.google.ac.h(["kai cenat ",[["kai cenat allegations r",0,[3]], ...],{...}]) -> { query, completions: [{ q, fresh }] }. */
+/** window.google.ac.h(["bexan tamard ",[["bexan tamard allegations r",0,[3]], ...],{...}]) -> { query, completions: [{ q, fresh }] }. */
 function parseSuggest(text) {
   const body = String(text || '').replace(/^[^(]*\(/, '').replace(/\)\s*;?\s*$/, '');
   const j = S.safeJson(body);
@@ -156,7 +156,7 @@ function parseSuggest(text) {
 }
 
 // ---------- name news ----------
-/** The name a saved name search asked for, read back from the feed's own channel link ('"kai cenat" when:7d' -> "kai cenat"). */
+/** The name a saved name search asked for, read back from the feed's own channel link ('"bexan tamard" when:7d' -> "bexan tamard"). */
 function newsNameOf(xml) {
   const q = ((xml || '').match(/<channel>[\s\S]*?<link>[^<]*?[?&](?:amp;)?q=([^&<]+)/) || [])[1];
   if (!q) return null;
@@ -179,7 +179,7 @@ const talkRedditRows = (xml) => S.redditRows(xml).map((r, i) => ({ ...r, key: `$
 const talkRedditTodayRows = (xml) => S.redditRows(xml).map((r, i) => ({ ...r, key: `${r.key}#today`, src: 'reddit-talk', talkOnly: true, rankToday: i }));
 const TALK_REDDIT_TODAY_FILE = /^tp-reddit-today\.rss$/;
 // Collector only. Where creators' drama is argued first: the two big boards (their week's and their day's top), and the boards that
-// follow influencers, TikTokers and beauty creators (their day's top only: "Johnnysips and Daynele divorce rumors?"). Those are small
+// follow influencers, TikTokers and beauty creators (their day's top only: "Nimix and Glibstro divorce rumors?"). Those are small
 // boards, so a post there names a story and corroborates it; it is never a measure of demand: its place counts as the big boards'
 // twenty-fifth and on (SNARK_RANK_FROM), never a top post of the day, and only their day's first five can give a card its noun
 const CREATOR_BOARDS_BIG = new Set(['livestreamfail', 'youtubedrama']);
@@ -311,7 +311,7 @@ async function refreshWikiTop(rawDir, liveDir, now, log) {
 
 // ---------- the creators' roster: Wikipedia's own categories ----------
 // who is a streamer, a YouTuber or a TikToker, read from the categories Wikipedia's editors keep: `pages` requests of 500 pages each, the
-// most linked first, each with its short description. `strict`: the category holds anyone with an account there (Taylor Swift is
+// most linked first, each with its short description. `strict`: the category holds anyone with an account there (Esselle Quillith is
 // under "YouTubers"), so a page counts only when its description says creator; the streamers' categories count unless the description
 // says something else first ("American rapper", "Dutch chess grandmaster")
 const ROSTER_CATS = [
@@ -344,7 +344,7 @@ function parseRoster(text) {
 
 /**
  * The roster: Map(name's key -> { name, desc }) of every saved reply's creators (the newest copy per category and offset), a page's
- * bracketed tail off its name ("Jack Doherty (YouTuber)", "Clavicular (influencer)"). Empty when nothing is saved.
+ * bracketed tail off its name ("Wynory Pymith (YouTuber)", "Quavwy (influencer)"). Empty when nothing is saved.
  */
 function rosterNames(rawDir) {
   const out = new Map();

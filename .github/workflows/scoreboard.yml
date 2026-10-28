@@ -73,15 +73,37 @@ jobs:
       - name: The ledger, the list and the scoreboard branch as they are
         run: bash .github/scoreboard/branches.sh fetch
 
+      # (v4 scores the main list alone, ranks 1-80 with no `section`: the extension's rows past it never move a v4 number. No list read
+      # leaves none to slice, as before; a slice that fails fails the job, never scored on the whole list)
+      - name: The list's main rows (what v4 scores)
+        run: |
+          if [ -f sbfeed/us.json ]; then node .github/scoreboard/depth.js --slice-feed sbfeed/us.json sbfeed/us80.json; fi
+
       # Exit 0: a day scored; 3: no state to read (nothing scored, the history kept); anything else fails the job.
       - name: Score the day
         id: score
         run: |
           set +e
-          node .github/scoreboard/run.js --state state --cache sbcache --out sbout --fetch --branch sbbranch --feed sbfeed/us.json --ledger sbfeed/ledger.jsonl
+          node .github/scoreboard/run.js --state state --cache sbcache --out sbout --fetch --branch sbbranch --feed sbfeed/us80.json --ledger sbfeed/ledger.jsonl
           code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
           if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then exit 1; fi
+
+      # (the 150-row depth, wave 9: the whole list at listDepth 150, aggregate numbers only, guarded key by key; never a v4 number, so
+      # a failure here only leaves depth.json out of the day's publish)
+      - name: The list's depth (aggregate numbers only)
+        if: steps.score.outputs.code == '0'
+        continue-on-error: true
+        timeout-minutes: 5
+        run: node .github/scoreboard/depth.js --state state --cache sbcache --out sbout --feed sbfeed/us.json --ledger sbfeed/ledger.jsonl
+
+      # (the precursor's daily refit, wave 9, shadow: counts and weights into sbcache/precursor.json, kept in the history cache and never
+      # published; a failure leaves yesterday's weights)
+      - name: The precursor's refit (cache only)
+        if: steps.score.outputs.code == '0'
+        continue-on-error: true
+        timeout-minutes: 5
+        run: node .github/scoreboard/precursor.js --state state --cache sbcache
 
       - name: Keep the history (cache only)
         id: keep

@@ -6,8 +6,9 @@
 #                ("none yet"), and only a file the fetched branch does not hold is left out. Any failed read of the remote, of a
 #                branch it holds or of a file in it exits 1 after three tries, so nothing is scored or published that day: a failed
 #                read taken for "none yet" would publish one day in place of every earlier one.
-#   publish      latest.json and days.jsonl from sbout/, after the aggregate guard passes on both, as the SINGLE commit of the
-#                "scoreboard" branch (force-pushed: no history is kept, as the feed branch keeps none). Never the feed branch.
+#   publish      latest.json and days.jsonl from sbout/, after the aggregate guard passes on both (and depth.json when depth.js wrote
+#                it), as the SINGLE commit of the "scoreboard" branch (force-pushed: no history is kept, as the feed branch keeps
+#                none). Never the feed branch.
 #                Refused when days were read back and sbout/days.jsonl holds fewer lines than min(those, daysKept).
 #   prune-cache  this workflow's own superseded history caches: every "scoreboard-history-*" key except KEEP, each deleted by its
 #                exact key. Nothing else is ever touched: not "state-*" (restored read only, never saved here), not "editor-model-*".
@@ -82,9 +83,12 @@ case "${1:-}" in
     fi
     tmp="$(mktemp -d)"
     cp sbout/latest.json sbout/days.jsonl "$tmp/"
+    # (the list's depth, wave 9: written by depth.js only after its own aggregate guard passed; a day without it publishes without)
+    if [ -s sbout/depth.json ]; then cp sbout/depth.json "$tmp/"; fi
     cd "$tmp"
     git init -q -b scoreboard
     git add latest.json days.jsonl
+    if [ -f depth.json ]; then git add depth.json; fi
     git -c user.name="ideas-scoreboard" -c user.email="ideas-scoreboard@users.noreply.github.com" commit -q -m "scoreboard $(date -u +%Y-%m-%d)"
     git push -q -f "$REMOTE" scoreboard
     echo "published the scoreboard branch: $(grep -c . days.jsonl) days"

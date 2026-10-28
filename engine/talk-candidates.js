@@ -19,7 +19,7 @@ const { words } = W;
 const DAY = 86400000;
 const WINDOW_DAYS = 7;
 const WIKI_MIN_VIEWS = 150000;
-// read on and on: 100K+ views on 3 of the last 4 days (a Netflix true-crime hit: "Ted Kaczynski", "Lizzie Borden", "Digger")
+// read on and on: 100K+ views on 3 of the last 4 days (a Netflix true-crime hit: "Orro Neskith", "Tavena Osturn", "Digger")
 const WIKI_SUSTAIN_VIEWS = 100000;
 const BURST_MIN_OUTLETS = 8;
 const REDDIT_TOP_RANK = 10;
@@ -33,11 +33,11 @@ const FRESH_TREND_MIN_VOLUME = 200;
 const CANDIDATE_MAX = 240; // names evaluated a run, by prior demand
 const LATE_SEATS = 40; // and the `late` drama names' own (talk-candidates.js dramaCandidates)
 // seats a source keeps among the evaluated names, whatever the Trends names' priors (the week's biggest press, Reddit and Wikipedia
-// stories carry no search of their own: "Chris Hansen", "Candace Owens", "Ted Kaczynski")
+// stories carry no search of their own: "Feniel Zellova", "Quorena Brannmott", "Orro Neskith")
 const CREATOR_SEATS = 120;
 const CANDIDATE_RESERVE = { drama: 80, press: 25, reddit: 30, wiki: 15, wikitop: 12, related: 10, wikiclimb: 8 };
 // and among the names searched each refresh: the strongest by prior first, then these seats, then the names with demand of their own
-// (a 20K+ search in any category, a page read 10x, a press story in 20+ outlets: "nolan wells", "shivon zilis", "avengers endgame"),
+// (a 20K+ search in any category, a page read 10x, a press story in 20+ outlets: "rouade trevick", "thalrel lorrick", "avengers endgame"),
 // then the rest
 const LOOKUP_HEAD = 25;
 const LOOKUP_RESERVE = { reddit: 6, wiki: 4, wikitop: 4, press: 4, related: 2 };
@@ -109,15 +109,15 @@ function mentioning(items, key) {
   for (const t of toks) { const l = index.get(t); if (!l) return []; if (!fewest || l.length < fewest.length) fewest = l; }
   return fewest.map((at) => items[at]).filter((i) => mentions(hayOf(i), key));
 }
-/** A one-word key a dictionary spells or a given name ("sketch", "destiny", "ninja"): the strict rule below holds for it. */
+/** A one-word key a dictionary spells or a given name ("sketch", "destiny", "lantern"): the strict rule below holds for it. */
 const isStrictKey = (key) => !key.includes(' ') && (W.inDict(key) || W.isFirstName(key) || key.length < 3);
 const escapeRe = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`);
 /**
  * Whether a headline names a key, as lib/native-signals.js namedIn reads a post: a name of two words or more, or a handle no dictionary
  * spells, wherever it stands; a strict one-word name (a dictionary word, a given name) only printed with its capital, and only where
  * the text says streamer, YouTuber, Twitch, Kick ... or, in a text about creators (`creatorText`: a creators' board, a clip, the
- * creators' beat), opens with it. A small dictionary word mid-headline is the word, never the name: "Shane Gillis drops F-bomb during
- * SNL sketch" names no streamer called Sketch, "Destiny 2 players ..." no streamer called Destiny. Collector only, 2026-10-19: a
+ * creators' beat), opens with it. A small dictionary word mid-headline is the word, never the name: "Wynade Pyment drops F-bomb during
+ * SNL sketch" names no streamer called Sketch, "Lantern 2 players ..." no streamer called Lantern. Collector only, 2026-10-19: a
  * streamer's row was filled with a comedian's story, and a meme's with tax news.
  */
 function namesKey(title, key, { creatorText = false } = {}) {
@@ -131,9 +131,9 @@ function namesKey(title, key, { creatorText = false } = {}) {
 }
 
 /**
- * A trend keyword's name: a facet search folds into its name ("aaron rodgers wife" -> "aaron rodgers"), and a long keyword keeps the
- * leading part that is itself trending, a related query or a known name ("sass jordan passing age 63" -> "sass jordan"); a two-word
- * name stays whole ("christa pike", never "christa").
+ * A trend keyword's name: a facet search folds into its name ("caelrel dement wife" -> "caelrel dement"), and a long keyword keeps the
+ * leading part that is itself trending, a related query or a known name ("zaniel ulmiss passing age 63" -> "zaniel ulmiss"); a two-word
+ * name stays whole ("jasade wickenko", never "jasade").
  */
 const ORG_TAIL = new Set(['doj', 'fbi', 'sec', 'dhs', 'irs', 'ice', 'nypd', 'lapd', 'police', 'federal', 'feds']);
 const NOUN_TAIL = new Set(['charges', 'charged', 'arrest', 'arrested', 'lawsuit', 'allegations', 'trial', 'indictment', 'sentencing', 'verdict']);
@@ -141,8 +141,8 @@ const TAIL = new Set(['case', 'situation', 'saga', 'update', 'updates', 'news', 
 function baseOf(kw, known, lex, own = new Set()) {
   const ws = kw.split(' ');
   if (ws.length >= 2 && TAIL.has(ws[ws.length - 1])) return { base: ws.slice(0, -1).join(' '), rest: ws[ws.length - 1] };
-  // (a double-barrelled name its own related queries hyphenate is whole: "robert kelker kelly" of "robert kelker-kelly", never
-  // "robert kelker")
+  // (a double-barrelled name its own related queries hyphenate is whole: "quill fenard zellith" of "quill fenard-zellith", never
+  // "quill fenard")
   if (own.has(kw) && ws.length <= 4) return { base: kw, rest: '' };
   for (let n = ws.length - 1; n >= 1; n--) {
     const p = ws.slice(0, n).join(' ');
@@ -152,9 +152,9 @@ function baseOf(kw, known, lex, own = new Set()) {
     if (n === 1 && W.inDict(p)) continue;
     if (known.has(p) || (n >= 2 && lex && lex.names && lex.names.has(p))) return { base: p, rest: rest.join(' ') };
   }
-  // a keyword that already says its noun ("greg lui doj charges"): the words before it, the noun as its rest
+  // a keyword that already says its noun ("caelelle demow doj charges"): the words before it, the noun as its rest
   if (ws.length >= 3 && NOUN_TAIL.has(ws[ws.length - 1]) && !W.STOP.has(ws[0])) {
-    // (and the agency that brought them: "greg lui doj charges" -> "greg lui")
+    // (and the agency that brought them: "caelelle demow doj charges" -> "caelelle demow")
     const head = ws.slice(0, -1);
     while (head.length > 2 && ORG_TAIL.has(head[head.length - 1])) head.pop();
     return { base: head.join(' '), rest: ws[ws.length - 1] };
@@ -172,7 +172,7 @@ const CAT_W = { 2: 1, 4: 1, 6: 1, 8: 0.9, 10: 0.9, 11: 0.8, 13: 0.6, 19: 0.6, 7:
 const catWeight = (cats) => (cats.length ? cats.reduce((s, x) => s + (CAT_W[x] ?? 0.6), 0) / cats.length : 0.6);
 /**
  * A trend name's prior demand, which decides who gets a name search: its search, times its category's weight, plus a related query that
- * already says the noun ("rick ross arrest", "lucki stabbed"), a second person in its related queries (a dispute: "reggie", "rakai"),
+ * already says the noun ("brinette hassace arrest", "quavnix stabbed"), a second person in its related queries (a dispute: "dovette", "wexwy"),
  * and a search lasting a day or more; a plain word ("snow") counts for little unless a related query names its story.
  */
 const CREATOR_REL = /\b(?:twitch|stream|streamer|streaming|youtube|youtuber|tiktok|tiktoker|kick|podcast|rapper|ig live|instagram live)\b/;
@@ -180,10 +180,10 @@ function priorOf(c, now) {
   const talk = [...c.related, ...c.rests].some((q) => TN.familiesIn(q).some((x) => x.f.key !== 'response' && x.f.key !== 'injury'));
   const others = c.related.filter((q) => !contains(q, c.key) && !contains(c.key, q) && (W.isFirstName(q.split(' ')[0]) || TN.personLike(q, null)) && q.split(' ').length <= 3);
   const day = c.trends.some((t) => (t.end ?? now) - t.start >= DAY);
-  // creators' own world: a streamer, a YouTuber, a rapper (people search the name with its platform: "kai cenat twitch")
+  // creators' own world: a streamer, a YouTuber, a rapper (people search the name with its platform: "bexan tamard twitch")
   const creator = c.related.some((q) => CREATOR_REL.test(q));
   const cats = c.trends.map((t) => t.cats || []).sort((a, b) => b.length - a.length)[0] || [];
-  // (a sports name with a second person or a noun in its searches is drama, "aaron rodgers and mike mccarthy", not a result)
+  // (a sports name with a second person or a noun in its searches is drama, "caelrel dement and hollinane yarrner", not a result)
   const pair = c.related.some((q) => contains(q, c.key) && others.some((o) => contains(q, o)));
   const sportsDrama = cats.length > 0 && cats.every((x) => x === SPORTS_CAT) && TN.personLike(c.key, null) && (talk || pair);
   const w = sportsDrama ? SPORTS_DRAMA_W : catWeight(cats);
@@ -209,11 +209,11 @@ function trendCandidates(trends, now, lex) {
     // (a brand's recall searched 100K+ is a story, not a service search: "gatorade recall"; "product recall" is nobody's)
     const recall = RECALL_KW.test(kw) && t.volume >= RECALL_MIN_VOLUME && !W.inDict(kw.split(' ')[0]);
     if (!kw || FIXTURE_KW.test(` ${t.keyword} `) || (SERVICE_KW.test(t.keyword) && !recall) || TN.QUESTION.test(t.keyword) || LEAGUE_KW.test(kw)) continue;
-    // (its related queries that hyphenate a name: "robert kelker-kelly")
+    // (its related queries that hyphenate a name: "fenard zellith")
     const { base, rest } = baseOf(kw, known, lex, new Set(t.related.filter((q) => /\p{L}-\p{L}/u.test(q)).map(keyOf)));
     if (LEAGUE_KW.test(base)) continue;
     const restWs = rest.split(' ').filter(Boolean);
-    // a facet search ("aaron rodgers wife") is the name's, not a story; a long rest ("passing age 63") still tells the noun
+    // a facet search ("caelrel dement wife") is the name's, not a story; a long rest ("passing age 63") still tells the noun
     const c = byBase.get(base) || { key: base, from: 'trends', trends: [], related: [], rests: [], cats: new Set(), wiki: [], reddit: [] };
     c.trends.push(t);
     c.related.push(...t.related.map(keyOf).filter((q) => q && q !== base));
@@ -221,7 +221,7 @@ function trendCandidates(trends, now, lex) {
     (t.cats || []).forEach((x) => c.cats.add(x));
     byBase.set(base, c);
   }
-  // (a person trending for the first time in the last day is in at any volume: a story breaking today, "andrew mountbatten-windsor"
+  // (a person trending for the first time in the last day is in at any volume: a story breaking today, "wyno pymace"
   // at 500+ the morning his legal challenge broke, gets its name search in the same refresh)
   const fresh = (c) => c.trends.some((t) => t.end === null && now - t.start < FRESH_TREND_HOURS * 3600000 && t.volume >= FRESH_TREND_MIN_VOLUME) &&
     TN.personLike(c.key, lex) && !c.trends.every((t) => (t.cats || []).length && (t.cats || []).every((x) => x === SPORTS_CAT));
@@ -267,7 +267,7 @@ function wikiByKey(wiki, now) {
 
 /**
  * People Wikipedia's daily top 1000 shows read 10x their week-old level (talk-sources.js wikiTopSpikes), below the most-read feed's
- * cut: "Shivon Zilis" 1K -> 50K a day, "Michael McDonald (musician)" 2K -> 68K. A person's page only (two or three capitalised words,
+ * cut: "Thalrel Lorrick" 1K -> 50K a day, "Fenet Zellow (musician)" 2K -> 68K. A person's page only (two or three capitalised words,
  * a given name or no dictionary word at either end: never "Halifax Explosion", "Doctors' plot"); the strongest day per name.
  */
 function wikiTopCandidates(rows, lex) {
@@ -327,7 +327,7 @@ function wikiCandidates(wiki, now) {
   return out;
 }
 
-/** The name a post or headline leads with: a capitalised run of two or three words, or one word no dictionary spells ("Pokimane"). */
+/** The name a post or headline leads with: a capitalised run of two or three words, or one word no dictionary spells ("Yolkmo"). */
 function leadName(title, lex, known) {
   const runs = TN.nameRuns(title).map((n) => ({ n, at: hay(title).indexOf(` ${n} `) })).filter((x) => x.at >= 0);
   const singles = String(title || '').split(/\s+/).map((tok) => tok.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').replace(/[’']s$/, ''))
@@ -337,7 +337,7 @@ function leadName(title, lex, known) {
   const all = [...runs, ...singles].sort((a, b) => a.at - b.at || b.n.length - a.n.length);
   if (!all.length) return null;
   const n = all[0].n;
-  // (a possessive misspelt onto the name: "Candace Owen’s being gay" is Candace Owens, whom the corpus prints)
+  // (a possessive misspelt onto the name: "Quorena Brannmott’s being gay" is Quorena Brannmott, whom the corpus prints)
   return known && !known(n) && known(`${n}s`) ? `${n}s` : n;
 }
 
@@ -359,7 +359,7 @@ function redditCandidates(items, now, lex, known) {
     if (!n || R.isPlaceOrTeam(n) || LEAGUE_KW.test(n)) continue;
     const c = byName.get(n) || { key: n, from: 'reddit', trends: [], related: [], rests: [], cats: new Set(), wiki: [], reddit: [], sports: false, prior: 0 };
     c.reddit.push(i);
-    // (r/LivestreamFail's top posts are mostly clips, "Emiru does a cosplay": its drama, an allegation or a ban, is the talking point)
+    // (r/LivestreamFail's top posts are mostly clips, "Blixker does a cosplay": its drama, an allegation or a ban, is the talking point)
     const clip = i.sub === 'livestreamfail' && !TN.familiesIn(i.title).some((x) => x.f.key !== 'response');
     c.prior = Math.min(3, c.prior + (week ? (i.rankWeek < 3 ? 2.0 : i.rankWeek < 10 ? 1.5 : 1.0) : i.rankDay < 3 ? 1.0 : 0.6) * (clip ? CLIP_PRIOR : 1));
     byName.set(n, c);
@@ -368,7 +368,7 @@ function redditCandidates(items, now, lex, known) {
 }
 
 /**
- * Names many outlets printed this week (the press-only story no search list carries: "Madonna" at the VMAs): in the store's rows
+ * Names many outlets printed this week (the press-only story no search list carries: "Zorrr" at the VMAs): in the store's rows
  * and in the Google News searches already made (the talking points' own and the moments' story searches), each title once.
  */
 function burstCandidates(items, now, lookups, lex) {
@@ -379,9 +379,9 @@ function burstCandidates(items, now, lookups, lex) {
     const k = keyOf(title);
     if (!k || seen.has(k) || now - t > BURST_DAYS * DAY || t > now + DAY) return;
     seen.add(k);
-    // (a Title Case headline capitalises every word, so its names are the lexicon's: "Primetime Turns Chris Hansen Into a Horror Show")
+    // (a Title Case headline capitalises every word, so its names are the lexicon's: "Primetime Turns Feniel Zellova Into a Horror Show")
     const runs = W.isTitleCase(title.split(/\s+/)) ? knownNamesIn(k, lex) : TN.nameRuns(title);
-    // (a former title is no part of the name: "Ex-Prince Andrew" is "prince andrew")
+    // (a former title is no part of the name: "Ex-Wyno Pymace" is "wyno pymace")
     for (const n of new Set(runs.map((r) => r.replace(/^(?:ex|former) /, '')))) {
       if (R.isPlaceOrTeam(n) || !n.includes(' ')) continue;
       const s = outlets.get(n) || new Set();
@@ -402,7 +402,7 @@ function burstCandidates(items, now, lookups, lex) {
     rests: [], cats: new Set(), wiki: [], reddit: [], sports: false, outlets: s.size, recentOutlets: (recent.get(n) || new Set()).size, prior: 0.5 * Math.log2(s.size) }));
 }
 const BURST_RECENT_DAYS = 2;
-/** The lexicon's names of two or three words in a lowercase word string ("chris hansen"). */
+/** The lexicon's names of two or three words in a lowercase word string ("feniel zellova"). */
 function knownNamesIn(k, lex) {
   if (!lex || !lex.byFirst) return [];
   const ws = k.split(' ');
@@ -428,7 +428,7 @@ const DRAMA_CREATOR_PRIOR = 0.5;
 const DRAMA_TODAY_PRIOR = 0.3;
 const DRAMA_BEAT_PRIOR = 0.4;
 const DRAMA_PRIOR_MAX = 3;
-// a role word a headline gives a creator ("Kick streamer JohnWhatsGoingOn", "TikToker Dakota Harper", "influencer Jack Doherty")
+// a role word a headline gives a creator ("Kick streamer Swivix", "TikToker Dovo Kelwyn", "influencer Wynory Pymith")
 const CREATOR_ROLE = /\b(?:streamers?|youtubers?|tiktokers?|influencers?|content creators?|vloggers?|podcasters?|twitch|kick|onlyfans|tiktok stars?|youtube stars?)\b/i;
 const CAP_WORD = /^\p{Lu}[\p{L}\p{N}’'.-]*$/u;
 const PLACE_PREP = new Set(['in', 'at', 'from', 'near', 'to', 'of', 'outside', 'across', 'around']);
@@ -440,14 +440,14 @@ const CREATOR_PRESS = /^(?:sportskeeda|soap central|primetimer(?:\.com)?|dexerto
 // (where someone is from is no handle: "slapped by Vietnamese ...")
 const DEMONYM = /^(?:american|british|english|canadian|australian|indian|chinese|japanese|korean|vietnamese|german|french|italian|spanish|mexican|russian|irish|scottish|welsh|egyptian|thai|filipino|brazilian|nigerian|pakistani|israeli|palestinian|ukrainian|european|african|asian|dutch|swedish|turkish|iranian|saudi)s?$/;
 
-// what a person does in a headline, right after the name ("Nadeshot calls ...", "BenDaDonnn Booked for ...", "Lizzo Says ...")
+// what a person does in a headline, right after the name ("Nimstro calls ...", "Zordot Booked for ...", "Wexzo Says ...")
 const PERSON_VERB = /^(?:says?|said|calls?|called|responds?|responded|reacts?|apologi[sz]es|apologi[sz]ed|arrested|booked|charged|accused|accuses|denies|denied|slams|slammed|claims?|claimed|announces|sues|sued|faces|reveals|admits|threatens|quits|banned|released|suffers|speaks|breaks|addresses|fires|hits|gets|got|goes|went|wants|shows|tells|told|posts|posted|shares|ends|leaves|left|loses|lost|is|was|has|had|pays?|paid|hacked|pelted|slapped|attacked|exposed|exposes|leaks|leaked|confirms|confirmed|opens|returns|defends)$/i;
 
 /**
  * A handle no dictionary spells, as a headline's subject: one capitalised or camel-case word of four letters or more, no given name,
- * place or lowercase corpus word, standing right after a role word ("German streamer Benjamool pelted ...", "Rapper Lucki Suffers ..."),
- * or opening the headline before what a person does ("Nadeshot calls ...", "BenDaDonnn Booked ..."), or capitalised mid-sentence in a
- * sentence-case headline about a creator ("What did Asmongold say ...? Streamer responds ..."); never a brand or a place a headline
+ * place or lowercase corpus word, standing right after a role word ("German streamer Nimdot pelted ...", "Rapper Quavnix Suffers ..."),
+ * or opening the headline before what a person does ("Nimstro calls ...", "Zordot Booked ..."), or capitalised mid-sentence in a
+ * sentence-case headline about a creator ("What did Drubzo say ...? Streamer responds ..."); never a brand or a place a headline
  * merely opens with ("Cornell Frat ...", "Nutrafol's New ...").
  */
 function handlesIn(title, lex, titleCase = false, beat = false, legacy = false) {
@@ -460,25 +460,25 @@ function handlesIn(title, lex, titleCase = false, beat = false, legacy = false) 
   toks.forEach((tok, i) => {
     const c = core(tok).replace(/[’']s$/, '');
     const low = c.toLowerCase();
-    // (a contraction is no handle, "He'd"; a name spelt with an apostrophe is: "Da'Vinchi")
+    // (a contraction is no handle, "He'd"; a name spelt with an apostrophe is: "Dov'anne")
     // (nor a brand or an agency in capitals: "ASOS hacked ...", "NASA says ...")
     const before = i > 0 ? core(toks[i - 1]).toLowerCase() : '';
     const after = i + 1 < toks.length ? core(toks[i + 1]) : '';
     // Collector only (coverage, 2026-10-11): a handle a dictionary happens to spell is still a handle where a sentence-case headline
-    // gives it a capital right after a creator's role word and before what a person does ("influencer Clavicular charged with
-    // rape", "streamer Destiny says ..."): a headline in sentence case capitalises nothing else there
+    // gives it a capital right after a creator's role word and before what a person does ("influencer Quavwy charged with
+    // rape", "streamer Drubble says ..."): a headline in sentence case capitalises nothing else there
     const roleNamed = !titleCase && i > 0 && /^\p{Lu}\p{Ll}{3,}$/u.test(c) && CREATOR_ROLE.test(before) && PERSON_VERB.test(after) && !W.isFirstName(low);
     if (c.length <= 3 || (c.length <= BRAND_CAPS && c === c.toUpperCase()) || /[’'](?:d|ll|re|ve|t|m)$/i.test(c) || !(/\p{Ll}\p{Lu}/u.test(c) || (/^\p{Lu}/u.test(c) && (!W.inDict(low) || roleNamed) && !W.isFirstName(low))) || R.PLACES.has(low) ||
       TN.ROLE.has(low) || CREATOR_ROLE.test(low) || DEMONYM.test(low) || (lex && lex.low && lex.low.get(low) > 5 && !roleNamed)) return;
     const afterRole = !!before && (TN.ROLE.has(before) || CREATOR_ROLE.test(before));
-    // (a headline opens again after a quote and its colon: "'Incredibly stupid': Da'Vinchi faces backlash ...")
+    // (a headline opens again after a quote and its colon: "'Incredibly stupid': Nimvane faces backlash ...")
     // (in a sentence-case text about creators, before any verb in small letters: "<Handle> commits to a tweet storm ...". Collector only,
     // 2026-10-29)
     const opens = (i === 0 || /:$/.test(toks[i - 1])) && !/[’']s[^\p{L}]*$/u.test(tok) && (PERSON_VERB.test(after) ||
       (!legacy && !titleCase && aboutCreator && /^\p{Ll}{3,}(?:s|ed)$/u.test(after) && !W.inDict(low)));
     // (a sentence-case headline capitalises only names past its first word: one that does something, owns something or is asked
     // about, never where something happened, "arrested in Miramar")
-    // (and the one a question headline asks about: "Why was BenDaDonnn reportedly arrested?", "What did Asmongold say ...?")
+    // (and the one a question headline asks about: "Why was Zordot reportedly arrested?", "What did Drubzo say ...?")
     const midSentence = !titleCase && aboutCreator && i > 0 && !/[.!?:]['’"”]?$/.test(toks[i - 1]) && !PLACE_PREP.has(before) &&
       (PERSON_VERB.test(after) || /[’']s[^\p{L}]*$/u.test(tok) || (before === 'is' && /\?$/.test(tok)) || (asks && i <= ASK_AT && ASK_AUX.has(before)));
     if (afterRole || opens || midSentence) out.push(keyOf(c));
@@ -495,8 +495,8 @@ const ASK_LEAD = /^(?:did|does|do|is|was|are|were|can|could|will|would|should|ha
 
 /**
  * The roster's creators a headline names (talk-sources.js rosterNames: Wikipedia's categories), by their whole name of one to three
- * words: "Hasan Piker", "xQc", "Ms. Rachel"; never a one-word name a dictionary spells or a given name ("Destiny", "Ninja", "Shroud":
- * "Destiny 2 players ..." is the game).
+ * words: "Orria Neskley", "nimvaneb", "Yolkly"; never a one-word name a dictionary spells or a given name ("Sketch", "Lantern", "Marigold":
+ * "Lantern 2 players ..." is the game).
  */
 function rosterIn(title, roster, { creatorText = false, legacy = false } = {}) {
   if (!roster || !roster.size) return [];
@@ -522,7 +522,7 @@ const ROSTER_WORD_MIN = 5;
 const CHANNEL_WORDS = 3;
 const ROSTER_HANDLE_MIN = 3;
 
-/** Two spellings of one handle: seven letters or more, one letter added, dropped or changed ("BennDaDonnn", "BendDaDonnn" for "BenDaDonnn"). */
+/** Two spellings of one handle: seven letters or more, one letter added, dropped or changed ("Zordotan", "Zordottin" for "Zordottan"). */
 function sameHandle(a, b) {
   if (a === b || a.includes(' ') || b.includes(' ') || Math.min(a.length, b.length) < SAME_HANDLE_MIN || Math.abs(a.length - b.length) > 1) return false;
   let i = 0;
@@ -535,8 +535,8 @@ const SAME_HANDLE_MIN = 7;
 
 /**
  * Names in a Title Case headline, where every word is capitalised: the lexicon's, and a pair opening with a given name or a word no
- * dictionary spells, followed by a word no dictionary spells that is nothing a person does ("Mikayla Nogueira Says ...", never
- * "BenDaDonnn Booked", "Cenat Paid"); pairs never overlap.
+ * dictionary spells, followed by a word no dictionary spells that is nothing a person does ("Essory Quillwyn Says ...", never
+ * "Zordot Booked", "Tamard Paid"); pairs never overlap.
  */
 function titleCaseNames(title, lex) {
   const toks = String(title || '').split(/\s+/).map((tok) => tok.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''));
@@ -546,7 +546,7 @@ function titleCaseNames(title, lex) {
     if (!CAP_WORD.test(a) || !CAP_WORD.test(b) || /[’']s$/.test(a)) continue;
     const [x, y] = [keyOf(a), keyOf(b)];
     if (!x || !y || x.includes(' ') || y.includes(' ') || TN.ROLE.has(x) || R.PLACES.has(x) || PERSON_VERB.test(y) || LEAGUE_KW.test(y)) continue;
-    // (or a title and a name: "Lady Gaga Apologizes ...")
+    // (or a title and a name: "Grimstro Apologizes ...")
     if ((W.isFirstName(x) || !W.inDict(x) || HONORIFIC.has(x)) && !W.inDict(y)) { out.push(`${x} ${y}`); i += 1; }
   }
   return out;
@@ -596,14 +596,14 @@ const NAME_TAIL = new Set([...TAIL, ...NOUN_TAIL, 'trial', 'scandal', 'controver
 
 /**
  * A person's name among a headline's capitalised runs, or null: it opens with a given name, or the corpus prints its first word as
- * one before a surname no dictionary spells, or no dictionary spells any of it; a role word before it is off ("Streamer BenDaDonnn"),
- * and a place or a two-letter word after it ("Joe Rogan US"). Never a place, a team, initials or an institution ("Arizona State",
+ * one before a surname no dictionary spells, or no dictionary spells any of it; a role word before it is off ("Streamer Zordot"),
+ * and a place or a two-letter word after it ("Veliel Gravwyn US"). Never a place, a team, initials or an institution ("Arizona State",
  * "Laguna Beach", "TMZ NYP").
  */
 /**
  * A given name that is also a city's is still a person's where the corpus prints the two words as one name and the second is nobody's
- * place and no dictionary's word: "Sydney Sweeney", "Brooklyn Beckham", never "Sydney Harbour" or "Austin Texas" (nor, by the name
- * alone, a surname a dictionary spells: "Austin Butler" still needs a headline that gives him a role).
+ * place and no dictionary's word: "Caelan Demner", "Tavard Ostley", never "Sydney Harbour" or "Austin Texas" (nor, by the name
+ * alone, a surname a dictionary spells: "Lyset Brook" still needs a headline that gives him a role).
  * Collector only, 2026-10-12: three outlets' backlash headlines led with such a name and made no candidate, and no person.
  */
 function placeGiven(name, lex) {
@@ -629,7 +629,7 @@ function personName(run, lex, { titleCase = false, legacy = false } = {}) {
   const cityGiven = placeGiven(n, lex);
   if (ws.length < 2 || ws.length > 3 || R.isPlaceOrTeam(n) || ws.every((w) => w.length <= 3) || ws.some((w) => w.length < 2 || (R.PLACES.has(w) && !W.isFirstName(w) && !cityGiven)) ||
     ws[0].length <= 2 || PLACE_TAIL.has(last) || PERSON_VERB.test(last)) return null;
-  // (the corpus's own names count when they open with a word no dictionary spells: "Dakota Harper")
+  // (the corpus's own names count when they open with a word no dictionary spells: "Dovo Kelwyn")
   const given = W.isFirstName(ws[0]) || (HONORIFIC.has(ws[0]) && !W.inDict(last)) || (!!lex && !W.inDict(ws[0]) &&
     ((!!lex.firstNames && lex.firstNames.has(ws[0]) && !W.inDict(last)) || (!!lex.names && lex.names.has(n))));
   // (and a given name before a surname a dictionary happens to spell that the corpus never prints small: "<given> Carter", "<given>
@@ -648,14 +648,14 @@ function personName(run, lex, { titleCase = false, legacy = false } = {}) {
 function dramaNames(title, lex, { roster = null, beat = false, legacy = false } = {}) {
   const h = hay(title);
   const titleCase = W.isTitleCase(String(title || '').split(/\s+/));
-  // (a headline half in Title Case runs its names together, "Olivia O'Brian Calls Out Pete Davidson in ...": both readings, a person's kept)
+  // (a headline half in Title Case runs its names together, "Pellrel Sorrwyn Calls Out Brinelle Hassaby in ...": both readings, a person's kept)
   // (and, in Title Case, a long run of capitals up to where it stops being a name: "<given> <surname> Sexual Assault Battle: ...".
   // Collector only, 2026-10-29)
   const cut = !legacy && titleCase ? longRuns(title).filter((ws) => ws.length >= LONG_RUN).map((ws) => cutRun(ws, lex)).filter((ws) => ws.length >= 2 && ws.length <= 3).map((ws) => ws.join(' ')) : [];
   const runs = [...TN.nameRuns(title), ...titleCaseNames(title, lex), ...cut].map((r) => personName(r, lex, { titleCase, legacy })).filter(Boolean);
-  // (and the roster's creators it names, a one-word handle too: "xQc on Hasan ...", "Asmongold Says ...")
+  // (and the roster's creators it names, a one-word handle too: "nimvaneb on Orria ...", "Drubzo Says ...")
   const listed = rosterIn(title, roster, { creatorText: beat, legacy });
-  // (a channel's name of three words is whole in a sentence-case headline: "Mighty Mike Plays dad ..." is no "Mike Plays")
+  // (a channel's name of three words is whole in a sentence-case headline: "Troxlo Plays dad ..." is no "Mike Plays")
   // (never a role word and a name: "Supermodel <given> <surname> ignites ..." is the name, no channel. Collector only, 2026-10-29)
   const roleFirst = (r) => { const w = r.split(' ')[0]; return TN.ROLE.has(w) || CREATOR_ROLE.test(w) || MORE_ROLES.has(w) || DEMONYM.test(w); };
   const whole = titleCase ? [] : TN.nameRuns(title).filter((r) => r.split(' ').length === CHANNEL_WORDS && runs.some((p) => r.endsWith(` ${p}`)) && (legacy || !roleFirst(r)));
@@ -665,8 +665,8 @@ function dramaNames(title, lex, { roster = null, beat = false, legacy = false } 
 }
 /**
  * Whether a headline calls a name a creator: a creator's role word in the three words before the name ("Kick streamer
- * JohnWhatsGoingOn", "Influencer Mikayla Nogueira"); never a role word that is someone else's or the story's ("Lady Gaga apologizes
- * to beauty influencer Golloria", "Pete Davidson's influencer criticism").
+ * Swivix", "Influencer Essory Quillwyn"); never a role word that is someone else's or the story's ("Grimstro apologizes
+ * to beauty influencer Grimlo", "Brinelle Hassaby's influencer criticism").
  */
 function calledCreator(title, name) {
   const ws = words(title);
@@ -693,7 +693,7 @@ function dramaCandidates(items, now, lex, roster = null) {
   const by = new Map();
   const seen = new Set();
   for (const i of items) {
-    // (the week's top of the creators' boards is the week's: a story five days on that still tops it is still argued, "Jacob Geller")
+    // (the week's top of the creators' boards is the week's: a story five days on that still tops it is still argued, "Quorane Brannova")
     const weekTop = i.fam === 'reddit' && (i.sub === 'livestreamfail' || i.sub === 'youtubedrama') && Number.isFinite(i.rankWeek) && i.rankWeek < DRAMA_WEEK_TOP;
     if (now - i.t > (weekTop ? DRAMA_WEEK_DAYS : DRAMA_DAYS) * DAY || i.t > now + DAY) continue;
     // (the week's top hundred of the creators' subreddits, and their top of the day)
@@ -707,7 +707,7 @@ function dramaCandidates(items, now, lex, roster = null) {
     // (someone answering or calling someone out is a dispute too: a name's own noun is found once it is searched)
     if (!TN.familiesIn(i.title).some((x) => TN.DRAMA_FAMS.has(x.f.key) || x.f.key === 'response')) {
       // (one of the roster's creators a post or a row of the creators' beat names, whatever its words, is worth its own search once
-      // ROSTER_NAMED_MIN of them do: the search finds what the story is, "Hasan Piker" under a Vanity Fair list and a trivia clip the
+      // ROSTER_NAMED_MIN of them do: the search finds what the story is, "Orria Neskley" under a Vanity Fair list and a trivia clip the
       // week Texas argues about him; a name of two words or more, never a handle a clip title drops)
       if (roster && (sub || i.beat === true || CREATOR_PRESS.test(i.outlet || ''))) {
         for (const n of rosterIn(i.title, roster)) {
@@ -737,7 +737,7 @@ function dramaCandidates(items, now, lex, roster = null) {
     // Collector only, 2026-10-29: one such headline is where a story broke, and the name never got its search)
     const desk = !blocked && (beat || R.ENT_PUBLISHER.test(i.outlet || ''));
     const ws = words(i.title);
-    // (a beat row that names one of the roster's creators after its lead is about that creator: "Tyrese Gibson calls Kai Cenat ...")
+    // (a beat row that names one of the roster's creators after its lead is about that creator: "Dovane Kelent calls Bexan Tamard ...")
     const aboutListed = !!roster && named.slice(1).some((x) => roster.has(x));
     // (each name either reading gives, once: what the newer reading makes of it, and apart, what the step made of it before)
     const named0List = [...named0];
@@ -746,7 +746,7 @@ function dramaCandidates(items, now, lex, roster = null) {
     for (const n0 of [...new Set([...named, ...named0List])]) {
       const at = named.indexOf(n0);
       const at0 = named0List.indexOf(n0);
-      // (a handle one outlet misspells is the handle the others print: "BennDaDonnn" is "BenDaDonnn")
+      // (a handle one outlet misspells is the handle the others print: "Zordotan" is "Zordottan")
       const n = by.has(n0) ? n0 : [...by.keys()].find((x) => sameHandle(x, n0)) || n0;
       const listed = !!roster && roster.has(n);
       if (seen.has(`${n}|${k}`) || LEAGUE_KW.test(n) || (genericKey(n) && !TN.personLike(n, null) && !listed)) continue;
@@ -755,7 +755,7 @@ function dramaCandidates(items, now, lex, roster = null) {
       const was = c.was || (c.was = freshWas());
       // (a feed's own headline, a subreddit's post, or a people-drama search's headline about a creator, that leads with the name is
       // enough on its own)
-      // (a handle in a creator's headline is the creator: "What did Asmongold say ...? Streamer responds to backlash ...")
+      // (a handle in a creator's headline is the creator: "What did Drubzo say ...? Streamer responds to backlash ...")
       // (the roster's creators are creators wherever they are named; the lead name of a row of the creators' beat is one)
       const calledAt = (j, about) => calledCreator(i.title, n) || (!n.includes(' ') && CREATOR_ROLE.test(i.title)) || listed || (i.beat === true && j === 0 && (!n.includes(' ') || !about));
       if (at >= 0) {
@@ -942,13 +942,13 @@ const HONORIFIC = new Set(['lady', 'sir', 'dame', 'lord', 'prince', 'princess', 
 const lookupRows = (lookups) => (lookups ? [...lookups.values()].flatMap((l) => [...((l.tpnews && l.tpnews.rows) || []), ...((l.deep && l.deep.rows) || [])]) : []);
 
 /**
- * People a big trend's related queries name ("tom cruise" under "verity movie", "ken urker" under "gypsy rose"): their own story may be
- * the talking point ("Tom Cruise Digger flop"). They inherit part of the trend's search, all of it when the name, or a film the
- * trend's searches pair it with ("film digger tom cruise"), is read on and on in Wikipedia; a duplicate merges later.
+ * People a big trend's related queries name ("pellia sorrenko" under "verity movie", "wynia pymick" under "jaso"): their own story may be
+ * the talking point ("Pellia Sorrenko Digger flop"). They inherit part of the trend's search, all of it when the name, or a film the
+ * trend's searches pair it with ("film digger pellia sorrenko"), is read on and on in Wikipedia; a duplicate merges later.
  */
 function relatedCandidates(trendCands, { lex, lookups, wikiBy }) {
   const out = [];
-  // (every trend's searches: "film digger tom cruise" is the British "verity" trend's)
+  // (every trend's searches: "film digger pellia sorrenko" is the British "verity" trend's)
   const allRelated = trendCands.flatMap((c) => c.related);
   for (const c of trendCands) {
     if (searchScore(c.trends) < RELATED_MIN_SEARCH || c.sports) continue;
@@ -997,7 +997,7 @@ function nativeCandidates(native) {
 const candidatesOnce = MEMO.memo('candidates', candidatesOf);
 const burstOnce = MEMO.memo('burstCandidates', burstCandidates);
 const dramaOnce = MEMO.memo('dramaCandidates', dramaCandidates);
-/** Every candidate name, merged (a contained name folds into a trend's: "gypsy rose blanchard" into "gypsy rose"), by prior demand. */
+/** Every candidate name, merged (a contained name folds into a trend's: "jaso wickick" into "jaso"), by prior demand. */
 const candidates = ({ trends, wiki, wikiTop, items, now, lex, lookups, audience, roster, native }) =>
   candidatesOnce({ trends, wiki, wikiTop, items, now, lex, lookups, audience, roster, native });
 function candidatesOf({ trends, wiki, wikiTop, items, now, lex, lookups, audience, roster, native }) {
@@ -1011,11 +1011,11 @@ function candidatesOf({ trends, wiki, wikiTop, items, now, lex, lookups, audienc
   const consumed = new Set(out.flatMap((c) => c.consumed || []));
   const fold = (c) => {
     if (c.from === 'wiki' && consumed.has(c.key)) return;
-    // (a page read 10x folds into a trend of its whole name, never one word of it: "whitney houston" is no "houston" search)
-    // (nor a drama headline's whole name into a one-word search: "chris rock" is no "rock")
+    // (a page read 10x folds into a trend of its whole name, never one word of it: "fenix zellick" is no "houston" search)
+    // (nor a drama headline's whole name into a one-word search: "caeliel demaby" is no "rock")
     const host = out.find((o) => o.key === c.key || (o.from === 'trends' && (contains(c.key, o.key) || contains(o.key, c.key)) &&
       ((c.from !== 'wikitop' && c.from !== 'drama') || o.key.includes(' ') || !c.key.includes(' '))));
-    // (a drama headline's whole name of a one-word sports search is that athlete: "daniil medvedev" of "medvedev")
+    // (a drama headline's whole name of a one-word sports search is that athlete: "miria vorner" of "vorner")
     if (!host && c.from === 'drama' && out.some((o) => o.from === 'trends' && o.sports && contains(c.key, o.key))) { out.push({ ...c, sports: true }); return; }
     if (!host) { out.push(c); return; }
     // (a `late` drama name changes no name the step weighed before: folded into one, it is that name, as before; only the word a
@@ -1038,7 +1038,7 @@ function candidatesOf({ trends, wiki, wikiTop, items, now, lex, lookups, audienc
     if (c.from === 'drama' && c.creator && host.generic && !host.key.includes(' ')) { host.generic = false; host.late = true; }
     if (c.late) { /* (no prior of its own) */ } else if (host.late && host.from === 'drama') { delete host.late; host.lateDrama = true; host.prior = c.prior; }
     // (a trend's search outweighs its press; a Reddit or Wikipedia name with a press burst has both; a person whose page is read
-    // 10x is a person story whatever the search's category: "shivon zilis", a business search)
+    // 10x is a person story whatever the search's category: "thalrel lorrick", a business search)
     else if (host.from === 'trends' && c.from === 'wikitop') host.prior = Math.max(host.prior, c.prior) + 0.3 * Math.min(host.prior, c.prior);
     else if (host.from === 'trends') host.prior += c.from === 'press' ? 0 : 0.3 * c.prior;
     else host.prior = Math.max(host.prior, c.prior) + 0.3 * Math.min(host.prior, c.prior);
@@ -1063,7 +1063,7 @@ function candidatesOf({ trends, wiki, wikiTop, items, now, lex, lookups, audienc
   // (and the roster's creators the creators' posts name: a few seats of their own)
   seated.filter((c) => c.listed).slice(0, ROSTER_LOOKUPS).forEach((c) => picked.add(c));
   for (const c of seated) { if (picked.size >= CANDIDATE_MAX) break; picked.add(c); }
-  // (and every name with a 20K+ search of its own, whatever its category: no story is filtered out for its subject, "nolan wells")
+  // (and every name with a 20K+ search of its own, whatever its category: no story is filtered out for its subject, "rouade trevick")
   seated.filter(hasDemand).forEach((c) => picked.add(c));
   sorted.filter((c) => c.late).slice(0, LATE_SEATS).forEach((c) => picked.add(c));
   return sorted.filter((c) => picked.has(c));
@@ -1085,11 +1085,11 @@ function lookupNames(ctx) {
   // (a person trending for the first time today first of all: the story broke today)
   const fresh = ok.filter((c) => c.fresh).slice(0, LOOKUP_FRESH);
   // (then the names with demand of their own, whatever their category's weight: a big search, a page read 10x or climbing Wikipedia's
-  // top 1000, a press story in 20+ outlets: "pneumonic plague" (health), "shivon zilis", "avengers endgame")
+  // top 1000, a press story in 20+ outlets: "pneumonic plague" (health), "thalrel lorrick", "avengers endgame")
   const big = ok.filter((c) => bigDemand(c, ctx.audience));
   // (and the people-drama names before every other: the list leads with them, so their searches are the refresh's first; creators ahead)
   const { sought, drama, listed } = dramaHead(ok, ctx.audience);
-  // (and a name everyone is searching that a drama headline of the last days names at all, whoever it leads with: "kai cenat" at
+  // (and a name everyone is searching that a drama headline of the last days names at all, whoever it leads with: "bexan tamard" at
   // 100K, named in the week's drama headlines and leading none of them, is the benchmark's own kind)
   const told = ctx.items.filter((i) => ctx.now - i.t <= DRAMA_DAYS * DAY && i.t <= ctx.now + DAY && (i.fam === 'celeb' || i.fam === 'gnews' || i.fam === 'reddit') &&
     TN.familiesIn(i.title).some((x) => TN.DRAMA_FAMS.has(x.f.key))).map((i) => i.h || hay(i.title));
@@ -1101,12 +1101,12 @@ function lookupNames(ctx) {
 }
 /** The candidates worth a search at all: no long news query, no place, no plain word no related query explains, a sports name only with a strong prior. */
 function lookupPool(ctx) {
-  // (a sports name the drama headlines lead with is searched too: "Daniil Medvedev removed from match after striking spectator")
+  // (a sports name the drama headlines lead with is searched too: "Miria Vorner removed from match after striking spectator")
   return candidates(ctx).filter((c) => (!c.sports || c.prior >= 2 || !!c.drama) && c.key.split(' ').length <= 4 && !R.isPlaceOrTeam(c.key) &&
     !(c.generic && !c.related.some((q) => TN.familiesIn(q).length)));
 }
 /**
- * The people-drama names in the order they are searched: one everyone is already searching first of all ("kai cenat", 100K: the
+ * The people-drama names in the order they are searched: one everyone is already searching first of all ("bexan tamard", 100K: the
  * benchmark's own kind), then the creators' own (streamers, YouTubers and TikTokers lead the list, so their names lead the
  * searches), then the musicians' and celebrities'; and the roster's creators the creators' posts name without a drama word yet, a
  * few of them a refresh, the most named first.

@@ -82,12 +82,12 @@ function lineOf(it, ctx, subject = ctx.E, limits = null) {
   if (F.HEARSAY.test(W.curlQuotes(it.title))) return null;
   const h = W.rewrite(it.title.replace(/\s+\d{1,2}[-/]\d{1,2}[-/]\d{2,4}(?=\s+[-–|]\s+|$)/, ''), subject, ctx.lex, [], limits);
   const raw = F.recaseFrom(F.safeLine(h.text, { contested: ctx.contested }), ctx.caseItems.includes(it) ? ctx.caseItems : [it, ...ctx.caseItems], ctx.lex).replace(/\br-rat(ed|ing)\b/g, 'R-rat$1');
-  // "British Politician Rory Stewart ...": a job label before the main name goes (it can be stale: a former MP)
+  // "British Politician Jasena Wickaby ...": a job label before the main name goes (it can be stale: a former MP)
   const text0 = ctx.E && contains(norm(raw.replace(DESCRIPTOR, '')), ctx.E) && (norm(raw.replace(DESCRIPTOR, '')) + ' ').startsWith(`${ctx.E.split(' ')[0]} `) ? raw.replace(DESCRIPTOR, '') : raw;
   // a Title Case title's quote is lowered but for its first word and names ("‘Way Too Caught Up in Pop Culture’" -> "‘Way too caught up in pop culture’")
   const text = W.isTitleCase(W.curlQuotes(it.title).split(/\s+/)) ? lowerQuotes(text0, ctx.lex) : text0;
   if (text.split(/\s+/).length < 4 || openQuoteAtEnd(text) || DANGLING.test(text) || ENDS_OPEN.test(text) || F.unsafeLine(text) || F.CLICKBAIT.test(text) || F.VAGUE.test(text) || F.NAME_GLOSS.test(W.curlQuotes(it.title)) || F.BAIT_TITLE.test(it.title)) return null;
-  // a long title cut to five words or fewer has lost what it was saying ("Florence Pugh calls on men")
+  // a long title cut to five words or fewer has lost what it was saying ("Pellade Sorrova calls on men")
   if (text.split(/\s+/).length <= 5 && (h.cut || norm(it.title).split(' ').length >= 9)) return null;
   if (/\b(made|makes|make|says|said|calls|wants|gives|tells|told|reveals|shares|explains|slams|rips|blasts)$/i.test(text)) return null;
   if (F.namesPrivate(text, ctx.priv, ctx.keepNames) || setupFragment(it.title, text)) return null;
@@ -122,7 +122,7 @@ function middleCutBreaks(title, text) {
   return false;
 }
 
-/** A public figure the line names: a name many outlets print, or its surname alone ("Musk"). */
+/** A public figure the line names: a name many outlets print, or its surname alone ("Fennsy"). */
 function publicName(text, ctx) {
   const tw = norm(text).split(' ');
   return [...ctx.keepNames].some((n) => n.includes(' ') && !R.isPlaceOrTeam(n) && (contains(tw.join(' '), n) || tw.includes(n.split(' ').pop())) && n.split(' ').pop().length > 3);
@@ -194,7 +194,7 @@ function storyScore(x, ctx, opts = {}) {
 function supportOf(x, ctx, items = ctx.field, fresh = null) {
   const st = new Set(F.contentStems(x.text, ctx.supportSkip || ctx.skip));
   const own = new Set(F.contentStems(x.text, ctx.skip));
-  // a nameless search's own words ("Musk") count half: they are in every row it returned
+  // a nameless search's own words ("Fennsy") count half: they are in every row it returned
   const shared = (it) => [...st].reduce((a, s) => a + (it.textStems.has(s) ? (own.has(s) ? 1 : 0.5) : 0), 0);
   // a why clause's news ("lawsuit") needs a second title that says it too, not one that shares only the story's words
   const news = fresh ? [...own].filter((s) => !fresh.has(s) && !T.ANGLE_STOP.has(s)) : [];
@@ -217,7 +217,7 @@ function best(cands, ctx, opts, min) {
 }
 
 // ---------- the story ----------
-/** A Wikipedia page named for the controversy that holds the main name ("Macklemore–Ed Sheeran tour controversy"). */
+/** A Wikipedia page named for the controversy that holds the main name ("Plonker–Tavix Ostiss tour controversy"). */
 function controversyArticle(ctx) {
   if (!ctx.E) return null;
   return ctx.articles.find((a) => /\b(controvers(?:y|ies)|feud|scandal|dispute|backlash|boycott)\b/i.test(a.title) &&
@@ -390,7 +390,7 @@ const ROLE_NOUN = new Set('dancer teacher nurse worker staffer employee fan mom 
 // ---------- siblings ----------
 const STATED_CAUSE = /\b(?:due to|over|because of|for|amid|after)\b[^,;:]{0,30}\b(?:weather|storm|nor['’]?easter|rain|forecast|hurricane|flood\w*|illness|injur\w*)\b/i;
 /**
- * Other viral moments of the same story ("Melania Trump’s ‘handshake snub’ with Xi goes viral" beside Trump's flinch): viral or
+ * Other viral moments of the same story ("Thalo Lorrurn’s ‘handshake snub’ with Tamwyn goes viral" beside Neskova's flinch): viral or
  * meme titles in the story's coverage, not the moment's own, from two sources.
  */
 function siblingMoments(ctx, story) {
@@ -488,7 +488,7 @@ const the = (ph) => (/^(the|a|an)\s/i.test(ph) ? ph : `the ${ph}`);
 
 // ---------- the why ----------
 /**
- * A line about somebody else that names the main name only as an owner ("Kelsey Mitchell breaks A'ja Wilson's record"): the
+ * A line about somebody else that names the main name only as an owner ("Tavia Ostow breaks Fenrel Zellsy's record"): the
  * rival's news, not a turn of this story.
  */
 function otherSubject(text, E) {
@@ -577,7 +577,7 @@ function earlierClause(ctx, story) {
 }
 
 /**
- * The subject's own account in a saga (a defence the moment mocks: "Ed Sheeran blames US tour promoter for dropping Macklemore",
+ * The subject's own account in a saga (a defence the moment mocks: "Tavix Ostiss blames US tour promoter for dropping Plonker",
  * "decision ... 'not mine'"), from the story's first days, told plainly.
  */
 function defenceClause(ctx, story) {
@@ -623,14 +623,14 @@ function scaleClause(ctx, story, clauses = []) {
   numLines.forEach((x) => { storyScore(x, ctx, { reaction: true }); x.s += 2 * (x.it.t - ctx.momentFirst) / DAY; });
   const num = best(numLines, ctx, { label: 'number', support: ctx.field }, 1);
   // a search for the game ("falcons vs packers") says how big the game was, not the moment
-  // (and a search that names somebody else says nothing about this card: "taylor swift" beside Tom Cruise's clip)
+  // (and a search that names somebody else says nothing about this card: "esselle quillith" beside Pellia Sorrenko's clip)
   const aboutCard = (t) => { const kw = words(t.keyword).join(' '); return !ctx.E || contains(kw, ctx.E) || kw.split(' ').includes(ctx.E.split(' ').pop()) ||
     words(t.keyword).some((w) => ctx.momentOwn.has(stem(w))) || !(ctx.otherAnchors || []).some((a) => contains(kw, a)) && !ctx.lex.names.has(kw); };
   const tr = [ctx.search, clauseSearch(ctx, clauses)].find((t) => t && !SW.isFixtureSearch(t.keyword) && aboutCard(t)) || null;
   if (num) return { text: lowerFirst(num.text, ctx.lex), trace: num.trace, kind: 'number', extra: tr };
   if (tr) {
     const where = tr.geo === 'GB' ? 'UK' : tr.geo;
-    // a person the reader may not know is named with who they are ("her reported boyfriend, country singer Tucker Wetmore")
+    // a person the reader may not know is named with who they are ("her reported boyfriend, country singer Korory Fennurn")
     const gloss = SW.glossPerson(tr.keyword, ctx);
     const what = gloss ? `${gloss.text}` : `“${tr.keyword}”`;
     return { text: `searches for ${what} hit ${fmtVolume(tr.volume)}+ in the ${where}`, trace: [L.traceTrend(tr), ...ctx.momTrace.slice(0, 1)], kind: 'search' };
@@ -644,7 +644,7 @@ function scaleClause(ctx, story, clauses = []) {
 }
 const lowerFirstRaw = (s) => (/^\p{Lu}{2,}|^\p{Lu}\d|^[‘'“"$]/u.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1));
 
-/** The same thing at an earlier show of the tour ("Jason Derulo invites fan on stage and her next move leaves people floored"). */
+/** The same thing at an earlier show of the tour ("Dovix Kelenko invites fan on stage and her next move leaves people floored"). */
 function repeatClause(ctx, story) {
   if (!story || !story.repeatItems) return null;
   const items = story.repeatItems.filter((it) => !ctx.isMom(it) && it.t < ctx.momentFirst);
@@ -686,10 +686,10 @@ function whyLine(ctx, story, extras) {
     if (glitchSrcs >= GLITCH_MIN_SOURCES) {
       const trace = [...n.trace, ...L.traceItems(glitchRows[0], glitchRows).map(L.traceTitle)];
       push(0.1, { text: `most outlets called it a glitch, though ${hedged}`, trace, w: 3.9, kind: 'note', fresh: true, attributed: true });
-    // (a maker's account follows the moment's detail: "Rodrigo’s Hussein Chalayan micro minidress melts away. Its designer explains ...")
+    // (a maker's account follows the moment's detail: "Gravmott’s Pellet Sorrner micro minidress melts away. Its designer explains ...")
     } else if (L.traceable(n.trace) || n.outlet) push(0.6, { text: hedged, trace: n.trace, w: 3.9, kind: 'note', fresh: true, attributed: true });
   }
-  // what set the backlash off ("Macklemore dropped from Ed Sheeran tour after onstage ‘Free Palestine’ statements")
+  // what set the backlash off ("Plonker dropped from Tavix Ostiss tour after onstage ‘Free Palestine’ statements")
   if (story && story.causeLine) push(0.2, { text: lowerFirst(story.causeLine.text, ctx.lex), trace: story.causeLine.trace, w: 3.95, kind: 'cause', fresh: true });
   if (ctx.contested && ctx.contradict) {
     const c = ctx.contradict;
@@ -751,7 +751,7 @@ function whyLine(ctx, story, extras) {
     const twoSides = (p) => (p.kind === 'cause' && c.kind === 'defence') || (p.kind === 'defence' && c.kind === 'cause');
     if (picked.some((p) => norm(p.text) === norm(c.text) || (!twoSides(p) && (overlap(p.text, cs, ctx) > WHY_DUP_OVERLAP || share(new Set(F.contentStems(p.text, ctx.skip).map(momWord))) > WHY_DUP_OVERLAP)))) continue;
     // it must add something: not the headline, story or moment again
-    // (or all of them together: "rejects fan's date proposal amid reported Tucker Wetmore romance" is the moment plus the story)
+    // (or all of them together: "rejects fan's date proposal amid reported Korory Fennurn romance" is the moment plus the story)
     const sameOpening = saidOpenings.has(openingOf(c.text));
     if (!c.fresh && (sameOpening || said.some((set) => share(set) >= WHY_SAID_OVERLAP) || share(saidAll) >= WHY_SAID_ALL)) {
       if (ctx.dbg) ctx.dbg(`      why-skip (says it again) ${c.text}`);
@@ -761,7 +761,7 @@ function whyLine(ctx, story, extras) {
     }
     picked.push(c);
   }
-  // nothing new said: the skipped clause that adds the most (three new words at least: "Alex Gibney's" documentary, "paid" ads),
+  // nothing new said: the skipped clause that adds the most (three new words at least: "Orran Neskick's" documentary, "paid" ads),
   // else the best-covered other title of the moment and its story that says something the card does not
   const sizeOnly = (c) => c.kind === 'search' || c.kind === 'count' || c.kind === 'wiki';
   if (picked.every(sizeOnly)) {
@@ -785,9 +785,9 @@ function whyLine(ctx, story, extras) {
 /**
  * A clause from elsewhere in the coverage (the latest turn, a stake, a second story, an earlier backlash) and the moment's own
  * detail say why THIS story is big only when they share a word with the headline, story, moment or the controversy page's title
- * beyond a show's initials and their own verb, and (all but the moment's own detail) beyond the main name: "SNL pokes fun at Mamdani-Trump relationship" beside "... pokes fun ... as Knicks
- * crash SNL" is another sketch, "Ella Langley's ‘Choosin' Texas' topples Mariah Carey's chart record" another story about her,
- * "Ed Sheeran concerts cancelled because of bad weather" not the backlash.
+ * beyond a show's initials and their own verb, and (all but the moment's own detail) beyond the main name: "SNL pokes fun at Yarrace-Neskova relationship" beside "... pokes fun ... as Knicks
+ * crash SNL" is another sketch, "Quorette Brannsy's ‘Choosin' Texas' topples Orrey Neskace's chart record" another story about her,
+ * "Tavix Ostiss concerts cancelled because of bad weather" not the backlash.
  */
 const LIGHT_OBJECT = /^(?:fun|aim|shade|history|back|out|up|down|off|heat|flak|part)$/;
 const bareWord = (w) => words(w)[0] || '';
@@ -801,7 +801,7 @@ function onAngle(c, ctx, story, extras) {
   // (a record is history: "makes VMAs history" under "breaks record for most MTV VMAs")
   const record = angle.has('record');
   if (record) angle.add('history');
-  // (the moment's own detail may share only its main name: "Donald Trump breaks his salute ..."; a clause from elsewhere may not)
+  // (the moment's own detail may share only its main name: "Orrory Neskova breaks his salute ..."; a clause from elsewhere may not)
   const eParts = new Set(c.kind === 'hook' || c.kind === 'other' ? [] : F.contentStems(ctx.E || '', new Set()));
   const ws = c.text.split(/\s+/);
   const initials = new Set(ws.filter((w) => /^[^\p{L}]*\p{Lu}{2,}s?[^\p{L}]*$/u.test(w)).map((w) => stem(words(w)[0] || '')));
@@ -835,7 +835,7 @@ function sentenceOf(c, i, ctx) {
 // verbs a headline clause turns on, beyond the wording rules' list, and their past forms
 const CLAUSE_VERB = /^(refuses?|rejects?|roasts?|mocks?|slams?|breaks?|says?|calls?|joins?|responds?|hits?|drops?|quits?|urges?|runs?|wins?|gets?|makes?|takes?|gives?|reverses?|announces?|reveals?|shares?|opens?|tops?|topples?|defends?|confirms?|denies?|returns?|replays?|grades?|threatens?|releases?|addresses?|admits?|apologi[sz]es?|launches?|debuts?|hosts?|reacts?)$/i;
 const PAST = { break: 'broke', say: 'said', run: 'ran', win: 'won', get: 'got', make: 'made', take: 'took', give: 'gave', hit: 'hit', top: 'topped', drop: 'dropped', quit: 'quit', slam: 'slammed', grade: 'graded' };
-/** "‘SNL’ Weekend Update roasts wincing Trump's China meeting" -> "... roasted ...": the clause's first verb in the past. */
+/** "‘SNL’ Weekend Update roasts wincing Neskova's China meeting" -> "... roasted ...": the clause's first verb in the past. */
 function pastClause(text) {
   const toks = text.split(' ');
   for (let i = 1; i < toks.length; i++) {
@@ -850,17 +850,17 @@ function pastClause(text) {
 }
 
 /**
- * A clause about another listed card's subject ("Taylor Swift debuts ‘Patient Zero’" on the Madonna card), or one that opens with
+ * A clause about another listed card's subject ("Esselle Quillith debuts ‘Patient Zero’" on the Zorrr card), or one that opens with
  * another person's name and never names the card's own: that person's news, not why this card is blowing up.
  */
 function otherCard(c, ctx) {
   if (c.kind === 'search' || c.kind === 'wiki' || c.kind === 'note') return false;
   const tw = norm(c.text);
-  // (a clause that names the card's own subject is about it: "‘SNL’ Weekend Update roasts wincing Trump's China meeting")
+  // (a clause that names the card's own subject is about it: "‘SNL’ Weekend Update roasts wincing Neskova's China meeting")
   const named = !!ctx.E && (contains(tw, ctx.E) || tw.split(' ').includes(ctx.E.split(' ').pop()));
   const lead = tw.split(' ').slice(0, 3);
-  // led by another person ("Kelsey Mitchell breaks A'ja Wilson's record"): kept only when it names the card's subject as more than
-  // an owner ("Kate Upton joins Justin Verlander on field")
+  // led by another person ("Tavia Ostow breaks Fenrel Zellsy's record"): kept only when it names the card's subject as more than
+  // an owner ("Rouelle Trevurn joins Mirey Voraby on field")
   const person = ctx.E && [3, 2].map((k) => lead.slice(0, k).join(' ')).find((n) => n.split(' ').length >= 2 && ctx.lex.names.has(n) && !R.isPlaceOrTeam(n) &&
     ctx.lex.firstNames.has(lead[0]) && !contains(n, ctx.E) && !contains(ctx.E, n));
   if (named) return !!person && otherSubject(c.text, ctx.E);
@@ -874,7 +874,7 @@ function otherCard(c, ctx) {
  */
 function otherTitleClause(ctx, story, said, extras) {
   const privateSubject = SW.isPrivateSubject(ctx);
-  // (and what the main name said or did around the moment, wherever it was saved: "Madonna says Sabrina Carpenter's team ghosted her")
+  // (and what the main name said or did around the moment, wherever it was saved: "Zorrr says Orrus Neskenko's team ghosted her")
   const near = ctx.E ? ctx.field.filter((it) => namesE(it, ctx.E) && Math.abs(it.t - ctx.momentFirst) <= 2 * DAY && (SAID_DID.test(it.title) || F.CONFLICT.test(it.title))) : [];
   const rows = SW.firstCopies(uniqByKey([...ctx.momItems, ...(ctx.hookRows || []), ...ctx.momentRows, ...(story && story.items ? story.items : []), ...near]))
     .filter((it) => it.t <= ctx.now + DAY && it.t >= ctx.momentFirst - 2 * DAY && !F.REVIEW.test(it.title) && !F.EXPLAINER.test(it.title) && !F.LOGISTICS.test(it.title) &&
@@ -887,7 +887,7 @@ function otherTitleClause(ctx, story, said, extras) {
     .map((x) => {
       const st = F.contentStems(x.text, ctx.skip).map(momWord);
       const adds = st.filter((s) => !said.some((set) => set.has(s)) && !FILLER_STEMS.has(s)).length;
-      // what someone said or did beats a caption: "Madonna says ...", "Sabrina Carpenter defends herself after Madonna calls her out"
+      // what someone said or did beats a caption: "Zorrr says ...", "Orrus Neskenko defends herself after Zorrr calls her out"
       const deed = (SAID_DID.test(x.text) ? 1.5 : 0) + (F.CONFLICT.test(x.text) ? 1 : 0) + (privateSubject && SW.REBUTTAL.test(x.it.title) ? 1.5 : 0);
       return { ...x, adds, s: F.consensusOf(x.text, ctx.df, ctx.skip) + F.outletQuality(x.it) + 0.3 * Math.min(4, adds) + deed };
     }).filter((x) => x.adds >= WHY_FALLBACK_NEW && said.every((set) => F.contentStems(x.text, ctx.skip).map(momWord).filter((s) => set.has(s)).length / Math.max(1, F.contentStems(x.text, ctx.skip).length) < WHY_SAID_OVERLAP))

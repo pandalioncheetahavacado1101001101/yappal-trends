@@ -33,10 +33,13 @@ const TIMELINE_KINDS = ['start', 'chapter', 'reply', 'measure', 'latest'];
 const POST_KINDS = ['video', 'clip', 'thread'];
 // (what a creator could film, D4 `angles`: lib/editor/prompt.js ANGLE_KINDS)
 const ANGLE_KINDS = ['explain', 'react', 'take', 'ask', 'timeline', 'try'];
+// (the extension's sections, D3 as of 2026-10-31: lib/extension.js SECTIONS, in display order)
+const SECTION_KEYS = ['justStarting', 'stillSearched', 'tonight', 'charts', 'games', 'niche', 'remembered', 'rightNow', 'rumours', 'more'];
 // (what joins a row to another, D4 `relatedRows`: lib/entity/graph.js)
 const RELATED_KINDS = ['person', 'work', 'sound', 'query'];
 const GRAPH_STEPS = [15, 30, 60, 120, 360, 1440];
-const LIMITS = { rows: 80, minRows: 5, listBytes: 120000, detailBytes: 6000, bundleBytes: 150000, title: 90, line: 200, query: 60,
+// (rows: the main list's 80 and the extension after them, D3 as of 2026-10-31; mainRows: the main list's own most)
+const LIMITS = { rows: 160, mainRows: 80, minRows: 5, listBytes: 240000, detailBytes: 6000, bundleBytes: 150000, title: 90, line: 200, query: 60,
   timelineText: 120, earlyOnPage: 3, earlyInList: 12, urgent: 3, namesBytes: 60000, posts: 3, related: 5, spread: 6, why: 6, whyText: 160, angles: 3, angleText: 160, relatedRows: 3, via: 60 };
 // Section C, as far as a row can show it: how old an Early row, an urgent row, a spike and a flare may be, and the shortest time left
 // a start known only to the day may carry.
@@ -100,6 +103,8 @@ function validateItem(item, index, pageSize, say, now = NaN) {
     Array.isArray(item.tags) && item.tags.includes(topic.key)), 'topic: { key (normalised, one of tags), name } when present');
 
   need(item.sub === undefined || SUBS.includes(item.sub), `sub must be one of ${SUBS.join(', ')} when present`);
+  // (an extension row's section: never on the first page, never Early, never urgent)
+  need(item.section === undefined || (SECTION_KEYS.includes(item.section) && !(pageSize && item.rank <= pageSize) && !item.isEarly && !item.filmWithin24h), `section: one of ${SECTION_KEYS.join(', ')}, past the first page, on a row that is neither Early nor filmWithin24h, when present`);
   // (a sound's count as a chart gives it, K7: on a sound row only, each part of the right shape, and the day's change never without the total)
   const snd = item.sound;
   need(snd === undefined || (item.kind === 'sound' && snd && typeof snd === 'object' && Object.keys(snd).length > 0), 'sound: an object with at least one part, on a sound row only');
@@ -178,6 +183,19 @@ function validateList(list, { bytes = 0, audience = null } = {}) {
   if (early.filter((x) => x.rank <= list.pageSize).length > LIMITS.earlyOnPage) say(`at most ${LIMITS.earlyOnPage} Early rows on the first page`);
   if (early.length > LIMITS.earlyInList) say(`at most ${LIMITS.earlyInList} Early rows in a list`);
   if (items.filter((x) => x && x.filmWithin24h).length > LIMITS.urgent) say(`at most ${LIMITS.urgent} rows with filmWithin24h`);
+  // (the extension follows the main list: at most mainRows rows without a section, and none after the first row with one)
+  const firstExt = items.findIndex((x) => x && x.section !== undefined);
+  const main = firstExt < 0 ? items.length : firstExt;
+  if (main > LIMITS.mainRows) say(`at most ${LIMITS.mainRows} rows before the extension, found ${main}`);
+  if (firstExt >= 0 && items.slice(firstExt).some((x) => x && x.section === undefined)) say('every row after the first extension row has a section');
+  const sec = list.sections;
+  if (sec !== undefined) {
+    const counts = new Map();
+    for (const x of items) if (x && typeof x.section === 'string') counts.set(x.section, (counts.get(x.section) || 0) + 1);
+    const ok = Array.isArray(sec) && sec.every((s) => s && SECTION_KEYS.includes(s.key) && isText(s.title, 40) && isInt(s.count) && s.count === (counts.get(s.key) || 0) && s.count > 0)
+      && new Set(sec.map((s) => s && s.key)).size === sec.length && sec.length === counts.size;
+    if (!ok) say(`sections: [{ key (${SECTION_KEYS.join(', ')}), title (1-40), count (its rows) }], each section of the items once`);
+  } else if (firstExt >= 0) say('sections: required when a row has a section');
   return out;
 }
 
@@ -368,7 +386,7 @@ function validateFolder(dir) {
   return { problems, files };
 }
 
-module.exports = { validateRow, validateList, validateDetail, validateBundle, validateNames, validateFolder, statusAgainstGraph, keyOf, LIMITS, RULES, SCHEMA_VERSION, ANGLE_KINDS, RELATED_KINDS };
+module.exports = { validateRow, validateList, validateDetail, validateBundle, validateNames, validateFolder, statusAgainstGraph, keyOf, LIMITS, RULES, SCHEMA_VERSION, ANGLE_KINDS, RELATED_KINDS, SECTION_KEYS };
 
 if (require.main === module) {
   const dir = process.argv[2];

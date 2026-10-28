@@ -6,11 +6,15 @@
  *   node .github/scripts/ledger.js <ledger.jsonl>
  *
  * Appends this run's line and drops every line older than 7 days (and anything past 800 lines: a week is 672 quarter-hours).
- * Each line: { slot, started, published, rows, requests, answered, modelCards, seconds, code, by, run, phases, cache, enrich, stories, gdelt }
+ * Each line: { slot, started, published, rows, requests, answered, modelCards, seconds, code, by, run, phases, cache, enrich, stories, gdelt,
+ *              rowsExtension, extFresh }
  *   slot        the collector's own slot when a feed was published (status.json), else the quarter-hour nearest the job's start
  *   started     when the cycle job started (its clock, LEDGER_STARTED: epoch seconds)
  *   published   the feed's generatedAt when this run published one, else null: lead time is published minus slot
  *   rows        rows in the US list published, else null
+ *   rowsExtension  of them, rows past the main list by section ({ section: rows }; lib/extension.js); absent when the cycle
+ *               printed no extension summary
+ *   extFresh    the share of those rows that started under 72 h ago (null when none); absent with rowsExtension
  *   requests    requests the cycle sent, else null (a cycle that publishes nothing prints no summary); answered: of them, answered
  *   modelCards  rows whose line the editor model wrote, else null
  *   seconds     seconds from the job's start to this line
@@ -145,6 +149,21 @@ function gdeltOf(summary) {
   return { on: g.on === true, since, read: g.read === true, ...Object.fromEntries(GDELT_NUMBERS.map((k) => [k, numberOrNull(g[k])])), weekly: g.weekly === true };
 }
 
+/**
+ * The extension's rows by section and their fresh share (summary.extension, lib/extension.js): section names and numbers only.
+ * Nothing at all when the summary carries no extension, so a line without one is the size it always was.
+ */
+function extensionOf(summary) {
+  const x = summary && summary.extension && typeof summary.extension === 'object' ? summary.extension : null;
+  if (!x) return {};
+  const rows = x.rows && typeof x.rows === 'object' && !Array.isArray(x.rows) ? x.rows : null;
+  const fresh = numberOrNull(x.fresh);
+  return {
+    rowsExtension: rows ? Object.fromEntries(Object.entries(rows).filter(([k, n]) => /^[A-Za-z]{1,24}$/.test(k) && numberOrNull(n) !== null).map(([k, n]) => [k, numberOrNull(n)])) : null,
+    extFresh: fresh === null ? null : Math.round(fresh * 1000) / 1000,
+  };
+}
+
 /** The cache's counts after the prune (cache-prune.json), or null when the prune did not run or could not list the cache. */
 function cacheOf(prune) {
   if (!prune || numberOrNull(prune.gb) === null) return null;
@@ -174,6 +193,7 @@ function lineOf(env, nowMs, summary, status, prune = null) {
     enrich: enrichOf(summary),
     stories: storiesOf(summary),
     gdelt: gdeltOf(summary),
+    ...extensionOf(summary),
   };
 }
 
@@ -209,5 +229,5 @@ function main() {
   return 0;
 }
 
-module.exports = { lineOf, keep, phasesOf, markOf, enrichOf, storiesOf, gdeltOf };
+module.exports = { lineOf, keep, phasesOf, markOf, enrichOf, storiesOf, gdeltOf, extensionOf };
 if (require.main === module) process.exit(main());

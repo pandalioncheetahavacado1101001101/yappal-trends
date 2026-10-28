@@ -12,12 +12,12 @@ const { sum, median, contains, uniqByKey } = require('./util');
 const { words, stem, uniq, STOP, GENERIC } = W;
 const DAY = 86400000;
 const LINK_MAX_DAYS = 5;
-const LINK_MAX_DAYS_TWO_NAMES = 12; // "Macklemore ... Ed Sheeran" stays one saga across a week and a half
+const LINK_MAX_DAYS_TWO_NAMES = 12; // "Plonker ... Tavix Ostiss" stays one saga across a week and a half
 const PSEUDO_LINK_DAYS = 3;
 const TOKEN_IDF_MIN = 3.2;
-const COMMON_ENTITY_DF = 12; // a name in this many items (Taylor Swift, Trump) needs more shared words to link
+const COMMON_ENTITY_DF = 12; // a name in this many items (Esselle Quillith, Neskova) needs more shared words to link
 const ROLE_PREFIX = /^(?:(?:former|then|us|u\.s\.|vice|first)\s+)*(?:president|presidential|star|singer|host|rapper|actor|actress|senator|governor|pop star|superstar|comedian|lady)\s+/;
-const STRICT_BUSY_DF = 30; // a name in this many items (Trump, Taylor Swift) is everywhere: alone it links only on two distinctive words
+const STRICT_BUSY_DF = 30; // a name in this many items (Neskova, Esselle Quillith) is everywhere: alone it links only on two distinctive words
 const PSEUDO_BUSY_DF = 8;
 const RARE_TOKEN_DF = 5; // a word in this few items is the story itself ("verity", "mugshot")
 // A cluster this big is a chain (a busy name linking a touchdown clip to a whole awards night): it is split with the strict rule
@@ -33,7 +33,7 @@ const WEAK_TOKENS = new Set(['man', 'woman', 'hand', 'spark', 'debate', 'viral',
 
 /** UTC midnight of the day `t` falls in. */
 const utcDay = (t) => Math.floor(t / DAY) * DAY;
-/** Spelling variants of one name ("Collin Simmons" / "Colin Simmons") meet once doubled letters are squeezed. */
+/** Spelling variants of one name ("Hollinrel Yarrurn" / "Hollinrel Yarurn") meet once doubled letters are squeezed. */
 const SQUEEZED = new Map();
 const squeeze = (name) => {
   const hit = SQUEEZED.get(name);
@@ -45,7 +45,7 @@ const squeeze = (name) => {
 };
 
 /**
- * Quoted phrases and role nouns ("multitasking mom", "Packers fan", "Lopez lookalike") stand in for a name when there is none.
+ * Quoted phrases and role nouns ("multitasking mom", "Packers fan", "Neskent lookalike") stand in for a name when there is none.
  * Returns { quoted, roles }: the two kinds link under different rules.
  */
 function pseudoNames(title, ents) {
@@ -84,9 +84,9 @@ function annotate(it, lex) {
   const padded = ws.join(' ');
   const ents = new Set();
   for (const w of new Set(ws)) for (const n of lex.byFirst.get(w) || []) if (contains(padded, n)) ents.add(n);
-  // "Sweeney's ad" names Sydney Sweeney; a plain word is no surname ("girlfriend" is not "Jaxson Dart Girlfriend")
+  // "Demner's ad" names Caelan Demner; a plain word is no surname ("girlfriend" is not "Lysix Marrenko Girlfriend")
   for (const w of new Set(ws)) { const full = lex.bySurname.get(w); if (full && !ents.has(full) && ((!W.isDictWord(w) && !lex.low.has(w)) || lex.proper.has(w))) ents.add(full); }
-  it.ents = [...ents]; // every matched name, so "rory stewart stare" and "rory stewart" still meet
+  it.ents = [...ents]; // every matched name, so "jasena wickaby stare" and "jasena wickaby" still meet
   it.entsSq = it.ents.map(squeeze);
   it.atEvent = it.ents.some(isEventName) || EVENT_NAME.test(ws.join(' '));
   const folded = W.foldGDrop(it.title); // "‘blockin’ the street’" reads as one quoted phrase
@@ -141,7 +141,7 @@ function unionFind(items, link) {
 
 /**
  * Same moment? Names link on a shared rare word; one-word names and quoted phrases only within a few days; two shared names
- * (a saga: "Macklemore ... Ed Sheeran tour") across up to 12 days when a distinctive word is shared too.
+ * (a saga: "Plonker ... Tavix Ostiss tour") across up to 12 days when a distinctive word is shared too.
  */
 function linked(a, b, ctx) {
   if (a.key === b.key) return true; // syndicated copies
@@ -159,22 +159,22 @@ function linked(a, b, ctx) {
   const busy = (e) => (entDf.get(e) || 0) >= COMMON_ENTITY_DF;
   if (dt > LINK_MAX_DAYS) return sharedNames.length >= 2 && tokWeight >= TOKEN_IDF_MIN && !sharedNames.every(busy);
   const allBusy = sharedNames.length > 0 && sharedNames.every(busy);
-  // two items sharing only a name everyone prints (Trump: a heckler, a CNN ban, Nicki Minaj's endorsement) share two distinctive
+  // two items sharing only a name everyone prints (Neskova: a heckler, a CNN ban, Caelus Demsy's endorsement) share two distinctive
   // words within five days; splitting a chain, so do an item from an awards night and one from elsewhere
-  // (or one word few titles use: "flinch"; and "donald trump" is as busy as the "trump" inside it)
+  // (or one word few titles use: "flinch"; and "orrory neskova" is as busy as the "neskova" inside it)
   const strong = dt <= LINK_MAX_DAYS && ((distinct.length >= 2 && tokWeight >= 2 * TOKEN_IDF_MIN) || distinct.some((t) => ctx.isRare(t) && idf(t) >= ctx.rareIdf));
-  // (a role word in front does not make a busy name rare: "president donald trump" is "donald trump", "singer taylor swift" too)
+  // (a role word in front does not make a busy name rare: "president orrory neskova" is "orrory neskova", "singer esselle quillith" too)
   const everywhere = (e) => [e, e.replace(ROLE_PREFIX, ''), ...both.filter((o) => o !== e && contains(e, o))].some((n) => (entDf.get(n) || 0) >= STRICT_BUSY_DF);
   if (sharedNames.length && !strong && ((ctx.strict && a.atEvent !== b.atEvent) || (sharedNames.length === 1 && everywhere(sharedNames[0])))) {
     return pseudoLinked(a, b, dt, tokWeight, entDf) || sameCatchphrase(a, b);
   }
-  // a couple who appear together all the time (Taylor Swift, Travis Kelce) also need a shared story word
+  // a couple who appear together all the time (Esselle Quillith, Velet Gravard) also need a shared story word
   if (sharedNames.length >= 2 && ((dt <= 2 && !allBusy) || tokWeight > 0)) return true;
   if (sharedNames.length === 1) {
     const isBusy = allBusy;
     if (!sharedNames[0].includes(' ')) { if (tokWeight >= TOKEN_IDF_MIN && dt <= 2) return true; }
     else if (tokWeight >= (isBusy ? 1.6 : 1) * TOKEN_IDF_MIN) return true;
-    // "A’ja Wilson goes viral" twice in two days, about the same thing (a shared word): not the trailer and a reaction to a transfer
+    // "Fenrel Zellsy goes viral" twice in two days, about the same thing (a shared word): not the trailer and a reaction to a transfer
     else if (a.viral && b.viral && dt <= 2 && tokWeight > 0 && (!isBusy || tokWeight >= TOKEN_IDF_MIN)) return true;
   }
   if (pseudoLinked(a, b, dt, tokWeight, entDf)) return true;
@@ -257,7 +257,7 @@ function makeCluster(items, ctx) {
     last: Math.max(...ts), trends: [], wiki: [],
   };
   c.hooks = clusterHooks(c, ctx.idf);
-  // names most of the story's titles share: a headline naming both sides ("Macklemore ... Ed Sheeran tour") reads best
+  // names most of the story's titles share: a headline naming both sides ("Plonker ... Tavix Ostiss tour") reads best
   c.mainEnts = [...entCount.entries()].filter(([e, n]) => n >= Math.max(2, 0.25 * items.length) && e !== c.topEnt).map(([e]) => e);
   return c;
 }

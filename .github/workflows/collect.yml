@@ -151,6 +151,23 @@ jobs:
       # (page one's sink, its labels and its title check, P5: on unless the repository variable IDEAS_PAGE_SINK is "0", so a bad page
       # is undone without a publish: lib/page-sink.js)
       IDEAS_PAGE_SINK: ${{ vars.IDEAS_PAGE_SINK }}
+      # (rows 81-160 in sections past the main list, wave 9: on unless the repository variable IDEAS_EXTENSION is "0" or "off", so the
+      # 80-row list comes back without a publish; the ledger line's `rowsExtension` and `extFresh` count them: lib/extension.js)
+      IDEAS_EXTENSION: ${{ vars.IDEAS_EXTENSION }}
+      # (the person-news fast lane, wave 9: shadow unless IDEAS_FASTLANE is "act" ("0" or "off": none, and no board read). Shadow lists
+      # nothing, logs one counts-only [fastlane] line a cycle and never takes Reddit's read. IDEAS_BOARDS_OFF drops board reads, a comma
+      # list of lead, census, survive or all: lib/voices/fastlane.js, lib/voices/boards.js)
+      IDEAS_FASTLANE: ${{ vars.IDEAS_FASTLANE }}
+      IDEAS_BOARDS_OFF: ${{ vars.IDEAS_BOARDS_OFF }}
+      # (the precursor scorer, wave 9: shadow unless IDEAS_PRECURSOR is "act" ("0" or "off": none). Its log is private, in the state
+      # (IDEAS_PRECURSOR_LOG "off": none); IDEAS_PRECURSOR_WEIGHTS names promoted weights, else the shipped ones: lib/precursor)
+      IDEAS_PRECURSOR: ${{ vars.IDEAS_PRECURSOR }}
+      IDEAS_PRECURSOR_LOG: ${{ vars.IDEAS_PRECURSOR_LOG }}
+      IDEAS_PRECURSOR_WEIGHTS: ${{ vars.IDEAS_PRECURSOR_WEIGHTS }}
+      # (the kinds desk, wave 9: deaths, outages, games and tonight rows past the main list. IDEAS_KINDS_OFF is a comma list of those
+      # or "all"; IDEAS_SOURCES_OFF names sources to skip, "kinds" for every read of the desk: lib/kinds-desk.js, lib/sources/fixed.js)
+      IDEAS_KINDS_OFF: ${{ vars.IDEAS_KINDS_OFF }}
+      IDEAS_SOURCES_OFF: ${{ vars.IDEAS_SOURCES_OFF }}
       FEED_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
       FRESH: ${{ inputs.cold_start && '--fresh' || '' }}
     steps:

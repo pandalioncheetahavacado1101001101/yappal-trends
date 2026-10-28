@@ -54,9 +54,9 @@ const LEADINS = [
 ];
 // "Why Fans Think X" -> "Fans think X" (a fan theory is the trend)
 const THEORY_LEAD = /^why (fans|people|everyone|the internet|swifties) (think|thinks|believe|believes|are convinced)\b/i;
-// "Country star Ella Langley ..." -> "Ella Langley ..." (only when a capitalised name follows)
+// "Country star Quorette Brannsy ..." -> "Quorette Brannsy ..." (only when a capitalised name follows)
 const DESCRIPTOR = /^(?:(?:(?:former|ex-|country|pop|reality|tv|nfl|nba|k-pop|hollywood) )+star|singer|actress|actor|rapper|model|influencer|streamer|youtuber|tiktoker|comedian|musician|(?:[a-z.]+ )?(?:prime minister|president|senator|governor|mayor)) (\S)/i;
-// Leading words a capitalised run sheds before it becomes a name ("The Rock" stays via Trends/Wikipedia; "Last Ditch" stays).
+// Leading words a capitalised run sheds before it becomes a name ("Zornix" stays via Trends/Wikipedia; "Last Ditch" stays).
 const RUN_NOISE = new Set(splitList(`the a an and or of in on at for with by from to as is are was were his her their its this that
   these those after before amid via vs when why how what who watch video exclusive breaking`));
 const CLAUSE = new Set(splitList('after amid as while during following despite before since because who which that when where but and ahead weeks days months plus'));
@@ -208,7 +208,7 @@ function collectNames(scan, titles, trends, wiki, memeNames) {
   for (const [k, n] of scan.solo) if (n >= 2 && k.length >= 4 && !scan.low.has(k) && !STOP.has(k) && !GENERIC.has(k)) names.add(k);
   for (const title of titles) for (const w of title.split(/\s+/)) {
     const { core } = splitWord(w);
-    if (/\p{Ll}\p{Lu}/u.test(core) && !GENERIC.has(core.toLowerCase())) names.add(words(core).join('')); // IShowSpeed, MrBeast
+    if (/\p{Ll}\p{Lu}/u.test(core) && !GENERIC.has(core.toLowerCase())) names.add(words(core).join('')); // GlibVane, gRimvane
   }
   for (const tr of trends) {
     for (const k of [tr.keyword, ...tr.related.slice(0, 3)]) {
@@ -232,7 +232,7 @@ function topicNames(names) {
     CALENDAR.has(x) || STOP.has(x))));
 }
 
-/** Unambiguous surnames of two- or three-word names ("sweeney" -> "sydney sweeney"); "kelce" has two owners, so it maps to none. */
+/** Unambiguous surnames of two- or three-word names ("demner" -> "caelan demner"); "gravard" has two owners, so it maps to none. */
 function surnames(names) {
   const owners = new Map();
   for (const n of names) {
@@ -275,7 +275,7 @@ function buildLexicon(titles, trends, wiki, memeNames) {
   const capSeen = new Set([...scan.runs, ...(memeNames || []).map((m) => words(m).join(' ')), ...wiki.filter((w) => w.key).map((w) => w.key)]);
   const cased = (n) => capSeen.has(n) || n.split(' ').every((w) => !inDictExact(w) || FIRST_NAMES.has(w) || PLACES.has(w));
   const phrases = [...[...allNames].filter(cased), ...[...ENTITY_STOP, ...PLACES].filter((n) => n.includes(' '))];
-  // first words of known two/three-word person names ("taylor", "ella") extend the bundled given-name list
+  // first words of known two/three-word person names ("esselle", "quorette") extend the bundled given-name list
   const firstNames = new Set([...names].filter((n) => /^\S+ \S+( \S+)?$/.test(n)).map((n) => n.split(' ')[0])
     .filter((f) => f.length > 2 && !STOP.has(f) && !inDictExact(f) && !PLACES.has(f) && !TEAM_WORDS.has(f)));
   // names seen capitalised in sentence-case text (not Trends queries, which carry no casing): what may capitalise a word in a line
@@ -288,7 +288,7 @@ function buildLexicon(titles, trends, wiki, memeNames) {
 function wordClass(core, lex) {
   const parts = words(core);
   if (!parts.length || parts.every((p) => STOP.has(p))) return 'lower';
-  if (/^[A-Z0-9]{2,3}s?$/.test(core) || /\p{Ll}\p{Lu}/u.test(core)) return 'proper'; // SNL, VMAs, IShowSpeed, McEntire
+  if (/^[A-Z0-9]{2,3}s?$/.test(core) || /\p{Ll}\p{Lu}/u.test(core)) return 'proper'; // SNL, VMAs, GlibVane, LorrMott
   if (parts.every((p) => lex.proper.has(p))) return 'proper';
   if (!DICT) return parts.some((p) => lex.low.has(p)) || SUFFIXY.test(core) ? 'lower' : 'unknown';
   // a team no dictionary spells ("Knicks") keeps its capital; "Giants", "Jets" are words too, so they go by the neighbours
@@ -346,24 +346,24 @@ function recase(s, lex, titleCase) {
     const nextToName = (i > 0 && isName(kind[i - 1]) && isCapWord(ws[i - 1])) || (i + 1 < ws.length && kind[i + 1] === 'proper');
     const afterPlace = i > 0 && (ENTITY_STOP.has(named.get(i - 1)) || PLACES.has(named.get(i - 1))) && !named.has(i) && /s$/.test(core); // New York Knicks
     if (kind[i] === 'inflected' && afterPlace) return w;
-    // Title Case only: "Lucy Hale", "Taylor Swift" (a word after a first name), "Drake's “Choosin’ Texas”" (possessive before a title)
+    // Title Case only: "Korus Fennent", "Esselle Quillith" (a word after a first name), "Plonzo's “Choosin’ Texas”" (possessive before a title)
     const low = words(core).join('');
     const prevWord = i > 0 ? words(parts[i - 1].core).join('') : '';
     const runStart = i < 2 || !isCapWord(ws[i - 2]) || /[,;:]$/.test(ws[i - 2]); // the previous word opens a name run
     const afterFirstName = i > 0 && runStart && isCapWord(ws[i - 1]) && !PLACES.has(prevWord) && !TEAM_WORDS.has(prevWord) && !STOP.has(prevWord) &&
       (FIRST_NAMES.has(prevWord) || (lex.firstNames && lex.firstNames.has(prevWord)) || (i === 1 && PROPER_WORDS && PROPER_WORDS.has(prevWord)));
-    // a dictionary noun's plural the lexicon learned as a name goes lowercase after a lowercase word: "horrific burns", not "Ken Burns"
+    // a dictionary noun's plural the lexicon learned as a name goes lowercase after a lowercase word: "horrific burns", not "Velia Burns"
     if (titleCase && kind[i] === 'proper' && i > 0 && (kind[i - 1] === 'lower' || kind[i - 1] === 'inflected') && low.length >= 5 && /[^s]s$/.test(low) &&
       inDictExact(low.slice(0, -1)) && !TEAM_WORDS.has(low) && !PLACES.has(low)) return lead + core.toLowerCase() + tail;
-    // (a plain word after a first name is a surname only when the pair is seen capitalised in sentence-case text: "Lucy Hale", not
+    // (a plain word after a first name is a surname only when the pair is seen capitalised in sentence-case text: "Korus Brook", not
     // "Cornell Gang rape")
     const seenPair = !lex.capNames || lex.capNames.has(`${prevWord} ${low}`) || !inDictExact(low) || lex.proper.has(low);
-    // (a word no dictionary knows, between a first name and a verb, is a surname whatever it ends in: "John Stamos Gets ...",
-    // "Mark Harris Says ..." lost their capital to the rule that reads a word ending in one "s" as a verb. "Drake Disses
-    // Kendrick" has no verb after it and stays one. Collector, the joined run of 2026-10-12: "John stamos gets over ...")
+    // (a word no dictionary knows, between a first name and a verb, is a surname whatever it ends in: "Quorade Lampos Gets ...",
+    // "Rouey Hornis Says ..." lost their capital to the rule that reads a word ending in one "s" as a verb. "Plonzo Disses
+    // Quoret" has no verb after it and stays one. Collector, the joined run of 2026-10-12: "Quorade Lampos gets over ...")
     const nextLow = i + 1 < ws.length ? words(parts[i + 1].core).join('') : '';
     // ("no dictionary knows": not the word, nor the word without its ending. The dictionary's own reading of endings is too
-    // generous here: it finds "stam" in "Stamos" and "harr" in "Harris")
+    // generous here: in a surname ending in "s" it finds "lamp" in "Lampos" and "horn" in "Hornis")
     const stemKnown = inDictExact(low) || (low.endsWith('s') && inDictExact(low.slice(0, -1))) || (low.endsWith('es') && inDictExact(low.slice(0, -2))) || (low.endsWith('ies') && inDictExact(`${low.slice(0, -3)}y`));
     const surnameBeforeVerb = !stemKnown && !!nextLow && looksVerb(parts[i + 1].core) && inDict(nextLow);
     if (titleCase && (kind[i] === 'lower' || kind[i] === 'inflected') && !STOP.has(low) && (!looksVerb(core) || surnameBeforeVerb) && afterFirstName && seenPair) return w;
@@ -397,12 +397,12 @@ function gerundToPresent(g) {
   return base + 's';
 }
 
-/** "Robert Pattinson" -> "Robert Pattinson’s" */
+/** "Bexena Tamaby" -> "Bexena Tamaby’s" */
 const possessive = (s) => (/s$/i.test(s) ? `${s}’` : `${s}’s`);
 
 /**
- * Explainer titles name the trend: "What is the Beckham test? David & Victoria TikTok trend explained" -> "The ‘Beckham test’
- * TikTok trend"; "Who Is 'Jean Philanthrope' And Is He AI?" -> "The ‘Jean Philanthrope’ trend".
+ * Explainer titles name the trend: "What is the Demace test? Caelia & Brinane TikTok trend explained" -> "The ‘Demace test’
+ * TikTok trend"; "Who Is 'Fenette Zellissander' And Is He AI?" -> "The ‘Fenette Zellissander’ trend".
  */
 const EXPLAINER_QUOTED_MAX_WORDS = 7; // "‘We’re All Just Blocking The Street’"
 const EXPLAINER_PLAIN_MAX_WORDS = 5;
@@ -436,12 +436,12 @@ const CUE = new RegExp(`${RE.viral.source}|${RE.moment.source}|${RE.reaction.sou
 
 // "X reacting to Y is the wholesome content we needed" -> "X reacting to Y"
 const PRAISE_TAIL = /\s+(?:is|was|are) (?:the|our|my|all|just) (?:\w+ ){0,2}(?:content|energy|thing|moment|vibe)s? (?:we|i) (?:all )?(?:needed|need|love|deserve)\b.*$/i;
-// "Dua Lipa participating in a dance" -> "Dua Lipa participates in a dance" (a caption with no main verb)
+// "Zanane Ulmenko participating in a dance" -> "Zanane Ulmenko participates in a dance" (a caption with no main verb)
 const GERUND_LEAD = /^((?:[A-Z][\w’'.-]+ ){1,3})([a-z]{4,}ing)\b/;
 
 /**
- * A headline that opens with a bare surname gets the full name: "Sweeney’s latest ad" -> "Sydney Sweeney’s latest ad". A plain
- * word that opens a sentence is not a surname unless it owns something ("Swift’s tour"): "Sounds kind of good" is not "BBC Sounds".
+ * A headline that opens with a bare surname gets the full name: "Demner’s latest ad" -> "Caelan Demner’s latest ad". A plain
+ * word that opens a sentence is not a surname unless it owns something ("Quillith’s tour"): "Sounds kind of good" is not "BBC Sounds".
  */
 function expandSurname(s, lex) {
   const [first, second] = s.split(' ');
@@ -449,8 +449,8 @@ function expandSurname(s, lex) {
   const full = lex.bySurname && lex.bySurname.get(key);
   if (!full || !isCapWord(first) || words(first).length !== 1) return s;
   if (inDict(key) && !/['’]s\W*$/.test(first)) return s;
-  // Collector only. A first name that opens its own full name is no bare surname: "Meghan Markle Makes First Public Appearance ..."
-  // read "Harry Meghan’s Markle makes ..." once a search for "harry meghan" had been learned as a name (seen on the review run of
+  // Collector only. A first name that opens its own full name is no bare surname: "Quoro Branniss Makes First Public Appearance ..."
+  // read "Rouet Quoro’s Branniss makes ..." once a search for "rouet quoro" had been learned as a name (seen on the review run of
   // 2026-10-12). Nor does a surface learned with its possessive lend it to the name.
   const next = second && isCapWord(second) && !/['’]s\W*$/.test(first) ? words(second)[0] : null;
   if (next && (FIRST_NAMES.has(key) || (lex.firstNames && lex.firstNames.has(key)) || ((lex.byFirst && lex.byFirst.get(key)) || []).includes(`${key} ${next}`))) return s;
@@ -493,7 +493,7 @@ function stripTrail(ws) {
   return a;
 }
 
-/** A cut must not stop on a possessive, a preposition or an article ("mocks Donald Trump's", "plows into"). */
+/** A cut must not stop on a possessive, a preposition or an article ("mocks Orrory Neskova's", "plows into"). */
 function badEnding(ws) {
   const last = ws[ws.length - 1] || '';
   if (/['’]s[,.:;!?]?$/.test(last) && !/['’]s['’"”]$/.test(last)) return true;
@@ -531,8 +531,8 @@ function keepsMiddle(ws, i, j) {
 }
 
 /**
- * A middle cut that sets two capitalised words side by side where the title kept them apart joins two people into one ("Cindy
- * Crawford [and Rande Gerber ‘struggling emotionally’ to plan] Presley’s funeral").
+ * A middle cut that sets two capitalised words side by side where the title kept them apart joins two people into one ("Essade
+ * Quillard [and Quorix Brannwyn ‘struggling emotionally’ to plan] Orret’s funeral").
  */
 function joinsNames(src, a) {
   const pairs = new Set(src.slice(1).map((w, i) => `${src[i]} ${w}`));
@@ -553,9 +553,9 @@ function trimVariants(ws) {
   const marks = ws.map((w, i) => (i >= 2 && (CLAUSE.has(bare(w)) || SOFT.has(bare(w))) ? i : -1)).filter((i) => i > 0);
   const commas = ws.map((w, i) => (i >= 3 && /,['’"”]?$/.test(ws[i - 1]) ? i : -1)).filter((i) => i > 0);
   for (const i of [...marks, ...commas]) {
-    // (never between two names one "and" joins: "cremated as Cindy Crawford [and Rande Gerber plan ...]")
+    // (never between two names one "and" joins: "cremated as Essade Quillard [and Quorix Brannwyn plan ...]")
     if (/^(?:and|or|&)$/i.test(ws[i]) && isCapWord(ws[i - 1]) && isCapWord(ws[i + 1] || '')) continue;
-    // (nor inside a list of names: "as Dave Grohl, [Krist Novoselic and Pat Smear accept ...]")
+    // (nor inside a list of names: "as Fenia Zellner, [Fenane Zellace and Dovelle Kelova accept ...]")
     if (commas.includes(i) && isCapWord(ws[i - 1]) && isCapWord(ws[i])) continue;
     const minI = CLAUSE.has(bare(ws[i])) || commas.includes(i) ? v + 1 : v + 2;
     if (v < 0 || i >= minI) add(ws.slice(0, i), true, false, '', [ws[i], ws[i + 1] || '']);
@@ -569,7 +569,7 @@ function trimVariants(ws) {
   for (const i of marks.filter((m) => SOFT.has(bare(ws[m])))) {
     for (const j of marks) if (j > i && (v < 0 || i >= v + 2) && !keepsMiddle(ws, i, j)) add([...ws.slice(0, i), ...ws.slice(j)], true, true, ws[j]);
   }
-  const app = ws.findIndex((w, i) => i >= 1 && /,$/.test(w) && /^(a|an|the)$/i.test(ws[i + 1] || '')); // "Nene Royal, a teen from X, won"
+  const app = ws.findIndex((w, i) => i >= 1 && /,$/.test(w) && /^(a|an|the)$/i.test(ws[i + 1] || '')); // "Mirus Vorurn, a teen from X, won"
   const appEnd = app < 0 ? -1 : ws.findIndex((w, i) => i > app + 1 && /,$/.test(w));
   if (appEnd > app) {
     const rest = [...ws.slice(0, app), ws[app].replace(/,$/, ''), ...ws.slice(appEnd + 1)];
@@ -600,8 +600,8 @@ function variantScore(v) {
   return v.cut ? s - 0.5 : s;
 }
 
-// what a sentence says of its subject is no filler (collector, the joined run of 2026-10-12: "John Stamos Gets Emotional Over
-// Beach Boys' Mike Love's Health Struggles" went out as "gets over ... health struggles", which says the opposite)
+// what a sentence says of its subject is no filler (collector, the joined run of 2026-10-12: "Quorade Brannner Gets Emotional Over
+// Tidewaves' Rouane Trevmott's Health Struggles" went out as "gets over ... health struggles", which says the opposite)
 const LINKING = new Set(splitList('get gets got getting is are was were be been being become becomes became go goes went going look looks looked feel feels felt turn turns turned grow grows grew seem seems seemed so too very more most how as'));
 /** A filler adjective goes where it dresses a noun ("an emotional tribute"); after a linking verb, or before a preposition or a clause, it is what the sentence says and stays ("gets emotional over", "was brutal", "goes wild after"). */
 const dropFillerAdj = (s) => s.replace(FILLER_ADJ, (m, adj, at) => {
@@ -695,7 +695,7 @@ function thirdPerson(v) {
 
 // the words that say a title is only reported: a headline cut from it keeps them ("Reportedly arrested", "accused of", "... claims")
 const TEXT_HEDGE = /\b(?:reportedly|allegedly|alleged|accused|accuses|alleges|claims?|claimed|rumou?red|reports?|sources?)\b/i;
-// a statement with a question mark tacked on ("xQc banned from Kick?"), never one that opens as a question
+// a statement with a question mark tacked on ("nimvaneb banned from Kick?"), never one that opens as a question
 const ASKED_LEAD = /^(?:what|who|whom|whose|why|how|when|where|which|did|does|do|is|are|was|were|will|would|can|could|should|has|have|had)\b/i;
 
 function rewrite(title, topEnt, lex, hooks = [], limits = null) {
@@ -706,14 +706,14 @@ function rewrite(title, topEnt, lex, hooks = [], limits = null) {
   }
   const explained = explainerHeadline(cleanForHeadline(title));
   if (explained) return { text: explained, cut: false, keptHook: true, lostHook: false, explainer: true };
-  // "Watch Olivia Rodrigo's dress melt away" -> "Olivia Rodrigo's dress melts away": the imperative's bare verb is told
+  // "Watch Veley Gravmott's dress melt away" -> "Veley Gravmott's dress melts away": the imperative's bare verb is told
   const told = title.replace(IMPERATIVE_CLIP, (m, np, verb) => (inDictExact(verb.toLowerCase()) && !STOP.has(verb.toLowerCase()) ? `${np} ${thirdPerson(verb)}` : m));
   let s = pickClause(cleanForHeadline(told), topEnt).replace(THEORY_LEAD, (m, who, verb) => `${capFirst(who.toLowerCase())} ${verb.toLowerCase()}`);
   for (const re of LEADINS) s = s.replace(re, '');
   s = s.replace(DESCRIPTOR, (m, next) => (/\p{Lu}/u.test(next) ? next : m));
   s = expandSurname(s, lex);
   const titleCase = isTitleCase(s.split(' '));
-  // (a statement someone only asks, "xQc banned from Kick?", stays a question: without its mark it would state it)
+  // (a statement someone only asks, "nimvaneb banned from Kick?", stays a question: without its mark it would state it)
   const asked = /\?+$/.test(s) && !ASKED_LEAD.test(s);
   s = transform(s.replace(/\?+$/, ''));
   s = recase(s, lex, titleCase);

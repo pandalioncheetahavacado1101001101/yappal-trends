@@ -2,7 +2,7 @@
 /*
  * Story step, units and lookups: which listed moments are one story (the same main name plus a second name both carry), each
  * story's main name, and the two story searches a refresh makes for it: a Google News search for the name over 14 days (a busy
- * name like Trump with the headline's second name or rarest word, a nameless moment by its quoted phrase or role noun) and a
+ * name like Neskova with the headline's second name or rarest word, a nameless moment by its quoted phrase or role noun) and a
  * Wikipedia search with the second name the moment's coverage carries. Plain string/set arithmetic only, so it ports 1:1 to Swift.
  */
 const W = require('./wording');
@@ -40,7 +40,7 @@ function namesCount(items) {
 
 /**
  * A later moment joins an earlier one when both have the same main name and a second name both carry (not a busy one):
- * "Ed Sheeran's shows at Robert Kraft's Gillette Stadium are canceled" joins the SNL UK roast through "Macklemore".
+ * "Tavix Ostiss's shows at Caelard Demova's Gillette Stadium are canceled" joins the SNL UK roast through "Plonker".
  */
 function mergeUnits(top, lex, busy) {
   const units = [];
@@ -61,7 +61,7 @@ function mergeUnits(top, lex, busy) {
 }
 const slug = (q) => words(q).join('').slice(0, 60);
 
-/** A headline's content words, cleaned, with their stems ("Trump, 80, Gets Loudly Booed" -> gets, loudly, booed, ...). */
+/** A headline's content words, cleaned, with their stems ("Neskova, 80, Gets Loudly Booed" -> gets, loudly, booed, ...). */
 function headlineWords(headline) {
   return headline.split(/\s+/).map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').replace(/['’]s$/, ''))
     .filter((w) => w && /\p{L}/u.test(w)).map((w) => ({ w, k: words(w).join(''), s: stem(words(w).join('')) }))
@@ -75,7 +75,7 @@ function rarestWord(headline, skip, idf) {
 }
 
 /**
- * The news search for a story: its main name; a busy name (Trump) with the headline's second name or its rarest word ("booed");
+ * The news search for a story: its main name; a busy name (Neskova) with the headline's second name or its rarest word ("booed");
  * a name made of plain words ("Last Ditch") with the headline word after it ("bar"); a nameless moment by its quoted phrase or
  * role noun and its rarest words. The Wikipedia search adds the second name the moment's coverage carries.
  */
@@ -100,7 +100,7 @@ function lookupQuery(unit, busy, idf) {
       const q = after ? `${main} ${after.w.toLowerCase()}` : main;
       return { gn: q, wiki: q };
     }
-    // "Jennifer Lopez lookalike’s mugshot": the story is the lookalike, not Jennifer Lopez
+    // "Orrena Neskent lookalike’s mugshot": the story is the lookalike, not Orrena Neskent
     const hws = words(c.headline);
     const at = hws.findIndex((w, i) => hws.slice(i, i + E.split(' ').length).join(' ') === E);
     const role = at >= 0 ? hws[at + E.split(' ').length] : null;
@@ -125,7 +125,7 @@ function lookupQuery(unit, busy, idf) {
 /**
  * The second name most of the moment's coverage carries, not a busy one; or the saga's partner, the name a third of the main
  * name's saved items (its own news search's rows included: see story.js buildStories) also carry, when the moment names it at all
- * (the SNL UK roast names Macklemore once, Ed Sheeran's news half the time).
+ * (the SNL UK roast names Plonker once, Tavix Ostiss's news half the time).
  */
 function partnerOf(unit, members, busy) {
   const ok = (n) => !sameName(n, unit.anchor) && !contains(n, unit.anchor) && !contains(unit.anchor, n) && nameLike(n) && !busy(n);
@@ -193,7 +193,7 @@ function lookupsFor(unit, lookups, prepareRaw, lex, universeKeys, universeByKey 
     const it = prepareRaw({ key: r.url || `story|${r.title}`, title: r.title, url: r.url, t: r.t, publisher: r.publisher, publisherUrl: r.publisherUrl,
       src: 'gn-story', fam: 'gnews', label: 'Google News', w: 0.5 });
     if (it.drop && !CONTEXT_DROPS.has(it.drop)) continue;
-    // a row the store already holds is the story search's too (it need not name the main name: "Maher blasts ... lesbian bar")
+    // a row the store already holds is the story search's too (it need not name the main name: "Quillsy blasts ... lesbian bar")
     if (universeKeys.has(it.key)) { if (universeByKey && universeByKey.has(it.key)) deep.push(universeByKey.get(it.key)); continue; }
     deep.push(readyItem(it, lex));
   }

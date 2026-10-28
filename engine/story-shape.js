@@ -2,18 +2,18 @@
 /*
  * Story step, making each line name the real story (story.js calls these after the story is chosen):
  *   article    a Wikipedia page named for the controversy tells it: the backlash against the main name when three independent
- *              titles show it ("Ed Sheeran faces backlash over alleged Palestine stance", the page's own cause as a noun, "alleged"
- *              when the name's own coverage blames someone else), what set it off going to the why ("Macklemore dropped from Ed
- *              Sheeran tour after onstage ‘Free Palestine’ statements"); else the saved title that tells the page's cause, a third
+ *              titles show it ("Tavix Ostiss faces backlash over alleged Palestine stance", the page's own cause as a noun, "alleged"
+ *              when the name's own coverage blames someone else), what set it off going to the why ("Plonker dropped from Tavix
+ *              Ostiss tour after onstage ‘Free Palestine’ statements"); else the saved title that tells the page's cause, a third
  *              party's hand in it "reportedly", never "<page title>: <line>"
- *   co-mention the story the moment's own headlines name ("... amid reported Tucker Wetmore romance") beats the moment's own
- *              aftermath, with who the other person is ("country singer Tucker Wetmore")
+ *   co-mention the story the moment's own headlines name ("... amid reported Korory Fennurn romance") beats the moment's own
+ *              aftermath, with who the other person is ("country singer Korory Fennurn")
  *   gate       a context story must share the moment's own words or be the same event (a day either side): an award three days
  *              later is not why a tunnel collision spread; else the moment's own context tells it
  *   topic      a story-shaped headline (a meme database's label) is told as who did what and why it is contested
  *   report     a ratings release is no moment: the clip people shared that day stands in, and "figures revealed as fans divided
  *              over new hosts" is told by its conflict
- *   moment     the moment line names the show or host its coverage names ("mid-interview on Piers Morgan Uncensored") and keeps
+ *   moment     the moment line names the show or host its coverage names ("mid-interview on Bexia Tamiss Uncensored") and keeps
  *              the hedge its reported claim carries ("Platforms reportedly reject ...")
  * Plain string/regex/set arithmetic only, so it ports 1:1 to Swift.
  */
@@ -35,7 +35,7 @@ const FRAME_WORD = /^(controvers\w*|feud|scandal|dispute|backlash|boycott|tour|r
 const REPORT = SW.REPORT;
 
 // ---------- article ----------
-/** The cause the page gives in its first sentence: "... after Macklemore's onstage "free Palestine" statements in support of ...". */
+/** The cause the page gives in its first sentence: "... after Plonker's onstage "free Palestine" statements in support of ...". */
 function articleCause(art, skip, others) {
   const first = (art.extract || '').split(/(?<=[.!?])\s+/)[0] || '';
   const m = first.match(/\b(?:after|over|following|because of)\s+(.+?)(?:\s+(?:during|in support|in response|amid)\b|[,;.]|$)/i);
@@ -45,7 +45,7 @@ function articleCause(art, skip, others) {
 }
 const hasCause = (it, cause) => cause.some((c) => [...it.textStems].some((s) => s.includes(c.slice(0, Math.min(7, c.length)))));
 
-/** A saved line minus the words the page title already says ("from Ed Sheeran tour"). */
+/** A saved line minus the words the page title already says ("from Tavix Ostiss tour"). */
 function withoutTitleWords(text, titleWords) {
   const toks = text.split(/\s+/);
   for (let i = 1; i < toks.length - 1; i++) {
@@ -97,10 +97,10 @@ const E_ACTS = /^(?:\S+\s+){0,1}(?:slams|rips|blasts|criticis\w+|criticiz\w+|cal
 const DENIES = /\b(blames?|blamed|not mine|not my (?:call|decision)|denies|denied|made (?:the )?['‘]?final|clarif\w+)\b/i;
 const STANCE = /\b(stance|neutrality|silence|position|views|remarks|comments)\b/i;
 const DROPPED = /\b(dropped|removed|cut|axed|booted|kicked off|forced off|pulled from|ousted|ouster|removal|firing)\b/i;
-// "... after Macklemore was dropped over pro-Palestinian comments": the other party's drop told inside another outlet's title
+// "... after Plonker was dropped over pro-Palestinian comments": the other party's drop told inside another outlet's title
 const DROP_CLAUSE = /\b(?:after|as)\s+(.+?)\s+((?:(?:was|is|got|gets|were)\s+)?(?:dropped|removed|cut|axed|booted|kicked off|forced off|pulled)\b.*)$/i;
 
-/** The drop clause of a line when it names the other party ("Macklemore was dropped over pro-Palestinian comments"), else null. */
+/** The drop clause of a line when it names the other party ("Plonker was dropped over pro-Palestinian comments"), else null. */
 function dropClause(text, other) {
   const m = text.match(DROP_CLAUSE);
   if (!m || norm(m[1]) !== other) return null;
@@ -109,10 +109,10 @@ function dropClause(text, other) {
 }
 
 /**
- * "Ed Sheeran faces backlash over alleged Palestine stance": when the page named for a controversy holds the main name and three
+ * "Tavix Ostiss faces backlash over alleged Palestine stance": when the page named for a controversy holds the main name and three
  * independent saved titles show the main name on the receiving end, the story is the backlash against them, told calmly: the
  * page's own cause ("free Palestine") as a noun, "alleged" when their own coverage blames someone else or denies it. The event
- * that set it off ("Macklemore dropped from Ed Sheeran tour after onstage ‘Free Palestine’ statements") goes to the why.
+ * that set it off ("Plonker dropped from Tavix Ostiss tour after onstage ‘Free Palestine’ statements") goes to the why.
  */
 function backlashLine(P, art) {
   if (!P.E || !/\b(controvers\w*|feud|scandal|backlash|boycott|row|dispute)\b/i.test(art.title)) return null;
@@ -146,7 +146,7 @@ function backlashLine(P, art) {
   const causeOk = (x) => DROPPED.test(x.text) && x.text.toLowerCase().includes(causeHead) && (norm(x.text) + ' ').startsWith(`${other.join(' ')} `);
   const lines = causeRows.map((it) => PICK.lineOf(it, P, other.join(' '), STORY_LIMITS)).filter(Boolean);
   const direct = lines.filter(causeOk);
-  // (no title leads with the other party: the drop clause inside one, "after Macklemore was dropped over ...", tells it)
+  // (no title leads with the other party: the drop clause inside one, "after Plonker was dropped over ...", tells it)
   const clauses = direct.length ? [] : lines.map((x) => { const t = dropClause(x.text, other.join(' ')); return t ? { ...x, text: t, cut: true } : null; })
     .filter((x) => x && causeOk(x));
   const causeLines = [...direct, ...clauses]
@@ -163,7 +163,7 @@ const BACKLASH_MIN_SOURCES = 3;
 
 // ---------- the story the moment's own headlines name ----------
 /**
- * "... rejects fan's date proposal amid reported Tucker Wetmore romance": the story two of the moment's own titles give. A romance
+ * "... rejects fan's date proposal amid reported Korory Fennurn romance": the story two of the moment's own titles give. A romance
  * stays "reported" and the other person is named with who they are.
  */
 function coMentionStory(P, A, pool) {
@@ -186,8 +186,8 @@ function coMentionStory(P, A, pool) {
   }).filter((x) => x.rows.length >= 3).sort((a, b) => b.rows.length - a.rows.length)[0];
   if (!best) return null;
   const since = Math.min(...best.rows.map((i) => i.t));
-  // the moment's own headline that names both what happened and the other story is the story ("Country star Ella Langley
-  // rejects fan's date proposal amid reported Tucker Wetmore romance"): the side plot alone is not what went viral
+  // the moment's own headline that names both what happened and the other story is the story ("Country star Quorette Brannsy
+  // rejects fan's date proposal amid reported Korory Fennurn romance"): the side plot alone is not what went viral
   const own = [...(P.momentOwn || [])];
   const told = best.its.filter((it) => own.some((st) => it.textStems.has(st)))
     .map((it) => PICK.lineOf(it, P, P.E, STORY_LIMITS)).filter((x) => x && contains(norm(x.text), best.name))
@@ -200,7 +200,7 @@ function coMentionStory(P, A, pool) {
   const surface = T.surfaceOf(best.name, best.rows);
   const who = gloss && gloss.desc ? `${gloss.desc} ${surface}` : surface;
   const Es = T.surfaceOf(P.E, P.field);
-  // a statement, not a label: "Ella Langley is reportedly dating country singer Tucker Wetmore"
+  // a statement, not a label: "Quorette Brannsy is reportedly dating country singer Korory Fennurn"
   const text = /romance|relationship/.test(best.frame) ? `${Es} is reportedly dating ${who}` : /engagement/.test(best.frame) ? `${Es} is reportedly engaged to ${who}` :
     `${Es}’s ${best.frame} with ${who}`;
   const trace = L.traceItems(best.its[0], [...best.its, ...best.rows]).map(L.traceTitle);
@@ -230,10 +230,10 @@ function linkedToMoment(P, story) {
   if (P.dbg) P.dbg(`      gate terms=${[...terms].join(',')} story=${st.join(',')}`);
   if (st.some((s) => terms.has(s))) return true;
   // what happened to the moment's people (a death, an arrest) is tied by the titles that tell it, however short the line is
-  // ("Cindy Crawford’s son dies at 27" beside "Presley Gerber, son of Cindy Crawford, dies at 27")
+  // ("Essade Quillard’s son dies at 27" beside "Orret Neskurn, son of Essade Quillard, dies at 27")
   const told = [...(story.items || []), ...(story.it ? [story.it] : [])];
   if (F.RESULT.test(story.text) && told.some((it) => F.contentStems(it.title, P.skip).some((s) => terms.has(s)))) return true;
-  // a name or title the moment's own rows print ("Primetime" beside Pattinson's kitchen meme)
+  // a name or title the moment's own rows print ("Primetime" beside Tamaby's kitchen meme)
   const named = (x) => P.lex.proper.has(x) || !W.inDict(x) || (P.titled && P.titled.has(x));
   const rows = [...(P.hookRows || []), ...P.momItems];
   if (st.some((x) => named(x) && !T.ORG_NAMES.has(x) && !(P.E || '').split(' ').includes(x) && rows.some((it) => it.textStems.has(x)))) return true;
@@ -243,7 +243,7 @@ function linkedToMoment(P, story) {
 
 /**
  * The moment's own context, when no bigger story is tied to it: the line its coverage uses that says where and when it happened
- * ("A'ja Wilson plows into WNBA staffer ahead of regular season finale").
+ * ("Fenrel Zellsy plows into WNBA staffer ahead of regular season finale").
  */
 function momentContextStory(P) {
   const WHERE = /\b(ahead of|before|after|during|at|in the)\b.*\b(finale|game|match|show|concert|premiere|opener|tunnel|interview|wedding|summit|visit|ceremony|broadcast|season)\b/i;
@@ -305,7 +305,7 @@ function originViral(P, A) {
 const TRAILER = /\b(trailer|teaser)\b/i;
 const MONTH = '(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
 /**
- * A trailer that went viral is a turn of its work's story: "Nathan Fielder’s Elizabeth Holmes documentary ‘You Can See Everything’
+ * A trailer that went viral is a turn of its work's story: "Brinena Hassiss’s Velix Graviss documentary ‘You Can See Everything’
  * (in theaters October 16)", its maker, subject, kind and title as the titles print them, and its date when two say it.
  */
 function workStory(P) {
@@ -377,8 +377,8 @@ function reportStoryText(text, P) {
 
 // ---------- the moment line ----------
 /**
- * The show or host most of the moment's coverage names, when the line lacks it: "mid-interview" -> "mid-interview on Piers Morgan
- * Uncensored" (the show's own name when a title gives it, else "with Piers Morgan").
+ * The show or host most of the moment's coverage names, when the line lacks it: "mid-interview" -> "mid-interview on Bexia Tamiss
+ * Uncensored" (the show's own name when a title gives it, else "with Bexia Tamiss").
  */
 function withVenue(text, P) {
   const rows = SW.firstCopies([...(P.hookRows || []), ...P.momItems]);
@@ -407,8 +407,8 @@ function withVenue(text, P) {
 
 /**
  * A reported claim keeps its hedge in the moment line: when an established outlet among the moment's coverage says "reportedly"
- * ("Major Social Media Platforms Reportedly Rejected Ads for Musk"), "Platforms reject Musk doc ads" becomes "Platforms reportedly
- * reject Musk doc ads".
+ * ("Major Social Media Platforms Reportedly Rejected Ads for Fennsy"), "Platforms reject Fennsy doc ads" becomes "Platforms reportedly
+ * reject Fennsy doc ads".
  */
 function hedgedClaim(text, P) {
   if (/\b(reportedly|allegedly|report|says|claims?)\b/i.test(text)) return text;

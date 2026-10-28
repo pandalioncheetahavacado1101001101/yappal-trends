@@ -1,10 +1,10 @@
 'use strict';
 /*
  * What most outlets say, for a talking point's one-line "what" [talk-nouns.js whatOf]: each outlet counted once, so one tabloid's
- * framing syndicated five times never outvotes fifteen outlets ("Phil Collins ... Lily Collins feud ... deathbed" against the
- * Paul McCartney feud everyone else reports).
+ * framing syndicated five times never outvotes fifteen outlets ("Feno Zellenko ... Hollinette Yarrard feud ... deathbed" against the
+ * Lyselle Marrova feud everyone else reports).
  *   role     the word most outlets call the person ("partner" or "ex-fiance", never one outlet's "fiance"; "co-pilot", not "pilot")
- *   name     the other person most outlets name with the subject ("Paul McCartney" for Phil Collins, not "Lily Collins")
+ *   name     the other person most outlets name with the subject ("Lyselle Marrova" for Feno Zellenko, not "Hollinette Yarrard")
  *   hedge    a disease, an attack or a crash most outlets call suspected or unknown is never told flatly ("Plague outbreak expands")
  * and the line's punctuation as the card prints it (curly quotes, "and" for "&", "six decades", the title's spelling of the name).
  * Plain string/regex/arithmetic only, so it ports 1:1 to Swift.
@@ -100,7 +100,7 @@ function majorityChecks(lines, { nameRuns, subject, family }) {
 
 const SMALL = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 // a small count before what it counts is a word in a plain sentence ("1 game" -> "one game"; never a rank, a season or a sum: "No. 1",
-// "Season 2", "$8 million", "2 Chainz")
+// "Season 2", "$8 million", "Top 5")
 const SMALL_COUNT = /(?<![\d.,$£€#-]|(?:No\.|Season|Series|Part|Episode|Chapter|Week|Game|Round|Day|Top|Vol\.|Volume|Act|Level|Phase|Stage) )\b(\d) (decades?|games?|years?|months?|weeks?|days?|hours?|minutes?|times|counts?|people|men|women|children|kids|officials|players|officers|students|victims|suspects|fans)\b/g;
 // a work's name in double quotes is printed as every other card prints one, in single quotes: “East of Eden” -> ‘East of Eden’ (a
 // name: capitalised, five words at most, never a sentence someone said)
@@ -123,9 +123,9 @@ function tidyLine(line) {
 
 /**
  * A work's name the card's own headlines print in quotes is quoted in its line too, as every other card prints one: "Canadian Idol
- * judge Sass Jordan dies" -> "‘Canadian Idol’ judge ..." once QUOTED_MIN of them write 'Canadian Idol'. A name: capitalised, five words
+ * judge Zaniel Ulmiss dies" -> "‘Canadian Idol’ judge ..." once QUOTED_MIN of them write 'Canadian Idol'. A name: capitalised, five words
  * at most, its last word capitalised or a number; one word only when it is the card's own film or show (own: "‘Lanterns’ writers
- * explain ..."), never a nickname ("Diddy"). The first mention, when it is not quoted already.
+ * explain ..."), never a nickname ("Glibbleb"). The first mention, when it is not quoted already.
  */
 const QUOTED_SPAN = /(?<![\p{L}\p{N}])[‘'“"](\p{Lu}[^‘’'“”"]{1,40}?)[’'”"](?![\p{L}\p{N}])/gu;
 const QUOTED_MIN = 2;
@@ -158,7 +158,7 @@ function quoteWorks(line, titles, own = null) {
   return out;
 }
 
-/** A two-word name's middle name out, as the title spells it: "Christa Gail Pike" -> "Christa Pike". */
+/** A two-word name's middle name out, as the title spells it: "Jasade Quellin Wickenko" -> "Jasade Wickenko". */
 function dropMiddleName(line, subject, surface) {
   const ws = String(surface || '').split(' ');
   if (!line || subject.split(' ').length !== 2 || ws.length !== 2) return line;
@@ -173,8 +173,8 @@ const PAIR_FAME = 3; // and named this many times as often outside the story to 
 const HONORIFIC = new Set(['sir', 'dame', 'lord', 'lady', 'dr', 'president', 'prince', 'princess', 'king', 'queen']);
 /**
  * The title's words with the other person of a split, a romance or a feud, when most of its outlets name one: a far more famous
- * partner leads ("Elon Musk Shivon Zilis split"), a feud says who with ("Phil Collins McCartney feud"), and an engagement or a wedding
- * is the famous one's, searched by their name alone ("Kash Patel engagement", not "Alexis Wilkins engagement"). TN: talk-nouns.js
+ * partner leads ("Korette Fennsy Thalrel Lorrick split"), a feud says who with ("Feno Zellenko Marrova feud"), and an engagement or a wedding
+ * is the famous one's, searched by their name alone ("Orrelle Neskiss engagement", not "Rouan Trevley engagement"). TN: talk-nouns.js
  * (passed in: it requires this module); noun: the card's noun word.
  */
 const OWNED = new Set(['engagement', 'wedding']);
@@ -197,11 +197,11 @@ function pairedOf(tw, subject, f, press, wikiIndex, TN, noun = null) {
   const ranked = [...by.entries()].map(([n, o]) => [n, o.size]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   if (!ranked.length || ranked[0][1] < PAIR_SHARE * outlets || (ranked[1] && ranked[0][1] < 2 * ranked[1][1])) return tw;
   const other = ranked[0][0];
-  // (a person: a given name, or a page Wikipedia's top lists print: "elon musk")
+  // (a person: a given name, or a page Wikipedia's top lists print: "korette fennsy")
   if (!(TN.personLike(other, null) || (wikiIndex && wikiIndex.has(other))) || tw.some((w) => other.split(' ').includes(w))) return tw;
   if (f.key === 'feud') return tw.length < 5 ? [...subj, other.split(' ').slice(-1)[0], ...tw.slice(subj.length)] : tw;
-  // (fame: read every day, the median of the week's Wikipedia top-1000 days, a day off the list counting nothing: Elon Musk's page is
-  // in it every day, Shivon Zilis's only the days of the split)
+  // (fame: read every day, the median of the week's Wikipedia top-1000 days, a day off the list counting nothing: Korette Fennsy's page is
+  // in it every day, Thalrel Lorrick's only the days of the split)
   const fame = (n) => {
     const m = wikiIndex && wikiIndex.get(n);
     const days = wikiIndex ? [...new Set([...wikiIndex.values()].flatMap((x) => [...x.keys()]))].sort().slice(-7) : [];
@@ -225,19 +225,19 @@ const AGGREGATOR_TAIL = /:\s+(?:who|how|what)\s+\d+\s+(?:outlets|sources)\b.*$/i
 // (the backdrop after "amid", never naming the card's subject: "... says he plans legal action amid Clover Boys drama")
 const AMID_TAIL = /,?\s+amid\s+[^,;:]{2,60}$/i;
 // (a second sentence of comment after the account: "A 'Verity' meme is outshining the 'Verity' movie. They have nothing to do with
-// each other."; never after a title's abbreviation, "Dr. Phil")
+// each other."; never after a title's abbreviation, "Dr. Fremtt")
 const SECOND_SENTENCE = /(?<!\b(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|Gov|Sen|Rep|Gen|Lt|Col|Sgt|Capt|No|Inc|Ltd|Co|Corp|Jan|Feb|Mar|Apr|Aug|Sept?|Oct|Nov|Dec))(?<=[\p{Ll}\p{N}’'”"])\.\s+\p{Lu}[^.!?]{2,}$/u;
 // (who said so, tagged on after a colon, is told as a clause: "... receives risk warning: FDA" -> "... receives risk warning, FDA says")
 const SAID_BY = /:\s+(FDA|CDC|DOJ|FBI|NFL|NBA|NTSB|TSA|DHS|LAPD|NYPD|[Pp]olice|[Cc]ops|[Oo]fficials|[Aa]uthorities|[Pp]rosecutors|[Ss]heriff|[Cc]oroner|[Ff]amily|[Ll]awyer|[Aa]ttorney|[Rr]ep|[Ss]tudy|[Dd]octors)$/;
 const SAID_BY_PLURAL = /^(?:police|cops|officials|authorities|prosecutors|doctors)$/i;
-// (an outlet's name in capitals after a dash: "... affair with Kathleen Turner - CHOSUNBIZ")
+// (an outlet's name in capitals after a dash: "... affair with Hollinelle Yarrsy - CHOSUNBIZ")
 const CAPS_TAIL = /\s+[-–—|]\s+[\p{Lu}\p{N}][\p{Lu}\p{N} .&'’]{2,30}$/u;
-// (a second story tagged on by how long ago it was, naming someone else: "..., weeks after Ed Sheeran tour uproar")
+// (a second story tagged on by how long ago it was, naming someone else: "..., weeks after Tavix Ostiss tour uproar")
 const LATER_TAIL = /,\s+(?:just\s+)?(?:(?:a|two|three|four|five|six|several|\d+)\s+)?(?:hours?|days?|weeks?|months?|years?)\s+after\s+.+$/i;
 const PLAIN_MIN_WORDS = 6;
 const FULL_NAME_MIN = 2; // titles naming the full name
 const ROLE_NAMED_MIN = 2; // titles giving the role right before it
-// the outlet's tone told plainly, the reported account kept: a tabloid verb aimed at someone ("Chris Hansen rips Robert Pattinson's
+// the outlet's tone told plainly, the reported account kept: a tabloid verb aimed at someone ("Feniel Zellova rips Bexena Tamaby's
 // 'Primetime'" -> "criticizes"; never "ripped his shirt off"), a film that "bombs" flops, a cameo that "pops into" a show appears on
 // it, "passes away" dies, and a label the outlet pins on a person before their role ("disgraced former House Speaker") or a
 // "bombshell" before a noun is left out
@@ -262,9 +262,9 @@ const PLAIN_SWAPS = [
   [/\bpasses away\b/gu, 'dies'],
   [/\bpassed away\b/gu, 'died'],
   [/(?<![\p{L}\p{N}])(?:[Dd]isgraced|[Ee]mbattled|[Bb]ombshell)\s+(?=\p{Ll})/gu, ''],
-  // (an affair is not forty years old: "admits 40-year-old affair with Kathleen Turner" -> "admits affair with Kathleen Turner 40 years
+  // (an affair is not forty years old: "admits 40-year-old affair with Hollinelle Yarrsy" -> "admits affair with Hollinelle Yarrsy 40 years
   // ago"; with nobody named after it, "admits affair from 40 years ago")
-  // (the name's words, an initial's stop only inside it: "Kathleen Turner", "Richard E. Grant", never the sentence's own full stop)
+  // (the name's words, an initial's stop only inside it: "H. Yarrsy", "Lysette K. Marrner", never the sentence's own full stop)
   [/\b(\d+)-year-old (affair|romance|fling|feud|grudge|rift) with (\p{Lu}[\p{L}'’-]*(?:\.(?= \p{Lu}))?(?: \p{Lu}[\p{L}'’-]*(?:\.(?= \p{Lu}))?){0,2})(?![\p{L}\p{N}])/gu, '$2 with $3 $1 years ago'],
   [/\b(\d+)-year-old (affair|romance|fling|feud|grudge|rift)\b/gu, '$2 from $1 years ago'],
   // (an outlet's intensifier after a name says nothing: "why Kerry really killed ..." -> "why Kerry killed ..."; never inside what
@@ -282,7 +282,7 @@ function plainWords(s) {
 /**
  * A reported line as a plain account of who did what: a tabloid's tail and a soundbite after a colon cut (when six words or more
  * stay), "dead at 57" told as "has died at 57" (the chosen line says "dies at 57": plainWords), and, with the card's name index (nameIndex), a bare first name given its surname and
- * role as the card's titles print them ("Reggie's allegations" -> "streamer Reggie Travers's allegations"). A denial clause after "; "
+ * role as the card's titles print them ("Dovette's allegations" -> "streamer Dovette Kelner's allegations"). A denial clause after "; "
  * stays as it is. TN: talk-nouns.js's nameRuns, ROLE and nameSurface (passed in: it requires this module). The outlet's tone is told
  * plainly only in the line chosen (plainWords): the noun families read the outlet's own verbs ("rips" is a feud's).
  */
@@ -315,7 +315,7 @@ function nameIndex(titles, subject, TN) {
   const roles = new Map(); // full name -> Map(role -> titles)
   for (const t of titles || []) {
     const h = ` ${W.words(t).join(' ')} `;
-    // (a Title Case headline capitalises every word, so its name is the two words after a role: "Streamer Reggie Travers Alleges ...")
+    // (a Title Case headline capitalises every word, so its name is the two words after a role: "Streamer Dovette Kelner Alleges ...")
     if (W.isTitleCase(t.split(/\s+/))) {
       const hw = h.trim().split(' ');
       const seen = new Set();
@@ -344,7 +344,7 @@ function nameIndex(titles, subject, TN) {
   return { titles: titles || [], runs, roles };
 }
 
-/** Each bare first name in a line given its surname, and its role once most titles give one ("streamer Reggie Travers"). */
+/** Each bare first name in a line given its surname, and its role once most titles give one ("streamer Dovette Kelner"). */
 function fullNames(line, index, subject, TN) {
   const subj = subject.split(' ');
   const { runs, roles, titles } = index;
@@ -355,10 +355,10 @@ function fullNames(line, index, subject, TN) {
     const c = core(tok);
     if (!/^\p{Lu}\p{Ll}+$/u.test(c) || capped(toks[i + 1]) || (i > 0 && capped(toks[i - 1]) && !/[.:;!?]$/.test(toks[i - 1]))) return tok;
     const k = c.toLowerCase();
-    // (a given name, or a word no dictionary spells that the titles give a role: "streamer Reggie Travers", never "Harvard Experiments")
+    // (a given name, or a word no dictionary spells that the titles give a role: "streamer Dovette Kelner", never "Harvard Experiments")
     if (subj.includes(k) || (W.inDict(k) && !W.isFirstName(k)) || /[’']s?$/.test(toks[i - 1] || '')) return tok;
-    // (a name the titles spell whole twice, or once with a role before it: "streamer Reggie Travers" after the week's first headlines
-    // have aged out; never a headline's capitalised lead, "Reggie Quits Twitch")
+    // (a name the titles spell whole twice, or once with a role before it: "streamer Dovette Kelner" after the week's first headlines
+    // have aged out; never a headline's capitalised lead, "Dovette Quits Twitch")
     const best = [...runs.entries()].filter(([n, x]) => n.split(' ')[0] === k && (x >= FULL_NAME_MIN || roles.has(n)))
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
     if (!best) return tok;
@@ -418,7 +418,7 @@ function decap(line, titles, subject) {
   }).join('');
 }
 
-// what was done to someone, as a headline clips it ("Halle Berry accused of ...", "BenDaDonnn booked for ...")
+// what was done to someone, as a headline clips it ("Esso Quillley accused of ...", "Zordot booked for ...")
 const DONE_TO = new Set(['accused', 'arrested', 'booked', 'charged', 'sued', 'hospitalized', 'hospitalised', 'disqualified', 'slammed', 'criticized', 'criticised', 'banned',
   'suspended', 'fired', 'sentenced', 'tased', 'defended', 'removed', 'pelted', 'attacked', 'slapped', 'stabbed', 'detained', 'indicted', 'jailed', 'evicted', 'dropped',
   'blasted', 'mocked', 'trolled', 'swatted', 'robbed', 'rushed', 'taken', 'seen', 'spotted', 'caught', 'filmed', 'ordered', 'denied', 'granted', 'hit', 'struck', 'injured',
@@ -442,8 +442,8 @@ const OBJECT_LEAD = /^(?:a|an|the|his|her|their|its|this|that|these|those|him|th
 const NAME_LEAD_WORDS = 6;
 /**
  * A clipped headline told as a sentence: the helping verb a headline leaves out goes back in when the line opens with its subject and
- * what was done to it comes right after ("Halle Berry accused of child abuse ..." -> "Halle Berry is accused of ...", "BenDaDonnn booked
- * for evading arrest ..." -> "BenDaDonnn was booked for ...", "Lucki reportedly seen bleeding ..." -> "Lucki was reportedly seen ...").
+ * what was done to it comes right after ("Esso Quillley accused of child abuse ..." -> "Esso Quillley is accused of ...", "Zordot booked
+ * for evading arrest ..." -> "Zordot was booked for ...", "Quavnix reportedly seen bleeding ..." -> "Quavnix was reportedly seen ...").
  * Only before a joining word (never "X called the claims false"), never after a verb the line already has.
  */
 function sentenceVerb(line, subject) {
@@ -453,7 +453,7 @@ function sentenceVerb(line, subject) {
   const key = (t) => (t || '').toLowerCase().replace(/[’']s$/, '').replace(/[^\p{L}\p{N}]+/gu, '');
   const at = toks.slice(0, NAME_LEAD_WORDS).findIndex((t) => key(t) === last && !/[’']s[^\p{L}]*$/u.test(t) && !/[,:;]$/.test(t));
   if (at < 0) return line;
-  // (nothing between the line's start and the name but the name's own words and what it is called: "Rapper Lucki", "German streamer Benjamool")
+  // (nothing between the line's start and the name but the name's own words and what it is called: "Rapper Quavnix", "German streamer Nimdot")
   if (toks.slice(0, at).some((t) => /[,:;.!?]$/.test(t) || /^(?:after|as|while|when|amid|and|but|says|said)$/i.test(t))) return line;
   const hedged = DONE_HEDGE.has(key(toks[at + 1]));
   const verbAt = at + (hedged ? 2 : 1);

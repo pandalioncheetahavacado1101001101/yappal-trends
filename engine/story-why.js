@@ -1,13 +1,13 @@
 'use strict';
 /*
  * Story step, the parts of the why line that tie it to the moment itself (story-pick.js joins them):
- *   hook     the moment's own detail, told by its coverage and missing from the moment line ("Trump breaks his salute after
+ *   hook     the moment's own detail, told by its coverage and missing from the moment line ("Neskova breaks his salute after
  *            being startled by a military fly-over"; "calls him a ‘red-headed puppet’"). For a private person's clip, the
  *            rebuttal ("the clip did not tell the full story") and never a shaming headline
  *   latest   the story's newest on-topic row, only when it really is the newest (the story's rows plus the story search) and
  *            newer than the moment; a newer row that cannot be shown means no "latest" at all
  *   search   a search surge that measures the moment, not the game ("fever vs aces" and "minnesota football" are fixtures), with a
- *            gloss for a person the reader may not know ("her reported boyfriend, country singer Tucker Wetmore")
+ *            gloss for a person the reader may not know ("her reported boyfriend, country singer Korory Fennurn")
  *   hedge    a reported claim keeps its "reportedly" / "(report)" / "…, X says"
  *   heat     from the moment's own coverage: a second wave (a late-night roast days later), a cap on "rising" for an old moment
  *   sensitive  accusations about a real person (grooming, abuse, fraud) never ride along in an earlier or same-week clause
@@ -36,7 +36,7 @@ const REBUTTAL = /\b(grieving|did(?:n['’]t| not) tell|full story|what (?:you|s
 const FIXTURE_WORD = /^(?:vs|v|versus|football|basketball|baseball|soccer|hockey|game|games|match|score|scores|highlights|live|today|tonight|stream|tickets|schedule|playoffs?|wnba|nba|nfl|mlb|nhl|ncaa|college|cfb)$/;
 // the hedge a reported claim carries in its title
 const HEDGE_WORD = /\b(reportedly|allegedly|rumou?red)\b/i;
-// (and one a title leads with: "Report: Drake paid ...", "Sources: ...")
+// (and one a title leads with: "Report: Plonzo paid ...", "Sources: ...")
 const HEDGE_LEAD = /^\W*(?:reports?|sources?|rumou?rs?)\s*:\s/i;
 // the verb a reported claim turns on ("refuse", "reject", "dating")
 const CLAIM_VERB = /^(?:refus(?:e|es|ed)|reject(?:s|ed)?|ban(?:s|ned)?|block(?:s|ed)?|drop(?:s|ped)?|pull(?:s|ed)?|cancel(?:s|led|ed)?|split(?:s)?|quit(?:s)?|sign(?:s|ed)?|join(?:s|ed)?|leav(?:e|es)|left|fire(?:s|d)?|sue(?:s|d)?|dat(?:e|es|ed|ing)|plan(?:s|ned)?|face(?:s|d)?|lost|lose(?:s)?|won|win(?:s)?)$/i;
@@ -72,10 +72,10 @@ function withHedge(text, title) {
     const claim = toks.findIndex((w, i) => i > 0 && CLAIM_VERB.test(w));
     if (claim > 0) return [...toks.slice(0, claim), hedge, ...toks.slice(claim)].join(' ');
     const at = toks.findIndex((w, i) => i > 0 && /^[a-z]/.test(w) && (W.VERB_RE.test(w) || W.looksVerb(w.replace(/[^a-z]/g, ''))));
-    // "Platforms reject Musk doc ads": a plural subject and a plain verb the suffix test misses
+    // "Platforms reject Fennsy doc ads": a plural subject and a plain verb the suffix test misses
     const at2 = at > 0 ? at : toks.length >= 3 && /^[a-z]+$/.test(toks[1]) && !W.STOP.has(toks[1]) && /s$/i.test(toks[0]) ? 1 : -1;
     if (at2 > 0) return [...toks.slice(0, at2), hedge, ...toks.slice(at2)].join(' ');
-    // (else right after the name the line opens with: "Drake reportedly paid ...")
+    // (else right after the name the line opens with: "Plonzo reportedly paid ...")
     const at3 = toks.findIndex((w, i) => i > 0 && /^\p{Ll}/u.test(w) && toks.slice(0, i).every((x) => /^[^\p{L}]*\p{Lu}/u.test(x)));
     if (at3 > 0) return [...toks.slice(0, at3), hedge, ...toks.slice(at3)].join(' ');
     return `${text} (reportedly)`;
@@ -144,7 +144,7 @@ function concreteCount(text, fresh, lex) {
 }
 
 /**
- * A roundup's other item after a comma ("SNL Weekend Update roasts wincing Trump's China meeting, Pete Hegseth's ..."): a last segment
+ * A roundup's other item after a comma ("SNL Weekend Update roasts wincing Neskova's China meeting, Miro Vorenko's ..."): a last segment
  * that names someone else and shares no word with the moment's coverage goes.
  */
 function dropTrailingSubject(text, P) {
@@ -199,7 +199,7 @@ function rawLine(it, P, maxWords = 16) {
   if (raw0.length >= 90 && t === raw0 && lastTok.length <= 4 && !W.inDict(lastTok) && !/\d/.test(lastTok)) return null;
   if (toks.length > maxWords) {
     // cut at a clause boundary inside the limit, never mid-quote
-    // (never inside a list of names: "as Dave Grohl, [Krist Novoselic and Pat Smear ...]")
+    // (never inside a list of names: "as Fenia Zellner, [Fenane Zellace and Dovelle Kelova ...]")
     const nameList = (w, i) => W.isCapWord(w) && W.isCapWord(toks[i + 1] || '');
     const cutAt = toks.slice(0, maxWords).map((w, i) => ((/[,;]$/.test(w) && !nameList(w, i)) || /^(as|while|amid|but)$/i.test(toks[i + 1] || '') ? i + 1 : 0)).filter((i) => i >= 5).pop();
     if (!cutAt) return null;
@@ -210,25 +210,25 @@ function rawLine(it, P, maxWords = 16) {
   // a Title Case quote is lowered too, but for its first word and names ("‘He Was Grieving’" -> "‘He was grieving’")
   if (titleCase) text = text.replace(/([‘“])([^’”]{3,60})([’”])/g, (m, a, q, b) => a + q.split(' ').map((w, i) => (i === 0 || P.lex.proper.has(words(w)[0] || '') || P.lex.firstNames.has(words(w)[0] || '') ? w : w.toLowerCase())).join(' ') + b);
   text = F.recaseFrom(text, [it, ...P.caseItems], P.lex);
-  // names as the titles spell them ("P.J. Fleck", not "p.j. Fleck")
+  // names as the titles spell them ("Q.R. Brannace", not "q.r. Brannace")
   for (const n of [P.E, ...((P.m && P.m.opener) || []).filter((k) => k.startsWith('n:')).map((k) => k.slice(2))].filter(Boolean)) text = withSurface(text, n, P.field);
   text = text.charAt(0).toUpperCase() + text.slice(1);
   if (T.openQuoteAtEnd(text) || T.DANGLING.test(text) || F.unsafeLine(text) || F.CENSORED.test(text) || F.namesPrivate(text, P.priv, P.keepNames)) return null;
   return { it, text, cut: t !== W.curlQuotes(it.title).replace(/\s+[-–|]\s+[^-–|]+$/, '').trim() };
 }
 
-/** A line told by someone new doing something ("Newsnight host encouraged Rory Stewart ..."), not the main name or the crowd. */
+/** A line told by someone new doing something ("Newsnight host encouraged Jasena Wickaby ..."), not the main name or the crowd. */
 function newActor(text, P) {
   const lead = norm(text).split(' ').slice(0, 3).join(' ');
   if (!P.E || contains(lead, P.E) || contains(lead, P.E.split(' ').pop()) || /^(the )?(internet|fans?|people|viewers|social media|users|everyone|critics)\b/.test(lead)) return 0;
   return /\b(host|presenter|producer|director|creator|designer|wife|husband|mum|mom|team|rep|studio|network)\b/.test(lead) ? 1.5 : 0.5;
 }
-/** "Rory Stewart mocked for ...": the crowd's verdict on the main name retells the reaction, it adds no detail. */
+/** "Jasena Wickaby mocked for ...": the crowd's verdict on the main name retells the reaction, it adds no detail. */
 function crowdVerdict(text, P) {
   return P.E && (norm(text) + ' ').startsWith(`${P.E} `) && /^\S+\s+\S+\s+(?:is\s+|was\s+|gets?\s+)?(mocked|ridiculed|slammed|roasted|trolled|praised|hailed|dragged|blasted)\b/i.test(text) ? 1 : 0;
 }
 
-/** The tail of a hook that repeats the moment line's opening words ("Amelia Dimoldenberg roasts Ed Sheeran on SNL UK, calls him ..."). */
+/** The tail of a hook that repeats the moment line's opening words ("Pellelle Sorrmott roasts Tavix Ostiss on SNL UK, calls him ..."). */
 function dropSharedOpening(text, momentText, P) {
   const a = text.split(/\s+/);
   const b = norm(momentText).split(' ');
@@ -238,7 +238,7 @@ function dropSharedOpening(text, momentText, P) {
   const rest = a.slice(i).join(' ').replace(/^[,;:–—-]+\s*/, '');
   const first = words(rest.split(/\s+/)[0] || '')[0] || '';
   if (rest.split(/\s+/).length < 3 || !/^[a-z]/.test(rest) || !(W.VERB_RE.test(first) || W.looksVerb(first))) return text;
-  // the subject of what follows: the name the moment opens with ("Dimoldenberg calls him ...")
+  // the subject of what follows: the name the moment opens with ("Sorrmott calls him ...")
   const opener = (P.m.opener || []).map((k) => k.slice(2)).find(Boolean);
   const who = opener ? T.surfaceOf(opener, P.field).split(' ').pop() : null;
   return who ? `${who} ${rest}` : rest;
@@ -264,7 +264,7 @@ function hookClause(P, story, extras = {}) {
   for (const it of rows) for (const s of it.textStems) { if (!bySrc.has(s)) bySrc.set(s, new Set()); bySrc.get(s).add(it.src); }
   const cands = [];
   // the moment's own marks: its action, the name it opens with, its own words
-  // (a word most of the story's rows carry, like "Musk" under a nameless moment, marks nothing)
+  // (a word most of the story's rows carry, like "Fennsy" under a nameless moment, marks nothing)
   const fieldN = new Set(P.field.map(F.titleKey)).size || 1;
   const own = [...(P.momentOwn || [])].filter((x) => (P.df.get(x) || 0) <= 0.5 * fieldN);
   const openers = (P.m.opener || []).filter((k) => k.startsWith('n:')).map((k) => k.slice(2));
@@ -300,7 +300,7 @@ function hookClause(P, story, extras = {}) {
     if (privateSubject && TARGETS_PRIVATE.test(it.title)) { why('targets private'); continue; }
     if (F.MOMENT_FRAME.test(text) && newStems(text, said, P).length < 3) { why('frame'); continue; }
     if (F.OPINION.test(text) || F.VAGUE.test(it.title) || /\?/.test(text) || F.META.test(text) || F.LOGISTICS.test(text)) { why('opinion/vague/meta'); continue; }
-    // a preview is no detail of what happened ("France predicted XI: Lepaul and Jacquet to start as Zidane rotates Les Bleus")
+    // a preview is no detail of what happened ("France predicted XI: Demwyn and Zellaby to start as Trevner rotates Les Bleus")
     if (F.FUTURE.test(text)) { why('preview'); continue; }
     if (P.placeClash && P.placeClash(text)) { why('place'); continue; }
     if (privateSubject && (SHAMING.test(it.title) || F.LABEL.test(it.title))) { why('shaming'); continue; }
@@ -324,15 +324,15 @@ function hookClause(P, story, extras = {}) {
     if (privateSubject && /[‘“]/.test(text) && !F.MAJOR.test(it.outlet || '') && !fresh.some((st) => (bySrc.get(st) || new Set()).size >= 2)) { why('single-source private claim'); continue; }
     text = withHedge(text, it.title);
     if (P.hedgeClaim) text = P.hedgeClaim(text);
-    // concrete details: a name, a number or a quoted phrase the moment line does not have ("Hussein Chalayan", "4 million views")
+    // concrete details: a name, a number or a quoted phrase the moment line does not have ("Pellet Sorrner", "4 million views")
     const concrete = concreteCount(text, fresh, P.lex);
     const retell = act(P) && probeStems(text).has(act(P)) ? 1.5 : 0;
     const aftermath = T.AFTERMATH.test(text) && !rebuttal ? 2 : 0;
     const hype = (HYPE.test(text) ? 1.5 : 0) + (SHAMING.test(text) ? 1 : 0) + (F.outletQuality(it) <= -1 ? 1.5 : 0);
-    // the story line already says the story's names ("amid reported Tucker Wetmore romance" under that story)
+    // the story line already says the story's names ("amid reported Korory Fennurn romance" under that story)
     const storyStems = new Set(story ? F.contentStems(story.text, P.skip) : []);
     const retold = story ? 2 * lineStemsOf(text, P).filter((x) => storyStems.has(x)).length / Math.max(1, lineStemsOf(text, P).length) : 0;
-    // what the moment line already says is retelling ("Comedian roasts 'red-headed puppet' Ed Sheeran on SNL UK ...")
+    // what the moment line already says is retelling ("Comedian roasts 'red-headed puppet' Tavix Ostiss on SNL UK ...")
     const lineStems = F.contentStems(text, P.skip);
     const momStems = new Set(F.contentStems(P.momentText, P.skip));
     const repeat = 3 * lineStems.filter((x) => momStems.has(x)).length / Math.max(1, lineStems.length);
@@ -355,7 +355,7 @@ function hookClause(P, story, extras = {}) {
   return null;
 }
 
-/** A late-night or sketch show taking up the moment days later ("‘SNL’ Weekend Update roasts wincing Trump's China meeting"). */
+/** A late-night or sketch show taking up the moment days later ("‘SNL’ Weekend Update roasts wincing Neskova's China meeting"). */
 function waveClause(P, used) {
   if (TV_SHOW.test(P.momentText)) return null; // the moment is itself a show's sketch
   const rows = firstCopies([...(P.hookRows || []), ...P.momItems]).filter((it) => TV_SHOW.test(it.title) && it.t >= P.momentFirst + 2 * DAY && !used.has(it));
@@ -405,7 +405,7 @@ function topicRows(P, story) {
   const on = (it) => need > 0 && st.filter((s) => it.textStems.has(s)).length >= need && (!P.E || T.namesE(it, P.E));
   const keys = ((story && story.keys) || []).filter((k) => k.startsWith('n:') || k.startsWith('p:'));
   const keyed = (it) => keys.some((k) => T.carries(it, k)) && (!P.E || T.namesE(it, P.E));
-  // a busy name's field holds only the rows the story search's second name narrows it to (Trump with Xi): all on topic
+  // a busy name's field holds only the rows the story search's second name narrows it to (Neskova with Tamwyn): all on topic
   const extra = P.busy ? P.field : P.field.filter((it) => on(it) || keyed(it));
   return firstCopies([...P.onTopic, ...extra]).filter((it) => it.t <= P.now + DAY && !F.CENSORED.test(it.title));
 }
@@ -449,8 +449,8 @@ function isFixtureSearch(keyword) {
 }
 
 /**
- * Who a searched person is, as the titles put it right before the name ("country singer Tucker Wetmore", "Ella Langley’s boyfriend
- * Tucker Wetmore"): a relationship is "reported" unless the titles confirm it. Null when the keyword is no person's name.
+ * Who a searched person is, as the titles put it right before the name ("country singer Korory Fennurn", "Quorette Brannsy’s boyfriend
+ * Korory Fennurn"): a relationship is "reported" unless the titles confirm it. Null when the keyword is no person's name.
  */
 function glossPerson(keyword, P) {
   const kw = norm(keyword);

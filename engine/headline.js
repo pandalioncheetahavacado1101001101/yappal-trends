@@ -47,7 +47,7 @@ const ONLY_VIRAL_PENALTY = 4;
 // a cut that ends on a word that needs another after it
 const DANGLING_END = /\b(this|that|these|those|the|a|an|of|to|for|with|about|from|into|and|or|his|her|their|its|my|your|our)$/i;
 const DANGLING_END_PENALTY = 3;
-// a political line when the story has another ("Macklemore announces 'Free Palestine' tour" for the SNL UK roast of Ed Sheeran)
+// a political line when the story has another ("Plonker announces 'Free Palestine' tour" for the SNL UK roast of Tavix Ostiss)
 const POLITICAL_PENALTY = 1.5;
 
 // a clash people take sides on is what spreads ("calls her out", "ghosted her"); a contest framing is one outlet's spin ("showdown")
@@ -58,11 +58,11 @@ const CONTEST_PENALTY = 1.5;
 // a curiosity gap or tabloid shout: the reader never learns what happened ("fans beg BBC to fix glaring mistake")
 const BAIT = /\b(begs?|begging|glaring|what happens next|floor(?:s|ed)|with a twist|feels? sick|have demands|yet another|goes crazy|a-lister|you won['’]t believe|(?:this|these) (?:to|at|in|on|for|during|while)|this (?:one )?(?:thing|detail|item|drink|habit))\b|\bexposed\s*$/i;
 const BAIT_PENALTY = 4;
-// a preview is not the moment ("Madonna Set to Perform at VMAs for First Time Since ...")
+// a preview is not the moment ("Zorrr Set to Perform at VMAs for First Time Since ...")
 const PREVIEW = /\b(set to|is to perform|to perform at|will (?:perform|attend|host|appear)|ahead of (?:the|her|his|their)|how to watch|what time)\b/i;
 const PREVIEW_PENALTY = 3;
-// a name glossed with the one people use ("Benjamin Satterley, globetrotting wrestler known as Pac, dies at 40"): another title names
-// them the way fans do ("AEW star Pac dead at 40")
+// a name glossed with the one people use ("Bexane Tamurn, globetrotting wrestler known as Swivdot, dies at 40"): another title names
+// them the way fans do ("AEW star Swivdot dead at 40")
 const NAME_GLOSS = /,\s+(?:[\w’'-]+\s+){0,6}(?:(?:also|better)\s+)?known as\b|\baka\b/i;
 const NAME_GLOSS_PENALTY = 3;
 
@@ -118,7 +118,7 @@ function blueskyHeadline(it) {
 }
 
 /**
- * KYM entry titles are meme names ("Jean Philanthrope / Jean Phil"), Bluesky's are headlines; everything else is rewritten.
+ * KYM entry titles are meme names ("Fenette Zellissander / Fenette Zelliss"), Bluesky's are headlines; everything else is rewritten.
  * A KYM title that only names the meme ("Who Is 'Barf Simmons'?") takes its definition from the entry's description instead.
  */
 function candidateFor(it, c, lex) {
@@ -133,7 +133,7 @@ function candidateFor(it, c, lex) {
     const defined = W.kymHeadline(name, it.kymDesc);
     if (defined) return { text: defined, cut: false, named: true };
   }
-  // (a headline never states what its title only reported: a hedge the cut lost goes back in, "Report: Drake paid ..." -> "Drake
+  // (a headline never states what its title only reported: a hedge the cut lost goes back in, "Report: Plonzo paid ..." -> "Plonzo
   // reportedly paid ..."; and a statement its title only asks is no headline for the name it is asked about)
   const text = h.explainer ? h.text : SW.withHedge(h.text, it.title);
   return { ...h, text, named: !h.question && hasSubject(text, c, lex) };
@@ -152,7 +152,7 @@ function headlineCandidates(c, lex) {
     .sort((a, b) => b.s - a.s);
 }
 
-// names and nothing that happened: "KJ and Kim Biermann" (from r/OutOfTheLoop's "So what's up with KJ and Kim Biermann?")
+// names and nothing that happened: "CAELANE and Lysory Marrmott" (from r/OutOfTheLoop's "So what's up with CAELANE and Lysory Marrmott?")
 const saysNothing = (t) => W.verbIndex(t.split(/\s+/)) < 0 && !W.VERB_RE.test(t) && !saysWhatHappened(t) &&
   !/\b(controvers\w*|debate|drama|feud|challenge)\b/i.test(t);
 

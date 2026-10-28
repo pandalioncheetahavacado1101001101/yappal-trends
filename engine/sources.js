@@ -16,19 +16,19 @@ const UA_KYM = 'MyVideoPal-Ideas/0.3 (personal iOS app prototype; reads a meme e
 const TRENDS_URL = 'https://trends.google.com/_/TrendsUi/data/batchexecute';
 const TRENDS_GEOS = [{ geo: 'US', w: 1.0 }, { geo: 'GB', w: 0.8 }, { geo: 'AU', w: 0.8 }];
 const TRENDS_POP_CATEGORIES = new Set([2, 4, 6, 8]); // Beauty & Fashion, Entertainment, Games, Hobbies
-// Sports and Other trends are search signals only ("justin verlander" 200k the day his daughter walked out); they never become items.
-// Law & Government (10) is a signal too: a death or a court case people are searching ("nolan wells") stands behind a sensitive story.
+// Sports and Other trends are search signals only ("mirey voraby" 200k the day his daughter walked out); they never become items.
+// Law & Government (10) is a signal too: a death or a court case people are searching ("rouade trevick") stands behind a sensitive story.
 const TRENDS_SIGNAL_CATEGORIES = new Set([...TRENDS_POP_CATEGORIES, 10, 11, 17]);
 const TRENDS_RESOLVE_MAX = 40;
 const BSKY_CATEGORIES = new Set(['culture', 'entertainment', 'other']);
-// A sports trend is kept only when it is a moment ("Colin Simmons flagged for taunting"), never a result.
+// A sports trend is kept only when it is a moment ("Hollinrel Yarrurn flagged for taunting"), never a result.
 const bskySportsMoment = (t) => t.category === 'sports' && !RE.sportsDry.test(t.displayName) && [RE.moment, RE.viral, RE.sportsMoment].some((re) => re.test(`${t.displayName} ${t.description || ''}`));
 // the whole About text: the definition opens it, the dating sentence ("first started going viral as early as December 2024") is
 // usually in its second paragraph
 const KYM_DESC_MAX = 2000;
 const DEK_MAX = 400; // an outlet's summary line: its first sentence is the meaning material
 // r/popular cannot join a multireddit, so it is a second request, at least 61 s after the first (Reddit: ~1 RSS req/min).
-// (r/Fauxmoi is where celebrity stories break first: "Tom Cruise checks on a 'sad' staffer"; one request still covers all five)
+// (r/Fauxmoi is where celebrity stories break first: "Pellia Sorrenko checks on a 'sad' staffer"; one request still covers all five)
 const REDDIT_MULTI = 'popculturechat+Fauxmoi+entertainment+OutOfTheLoop+TikTokCringe';
 const REDDIT_GAP_MS = 61000;
 
@@ -132,7 +132,7 @@ const GN_WORD_QUERIES = [
   { id: 'gn-w-slang', q: '(slang OR "slang term" OR "slang word") (tiktok OR "gen z" OR "gen alpha" OR teens OR kids OR viral) {w}', w: 0.9 },
   { id: 'gn-w-explained', q: '(trend OR meme OR challenge OR slang) explained -coin -crypto -stock {w}', w: 1.0 },
   { id: 'gn-w-whatis', q: '"what is the" (trend OR challenge OR meme) tiktok {w}', w: 1.0 },
-  // Know Your Meme's weekly roundup ("Weekly Meme Roundup: Robert Pattinson Lyrics, Speed GTA, Gavin Dorman And More"), on Yahoo:
+  // Know Your Meme's weekly roundup ("Weekly Meme Roundup: Bexena Tamaby Lyrics, Glibly GTA, Quorey Brannard And More"), on Yahoo:
   // its own list of the week's memes. A separate search (not an OR on gn-w-explained) so a new store backfills its 14 days.
   { id: 'gn-w-roundup', q: '"weekly meme roundup" {w}', w: 1.0 },
   // Collector only (decision 9): formats and challenges as outlets explain them ("What to know about the viral 'Cat in the Hat'
@@ -157,7 +157,7 @@ const BSKY_FILES = /^bluesky-getTrends\.json$/;
 const WIKI_FILES = /^wiki-featured-feed-(\d{4}-\d\d-\d\d)\.json$/;
 
 // Wikipedia most-read discovery: a film, show or person article read 80K+ times on a day at 3x its usual views that nothing in the
-// store names yet ("Monster: The Lizzie Borden Story", "Unabomber") gets one Google News search for its title over three days, and
+// store names yet ("Monster: The Tavena Osturn Story", "Quavrrb") gets one Google News search for its title over three days, and
 // its rows join the store like any feed's. Saved as gn-wiki-<key>.xml.
 const WIKI_DISCOVER = { id: 'gn-wiki', w: 0.8, dynamic: true, files: /^gn-wiki-[a-z0-9]+\.xml$/ };
 const WIKI_DISCOVER_VIEWS = 80000;

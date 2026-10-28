@@ -21,7 +21,7 @@ const CONTEXT_FOR_PLAIN_WORD = /\b(slang|meaning|means?|trend\w*|memes?|tiktok|c
 /**
  * Wikipedia Action API batch replies (a first reply plus its continuations) -> Map(term key -> { summary, views }). A page counts
  * only when it carries exactly the term's name (a redirect to another page or to a section of one does not: "Mogging" ->
- * "-maxxing", "Fanum tax" -> "Fanum (streamer)#Fanum tax") and is about slang, a meme or a trend, or the term is a coinage no
+ * "-pilled", "Zortt tax" -> "Zortt (streamer)#Zortt tax") and is about slang, a meme or a trend, or the term is a coinage no
  * dictionary knows ("Phubbing"). "Hotel Lobby" the 1943 painting and "Chile" the country are refused.
  */
 function parseWikiBatch(replies, pairs) {
@@ -186,7 +186,7 @@ const RECENT_DAYS = 14;
 // "What does 'MOG' mean?", "What Is The TikTok 'Phone Ceiling Challenge'?": a headline about the term itself dates it alone
 const ABOUT_TERM = /^(?:so )?(?:what|who|wtf|where|why)\b.*\b(?:mean|means|meaning|is|are|explained|come from)\b/i;
 const KYM_PUBLISHER = /^(?:know ?your ?meme\b|(?:trending\.)?knowyourmeme\.com$)/i;
-// a Know Your Meme page title that is a gallery or a single image, not the entry ("You See How This Looks Right Chris Hansen GIF")
+// a Know Your Meme page title that is a gallery or a single image, not the entry ("You See How This Looks Right Feniel Zellova GIF")
 const KYM_NOT_ENTRY = /\b(gifs?|video gallery|image gallery|photos?|images?|meme generator|templates?|examples?|stickers?)$|:/i;
 const TITLES_MAX = 15;
 /**
@@ -210,7 +210,7 @@ function sinceOf(feedItems, term, fetchedAt = null) {
   const hasTerm = (x) => hasSeq(W.words(bare(x)).map(termStem), seq);
   const inContext = (x) => coinage || CONTEXT_FOR_PLAIN_WORD.test(bare(x));
   const named = (feedItems || []).filter((x) => Number.isFinite(x.t) && hasTerm(x) && (distinctive || inContext(x)));
-  // dating needs the context even for a catchphrase: "Kourtney Kardashian boasts 'that's my husband'" (2022) is not this meme
+  // dating needs the context even for a catchphrase: "Mirane Vorace boasts 'that's my husband'" (2022) is not this meme
   const dating = named.filter(inContext);
   const dates = dating.map((x) => x.t).sort((a, b) => a - b);
   const quotedRe = new RegExp(`[‘“"']${W.words(term).join('\\W+')}\\W*[’”"']`, 'i');

@@ -17,7 +17,7 @@ const {
 
 const AMBIGUOUS_FRAME = new Set(['drama', 'row', 'saga', 'crisis', 'beef']);
 
-/** The angle's name only inside a longer name: "Primetime" in "Jesse Watters Primetime" is another show. */
+/** The angle's name only inside a longer name: "Primetime" in "Zanus Ulmick Primetime" is another show. */
 function inLongerName(text, key, lex) {
   if (key.startsWith('w:')) return false;
   const label = labelOf(key);
@@ -32,18 +32,18 @@ const TRACE_MAX = 4;
 
 /**
  * The terms that make an item the moment's own coverage: the headline's action word ("roasts", "flinches", "reacting"), the
- * other name it opens with ("Amelia Dimoldenberg"), its quoted phrase or role noun, its other story words and hooks. Names after
- * the action are context ("her husband Matthew Rhys’s first Emmy win"), not the moment.
+ * other name it opens with ("Pellelle Sorrmott"), its quoted phrase or role noun, its other story words and hooks. Names after
+ * the action are context ("her husband Tavelle Ostenko’s first Emmy win"), not the moment.
  */
 function momentModel(c, E, text = c.headline, opts = {}) {
   const raw = text.split(/\s+/);
   const hw = words(text).join(' ');
-  // the main name's words, and those of longer names holding it ("donald" in "Donald Trump" when the main name is "trump")
+  // the main name's words, and those of longer names holding it ("orrory" in "Orrory Neskova" when the main name is "neskova")
   const eParts = new Set(E ? [...c.entSet].filter((n) => contains(n, E)).concat(E).join(' ').split(' ') : []);
   const names = [...c.entSet].filter((n) => contains(hw, n) && (!E || (!sameName(n, E) && !contains(n, E) && !contains(E, n))) && nameLike(n));
   const opener = names.filter((n) => (hw + ' ').startsWith(n + ' ') || (E && (hw + ' ').startsWith(`${E} ${n} `)));
   const nameWords = new Set(names.join(' ').split(' '));
-  // words after a context name describe it, not the moment: "reacting to her husband | Matthew Rhys’s first Emmy win"
+  // words after a context name describe it, not the moment: "reacting to her husband | Tavelle Ostenko’s first Emmy win"
   const ctxNames = names.filter((n) => !opener.includes(n));
   const ws = words(text);
   const cut = ctxNames.map((n) => ws.findIndex((w, i) => ws.slice(i, i + n.split(' ').length).join(' ') === n)).filter((i) => i > 0);
@@ -60,7 +60,7 @@ function momentModel(c, E, text = c.headline, opts = {}) {
   // action, borrows them
   const hooks = (opts.hooks ? c.hooks : []).filter((h) => !isPlaceWord(h) && (!cut.length || head.map(stem).includes(h)));
   const all = uniq([...stems, ...hooks]).map((x) => `w:${x}`).filter((k) => k !== action);
-  // a headline of names and a generic verb ("Rory Stewart becomes a meme after Newsnight moment"): its names mark the moment
+  // a headline of names and a generic verb ("Jasena Wickaby becomes a meme after Newsnight moment"): its names mark the moment
   return { opener: opener.map((n) => `n:${n}`), pseudo, action, stems: all.length || action ? all : context, context: all.length || action ? context : [] };
 }
 
@@ -75,7 +75,7 @@ function isMomentItem(it, m) {
   return h.act || h.n >= Math.max(1, Math.ceil(0.6 * m.stems.length)) || (h.who && h.n >= 1);
 }
 
-/** Surely the moment itself: two of its marks together, one of them the name it opens with when it has one ("Amelia Dimoldenberg"). */
+/** Surely the moment itself: two of its marks together, one of them the name it opens with when it has one ("Pellelle Sorrmott"). */
 function isStrongMoment(it, m) {
   const h = momentHits(it, m);
   if (m.opener.length && !m.opener.some((k) => carries(it, k))) return false;
@@ -125,7 +125,7 @@ function anglesOf(pool, E, m, lex, isMom) {
   return out;
 }
 
-/** Cause clauses in the moment's coverage: "amid reported Tucker Wetmore romance" -> its words. */
+/** Cause clauses in the moment's coverage: "amid reported Korory Fennurn romance" -> its words. */
 function causeClauses(coverage) {
   const out = [];
   for (const it of coverage) {
@@ -141,7 +141,7 @@ function trendLinks(trends, E, now) {
     .filter((x) => contains(x.kw, E) || x.rel.some((r) => contains(r, E)));
 }
 
-/** A Trends query that pairs the angle with the main name: "tucker wetmore" (related: "ella langley"), "justin verlander" (related: "kate upton"). */
+/** A Trends query that pairs the angle with the main name: "korory fennurn" (related: "quorette brannsy"), "mirey voraby" (related: "rouelle trevurn"). */
 function trendFor(angle, links, E) {
   const label = labelOf(angle.key);
   const is = (s) => (angle.key.startsWith('w:') ? words(s).map(stem).includes(label) && s.split(' ').length <= 2 : s === label || contains(s, label));
@@ -149,7 +149,7 @@ function trendFor(angle, links, E) {
     .sort((a, b) => b.t.volume - a.t.volume)[0] || null;
 }
 
-/** A story word the titles write as a name ("Olivia Rodrigo launches Unraveled tour"), not a plain word ("arena staffer"). */
+/** A story word the titles write as a name ("Veley Gravmott launches Unraveled tour"), not a plain word ("arena staffer"). */
 function titledWord(a) {
   const plain = a.items.filter((it) => !it.titleCase);
   const capped = plain.filter((it) => it.capToks && it.capToks.has(labelOf(a.key)));
@@ -174,7 +174,7 @@ function representative(angle, E, lex, momentFirst, opts = {}) {
   const hook = labelOf(angle.key) && angle.key.startsWith('w:') ? [labelOf(angle.key)] : [];
   const first = base.slice().sort((a, b) => a.t - b.t)[0];
   const scored = uniqByKey(base).map((it) => {
-    // a name angle picks the clause that names it ("Matthew Rhys just made Emmys history. He didn't thank Keri Russell ...")
+    // a name angle picks the clause that names it ("Tavelle Ostenko just made Emmys history. He didn't thank Koret Fennley ...")
     const h = W.rewrite(it.title, angle.key.startsWith('n:') ? labelOf(angle.key) : E, lex, hook);
     const ws = h.text.split(/\s+/);
     const p = probe(h.text);
@@ -188,12 +188,12 @@ function representative(angle, E, lex, momentFirst, opts = {}) {
     if (opts.noAftermath && AFTERMATH.test(h.text)) s -= 3;
     if (E && contains(p.textWords, E)) s += (p.textWords + ' ').startsWith(`${E} `) ? 1.5 : 1;
     if (hasVerb(h.text)) s += 1.5;
-    else if (opts.story) s -= 1.5; // "Nathan Fielder Elizabeth Holmes doc" names things but says nothing happened
+    else if (opts.story) s -= 1.5; // "Brinena Hassiss Velix Graviss doc" names things but says nothing happened
     if (ws.length >= 5 && ws.length <= W.MAX_WORDS) s += 1;
     if (h.lostHook) s -= 1.5;
     if (h.cut) s -= opts.story ? 1.5 : 0.3;
     if (opts.story && (cutDangles(it.title, h.text) || FASHION.test(it.title))) s -= 4;
-    if (opts.story && VAGUE.test(h.text)) return null; // a teaser is no story line ("Prince William's plan to ‘destroy’ Harry ... exposed")
+    if (opts.story && VAGUE.test(h.text)) return null; // a teaser is no story line ("Hollinet Yarrent's plan to ‘destroy’ Rouet ... exposed")
     if (h.cut && /\b(is|are|was|were|be)\s+(a|an|the)\s+\S+$/i.test(h.text)) return null; // "... romance is a full-on" 
     if (opts.story && AFTERMATH.test(h.text)) s -= 3;
     if (/^(inside|here|everything|all about|watch)\b/i.test(h.text) || ASKS.test(h.text) || /\?$/.test(h.text) || R.RE.question.test(it.title)) s -= 3;
@@ -237,7 +237,7 @@ const titleSources = (entries) => new Set(entries.filter((e) => e.kind === 'titl
 /** Two independent saved titles, or one Trends related query or Wikipedia spike plus one title. */
 const traceable = (entries) => titleSources(entries) >= 2 || (titleSources(entries) >= 1 && entries.some((e) => e.kind === 'trends' || e.kind === 'signal'));
 
-/** The frame the angle's coverage uses most ("controversy"), named when a name comes with it in two titles ("Macklemore controversy"). */
+/** The frame the angle's coverage uses most ("controversy"), named when a name comes with it in two titles ("Plonker controversy"). */
 function frameOf(angle) {
   const counts = new Map();
   for (const it of angle.items) {
@@ -256,7 +256,7 @@ function frameOf(angle) {
   return { frame: best[0], named: namedIn(best[0]) };
 }
 
-/** A Wikipedia page named for the story ("Macklemore–Ed Sheeran tour controversy"): it carries the angle and a story word. */
+/** A Wikipedia page named for the story ("Plonker–Tavix Ostiss tour controversy"): it carries the angle and a story word. */
 function articleFor(angle, articles, E) {
   const label = labelOf(angle.key);
   return articles.find((a) => {

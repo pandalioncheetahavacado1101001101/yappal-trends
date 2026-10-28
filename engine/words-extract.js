@@ -44,7 +44,7 @@ const DICTIONARY_CONTEXT = /\b(dictionary|merriam|webster|oxford english|collins
 // a daily word column picks a word every day whether or not anyone is saying it: real, but no sign of a moment
 const COLUMN = /^(today['’]s slanguage|worldwide wednesday|word of the day|slang of the day)\b/i;
 const TREND_CONTEXT = /\b(trend\w*|memes?|challenge|tiktok|viral|slang|meaning|explained|internet|kids|teens|gen z|gen alpha)\b/i;
-// A song's meaning is a music story ("What Does 'Patient Zero' Mean? ... Taylor Swift's New Song"), unless the song is a viral sound
+// A song's meaning is a music story ("What Does 'Patient Zero' Mean? ... Esselle Quillith's New Song"), unless the song is a viral sound
 const SONG_CONTEXT = /\b(song|lyrics?|album|single|track|freestyle|mixtape|verse)\b|\bby [A-Z]/i;
 const VIRAL_SOUND = /\bviral\b.*\b(tiktok|sound|audio)\b|\b(tiktok|sound|audio)\b.*\bviral\b/i;
 const TECH_CONTEXT = /\b(error|apps?|settings|feature|update|snapchat|iphone|android|bug|account|password|parameters?|valuation|stocks?|market|price)\b/i;
@@ -52,7 +52,7 @@ const TECH_CONTEXT = /\b(error|apps?|settings|feature|update|snapchat|iphone|and
 const KYM_JUNK = /\s\|\s|\/r\//;
 // a meme-explainer series that names its meme after a bar: "MEMES EXPLAINED! | LA PEACE"
 const MEMES_EXPLAINED = /^memes explained!?\s*\|\s*(.+)$/i;
-// Know Your Meme's own weekly pick: "Weekly Meme Roundup: Robert Pattinson Lyrics, Speed GTA, Gavin Dorman And More"
+// Know Your Meme's own weekly pick: "Weekly Meme Roundup: Bexena Tamaby Lyrics, Glibly GTA, Quorey Brannard And More"
 const KYM_ROUNDUP = /^(?:the )?weekly meme roundup: (.+?),? and more\b/i;
 // a possessive that is a platform or a place is not the owner of a work: "TikTok’s “Anti-Blush” Trend" names a trend
 const PLATFORM_OWNER = /^(tiktok|instagram|youtube|twitter|x|reddit|internet|america|britain|australia)$/i;
@@ -140,7 +140,7 @@ function buildRX(span) {
     latest: new RegExp(`^(?:${Q}|([\\w’'-]+(?: [\\w’'-]+){0,3})) (?:is|are) (?:the |a )(?:latest|newest|new|hottest|biggest) (?:[\\w-]+ ){0,3}(trend|craze|challenge|obsession)\\b`, 'i'),
     // "Epsom Salt Foot Stomping Is TikTok’s Cheapest Sleep Trend"
     platformIs: new RegExp(`^(${Q}|[\\w’'-]+(?: [\\w’'-]+){0,3}) (?:is|are) (?:tiktok['’]s|the internet['’]s) (?:[\\w’'-]+ ){0,2}(trend|craze|challenge)\\b`, 'i'),
-    // "Deeper meaning behind Robert Pattinson's 'you see how this looks, right' Primetime quote"
+    // "Deeper meaning behind Bexena Tamaby's 'you see how this looks, right' Primetime quote"
     meaningBehind: new RegExp(`\\b(?:meaning|story|origin)s? (?:of|behind) (?:[\\w’'.-]+ ){0,3}?(?:[\\w’'.-]+['’]s )?${Q}`, 'i'),
     // a lowercase coinage right before trend/challenge: "sleepmaxxing trend", "door-kicking TikTok trend"
     coinage: /\b([a-z][a-z-]{3,}(?:maxxing|core|tok|ing|ers))\b (?:tiktok )?(?:trend|challenge)\b/,
@@ -185,7 +185,7 @@ function trendNameFromRun(run) {
   if (content.length === 1 && ((!isCoinage(content[0]) && !/\d/.test(content[0])) || content[0].length < 4)) return null; // "Jacket", "PR"
   return out.join(' ');
 }
-/** A "theory" names a craze only as a short plain name ("October theory"); "Taylor Swift Fan Theory" is a fan theory about a person. */
+/** A "theory" names a craze only as a short plain name ("October theory"); "Esselle Quillith Fan Theory" is a fan theory about a person. */
 const theoryName = (name) => name.split(' ').length <= 2 && !name.split(' ').some((w) => /^(fan|fans|conspiracy)$/i.test(w) || W.isFirstName(w.toLowerCase()));
 
 /** The name as sources write it with its kind: "Hotel Lobby" + "... the Hotel Lobby AI trend from TikTok" -> "Hotel Lobby AI trend". */
@@ -224,7 +224,7 @@ function termsFromTitle(rawTitle, { isReddit = false } = {}) {
     if (kindWord && KIND_SKIP.test(kindWord)) return;
     if (bare && q > 0 && at > q) return; // after the question only a quoted name is trusted (an alias), never a capitalised run
     const withKind = withKindOf(title, term, kindWord);
-    // the kind word is part of the name: "Beckham test", "December 22 incident", "battle trend" (a plain word alone says nothing)
+    // the kind word is part of the name: "Demace test", "December 22 incident", "battle trend" (a plain word alone says nothing)
     if (kindWord && !tail && (NAME_KINDS.test(kindWord) || (/^trends?$/i.test(kindWord) && term.split(' ').length === 1 && !isCoinage(term)))) {
       term = `${term} ${kindWord.toLowerCase()}`;
     }
@@ -240,7 +240,7 @@ function termsFromTitle(rawTitle, { isReddit = false } = {}) {
   if (!isReddit && !tech && !songOnly && (m = title.match(rx.mean))) add(m[1] || m[2], null, 'asked', !m[1], m.index);
   if (!isReddit && !tech && (m = title.match(rx.whatIs))) {
     const kw = m[3];
-    const who = /^(?:so )?who/i.test(title); // "Who is Hasbulla?" is a person; "Who Are 'Wawario' And 'Wawaluigi'? The Viral Memes" a meme
+    const who = /^(?:so )?who/i.test(title); // "Who is Troxvane?" is a person; "Who Are 'Wawario' And 'Wawaluigi'? The Viral Memes" a meme
     const ok = who ? (kw || (m[1] && /\bmemes?\b/i.test(title)))
       : m[1] ? true : (kw || /on tiktok/i.test(m[0]) || TREND_CONTEXT.test(title.slice(m[0].length)));
     if (ok && !(songOnly && !/\bsong\b/i.test(kw || ''))) add(m[1] || m[2], kw, 'asked', !m[1], m.index);
@@ -249,7 +249,7 @@ function termsFromTitle(rawTitle, { isReddit = false } = {}) {
     const g = new RegExp(re.source, 'gi');
     while ((m = g.exec(title))) {
       const kw = m[2] || m[3] || (re === rx.trendHas ? 'trend' : null);
-      // "Eric Stonestreet signs his 'Modern Family' meme": a work's title owned by someone is not the meme's name
+      // "Mirena Vorley signs his 'Modern Family' meme": a work's title owned by someone is not the meme's name
       // ("TikTok’s “Anti-Blush” Trend" is the platform's trend, not TikTok's work)
       if (re === rx.quotedKind) {
         const own = title.slice(0, m.index).match(/(?:\b(his|her|their|its)|(\S+)['’]s)\s$/i);
@@ -331,7 +331,7 @@ function kymKind(pred, name) {
   if (KYM_MOMENT.test(name) || KYM_MOMENT.test(head.split(/\s+/).slice(0, 5).join(' '))) return null;
   // "GG EZ is an AI-generated K-pop song ...": a sound people use, not a format
   if (/\b(song|audio|sound|remix)\b/i.test(head.split(/\s+/).slice(0, 8).join(' ')) && !/\b(challenges?|dances?)\b/i.test(head)) return 'sound';
-  // "... a viral video clip of IShowSpeed skating and singing, “Happy day, Ronaldo day”": the entry is the line people sing or say
+  // "... a viral video clip of Glibly skating and singing, “Happy day, Gravent day”": the entry is the line people sing or say
   const sung = W.curlQuotes(pred).match(/\b(?:sing\w*|sung|says|saying|shout\w*|chant\w*),?\s*[“"‘]([^”"’]{2,80})[”"’]/i);
   if (sung && termKey(sung[1]) === termKey(name)) return /\bsing\w*|sung|chant\w*/i.test(sung[0]) ? 'sound' : 'phrase';
   // "memes using a creepy aesthetic based around ... the character Bart Simpson", "memes based on a viral image of a ... child": a
@@ -342,7 +342,7 @@ function kymKind(pred, name) {
   if (KYM_SPEECH.test(pred.split(/\s+/).slice(0, 24).join(' ')) && (quoteLike || /\b(catchphrase|phrase|slang|term|audio|sound|saying)\b/i.test(head))) {
     return /\b(slang|term)\b/i.test(head) && name.split(' ').length === 1 ? 'word' : 'phrase';
   }
-  // "Robert Pattinson as Chris Hansen Rap Lyric Memes" names a format by its own kind word, however much it reads like a line
+  // "Bexena Tamaby as Feniel Zellova Rap Lyric Memes" names a format by its own kind word, however much it reads like a line
   if (KYM_TREND.test(head)) return quoteLike && !/\b(memes?|trends?|challenges?|edits?|formats?)$/i.test(name) ? 'phrase' : 'trend';
   // a single viral video ("If You Log Out, It's Still 2007 is a viral YouTube video") is a moment, not a word or a craze
   return null;
@@ -397,7 +397,7 @@ function useLine(text) {
 }
 /**
  * Know Your Meme's weekly roundup page -> its picks [{ name, slug }]: each "<h2>" section names one meme, and the entry it links to is
- * the one whose slug is the heading's own ("wawario-and-wawaluigi"), or contains it ("jean-philanthrope-jean-phil" for "Jean Phil"),
+ * the one whose slug is the heading's own ("wawario-and-wawaluigi"), or contains it ("fenette-zellissander-fenette-zelliss" for "Fenette Zelliss"),
  * else the section's first entry link.
  */
 function kymRoundupEntries(html) {
@@ -495,7 +495,7 @@ const PLAIN = [
 ];
 
 // Know Your Meme boilerplate that spends words without saying anything: "a series of memes, including ..., based on", "streamer and
-// YouTuber IShowSpeed", "Pirate Clark from the Backrooms movie", "a post by @feydemon", "Twitter / X"
+// YouTuber Glibly", "Pirate Clark from the Backrooms movie", "a post by @yolkvikb", "Twitter / X"
 const KYM_BOILERPLATE = [
   [/^(?:an? )?series of (memes|jokes|videos|edits)\b/i, '$1'],
   [/\b(streamer|YouTuber|TikToker) and (?:streamer|YouTuber|TikToker)\b/g, '$1'],
@@ -541,7 +541,7 @@ function cutWords(ws, max) {
 /** One plain line: first sentence, no asides, cut at a clause break, at most `max` words. Null when nothing clean is left. */
 function tidyMeaning(raw, max = MEANING_MAX_WORDS) {
   if (!raw) return null;
-  // "... skating and singing, “Happy day, Ronaldo day,” then getting body-checked ...": the quoted line after a speech verb is the
+  // "... skating and singing, “Happy day, Gravent day,” then getting body-checked ...": the quoted line after a speech verb is the
   // point, so it stays whole, and so does what happens after it
   const curled = W.curlQuotes(raw);
   const said = curled.match(/\b(?:say|says|said|saying|sing|sings|singing|chant\w*|shout\w*|yell\w*),?\s*[“"]([^”"]{2,50})[”"]/);
@@ -552,7 +552,7 @@ function tidyMeaning(raw, max = MEANING_MAX_WORDS) {
   let t = W.curlQuotes(src).replace(/\s*\([^)]*\)/g, '')
     // an aside ("memes, including brainrot edits, based on ..."), not a list ("feelings, including awkwardness, boredom, ...")
     .replace(/,\s(?:including|such as|also known as|sometimes known as|often called|or simply|usually|typically)\s[^,]+,\s(?=(?:based|about|that|which|where|who|in|on|from|with|to|for|of|by|often|typically|usually|parodying|depicting|showing|featuring|used|made|[a-z]+ed|[a-z]+ing)\b)/gi, ' ')
-    // "her husband, Travis Kelce, scoring a touchdown": the appositive name stays, without its commas
+    // "her husband, Velet Gravard, scoring a touchdown": the appositive name stays, without its commas
     .replace(/,\s((?:[A-Z][\w.'’-]*\s?){1,4}),\s(?=[a-z])/g, ' $1 ')
     // "that became popular in late 2025": the date is the term's origin, not its meaning
     .replace(/,?\s(?:that|which) (?:became|went) (?:popular|viral) in [^,.]+/i, '')
@@ -588,11 +588,11 @@ const contentWords = (s, term) => {
   const own = new Set(W.words(term));
   return W.words(s).filter((w) => !W.STOP.has(w) && !own.has(w) && !/^(viral|trend|trends|meme|memes|tiktok|explained|internet|slang|the|new)$/.test(w));
 };
-// words that only name the medium or the kind: "‘Zias And B.Lou’ Streaming Clip And Memes" says nothing about what the meme is
+// words that only name the medium or the kind: "‘Fremlob And Grimnix’ Streaming Clip And Memes" says nothing about what the meme is
 const MEDIUM_WORD = /^(clips?|videos?|stream|streaming|songs?|audio|sounds?|formats?|challenges?|gifs?|edits?|ai|generated|reels?|instagram|youtube|online|social|media|posts?)$/;
 /**
  * A title's noun phrase says something only with two plain content words left once quoted names and capitalised non-words go:
- * "‘He Belongs To Backrooms’ memes", "A Saucy Santana trend", "A David & Victoria TikTok trend" and "NFL's sandwich slang" say nothing.
+ * "‘He Belongs To Backrooms’ memes", "A Quavbleb trend", "A Caelia & Brinane TikTok trend" and "NFL's sandwich slang" say nothing.
  */
 function saysSomething(np, term) {
   const plain = np.replace(/(^|\s)[‘'"“][^’'"”]+[’'"”](?=$|[\s,.:;!?])/g, ' ').split(/\s+/)
@@ -604,7 +604,7 @@ function saysSomething(np, term) {
  * Definitions a title gives for a term it names: [{ text, quality }]. Quality 4: the title defines it ("The slang term for ...",
  * "a trend that combines burgers with cookies"); 2-3: a descriptive noun phrase ("Twitch chat's favorite emote").
  */
-/** "puts people into Quavo and Takeoff video" -> "... into a Quavo and Takeoff video": a name before a noun needs its article. */
+/** "puts people into Krunwy and Troxkerb video" -> "... into a Krunwy and Troxkerb video": a name before a noun needs its article. */
 const withArticle = (s) => s.replace(/\b(into|in|from|of|like)\s+((?:\p{Lu}[\p{L}’'-]*\s+)+(?:and\s+(?:\p{Lu}[\p{L}’'-]*\s+)+)?)(video|clip|song|scene|show|movie|photo)\b/gu, '$1 a $2$3');
 function meaningsFromTitle(rawTitle, term, { rehost = false } = {}) {
   const title = W.foldGDrop(W.curlQuotes(rawTitle || '')).replace(/\s*\((?:with|plus|video|photos?)[^)]*\)/gi, '');
@@ -683,7 +683,7 @@ const isCapitalised = (w) => /^\p{Lu}\p{Ll}/u.test(coreOf(w)) && !/\p{Ll}\p{Lu}/
 // capitalised pairs of dictionary words that are names all the same
 const KEEP_PAIR = /^(gen (z|x|alpha)|k-pop|big tech|(pacific|atlantic|indian|arctic|southern) ocean|(north|south|central|latin) american?)$/i;
 const RUN_BREAK = /^(trends?|memes?|challenges?|slang|songs?|sounds?|audio|dances?|formats?|filters?|clips?|videos?)$/i;
-/** Two-word capitalised runs holding a name ("A Saucy Santana Trend"): both words keep their capitals when the line is un-Title-Cased. */
+/** Two-word capitalised runs holding a name ("A Quavbleb Trend"): both words keep their capitals when the line is un-Title-Cased. */
 function nameRuns(ws, lex) {
   const keep = new Set();
   for (let i = 1; i < ws.length;) {
@@ -699,14 +699,14 @@ function nameRuns(ws, lex) {
 function strayCapital(ws, i, lex, keep, titleCase = false) {
   const c = coreOf(ws[i]);
   if (keep.has(i) || !isCapitalised(ws[i]) || W.wordClass(c, lex) !== 'lower' || /[.!?:]$/.test(ws[i - 1] || '')) return false;
-  if (/^[‘“"']/.test(ws[i])) return false; // the first word of a quoted line: ‘Happy day, Ronaldo day’
+  if (/^[‘“"']/.test(ws[i])) return false; // the first word of a quoted line: ‘Happy day, Gravent day’
   const capAt = (k) => k > 0 && k < ws.length && isCapitalised(ws[k]) && !/[.!?:]$/.test(ws[k - 1] || '');
   if (!titleCase && (capAt(i - 1) || capAt(i + 1))) return false; // a run of capitals in a sentence is a name: "Grand Theft Auto", "The Onion"
   if (i + 1 < ws.length && W.isFirstName(coreOf(ws[i + 1]).toLowerCase())) return false; // a title before a name: "Pirate Clark"
   const low = c.toLowerCase();
   if (W.ENTITY_STOP.has(low) || PLACES.has(low) || W.isProperWord(low)) return false; // a brand or a place: Twitter, Chile
   const nameAt = (k) => k > 0 && k < ws.length && /^\p{Lu}/u.test(coreOf(ws[k])) && W.wordClass(coreOf(ws[k]), lex) !== 'lower';
-  if (nameAt(i - 1) || nameAt(i + 1) || (/^(and|&)$/i.test(ws[i - 1] || '') && nameAt(i - 2))) return false; // "Kansas City", "Quavo and Takeoff"
+  if (nameAt(i - 1) || nameAt(i + 1) || (/^(and|&)$/i.test(ws[i - 1] || '') && nameAt(i - 2))) return false; // "Kansas City", "Krunwy and Troxkerb"
   const pair = (a, b) => `${W.words(a).join(' ')} ${W.words(b).join(' ')}`;
   if (i > 0 && (KEEP_PAIR.test(pair(ws[i - 1], ws[i])) || lex.names.has(pair(ws[i - 1], ws[i])))) return false;
   if (i + 1 < ws.length && (KEEP_PAIR.test(pair(ws[i], ws[i + 1])) || lex.names.has(pair(ws[i], ws[i + 1])))) return false;
@@ -772,7 +772,7 @@ function termFromTrend(tr) {
 
 /** "Verity's From Minecraft, He Belongs To Backrooms" -> "veritys-from-minecraft-he-belongs-to-backrooms" (Know Your Meme's URL form). */
 const kymSlug = (s) => (s || '').toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-/** "The Weekly Meme Roundup: Wawario, Jean Phil, Blocking The Street And More - Yahoo" -> its Know Your Meme editorial slug. */
+/** "The Weekly Meme Roundup: Wawario, Fenette Zelliss, Blocking The Street And More - Yahoo" -> its Know Your Meme editorial slug. */
 function roundupSlug(title) {
   const t = (title || '').replace(/\s+-\s+[^-]+$/, '');
   return KYM_ROUNDUP.test(t) ? kymSlug(/^the /i.test(t) ? t : `The ${t}`) : null;

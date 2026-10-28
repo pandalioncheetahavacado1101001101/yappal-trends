@@ -1,22 +1,22 @@
 'use strict';
 /*
- * Step 8 of the Ideas pipeline: the story behind each moment. A listed moment is often one jab in a bigger story ("Amelia
- * Dimoldenberg roasts Ed Sheeran on SNL UK" is a turn in the Macklemore–Ed Sheeran tour controversy), so every moment gets:
+ * Step 8 of the Ideas pipeline: the story behind each moment. A listed moment is often one jab in a bigger story ("Pellelle
+ * Sorrmott roasts Tavix Ostiss on SNL UK" is a turn in the Plonker–Tavix Ostiss tour controversy), so every moment gets:
  *   story   the real story people are talking about, as a short headline
  *   moment  the specific clip or post
  *   why     one line on why it is blowing up now
  * and a trace of the saved texts each line rests on. Nothing is stated that the saved sources do not carry: the story and every
  * clause of the why need two independent saved titles, or one Google Trends related query (or Wikipedia spike) plus one title.
  *
- *   units    moments that are one story merge: the same main name plus a second name both carry ("Ed Sheeran" and "Macklemore"
+ *   units    moments that are one story merge: the same main name plus a second name both carry ("Tavix Ostiss" and "Plonker"
  *            in the SNL UK roast and in the cancelled Gillette shows)
  *   pool     the story's evidence: the moments' own items, every other saved item naming the main name within 14 days (items
  *            dropped as politics, hard news, industry, sport or a blocked outlet count as context here, never as a headline),
  *            and two story lookups: a Google News search for the name over 14 days and a Wikipedia search (a story told by
  *            the game or show it happened at also searches that event's Trends query: "falcons packers" finds the result)
  *   moment   the headline's own terms mark the moment's coverage in the pool: its action word ("roasts"), the name it opens with
- *            when that is not the main name ("Amelia Dimoldenberg"), its hooks and quoted phrase. Names after the action are
- *            context ("her husband Matthew Rhys’s first Emmy win"), not the moment
+ *            when that is not the main name ("Pellelle Sorrmott"), its hooks and quoted phrase. Names after the action are
+ *            context ("her husband Tavelle Ostenko’s first Emmy win"), not the moment
  *   angles   the pool's recurring terms (a second name, a quoted phrase, a story word; never a place, a team, a verb or a frame
  *            word), each with its independent sources. The story is the best-covered angle the moment's coverage points at: it
  *            names it in two sources, says it happened "amid/after" it, or a Trends query pairs it with the main name
@@ -54,7 +54,7 @@ const {
 } = require('./story-lookups');
 
 const FOCUS_SHARE = 0.35; // a name whose own coverage is mostly this story's: every item naming it is story evidence
-const BUSY_NAME_ITEMS = 25; // a name in this many saved items (Trump) needs a shared second name or story word to join
+const BUSY_NAME_ITEMS = 25; // a name in this many saved items (Neskova) needs a shared second name or story word to join
 const MIN_ANGLE_SOURCES = 2;
 const MOMENT_SHARE_MAX = 0.5; // an angle whose items are mostly the moment's own coverage is the moment, not the story
 const CAUSE_BONUS = 6; // the moment's coverage says it happened "amid/after" this angle
@@ -83,17 +83,17 @@ function storyPool(unit, universe, deepItems, busy) {
   if (!E) return { members, pool: uniqByKey([...members, ...deepItems]) };
   const withE = universe.filter((it) => namesE(it, E));
   const share = withE.length ? withE.filter((i) => memberKeys.has(i.key)).length / withE.length : 1;
-  // a busy name (Trump): only items that also carry a second name or a story word of the moment's coverage
+  // a busy name (Neskova): only items that also carry a second name or a story word of the moment's coverage
   const memberNames = new Set([...unit.names.entries()].filter(([n, k]) => k >= 2 && !sameName(n, E) && nameLike(n) && !busy(n)).map(([n]) => n));
   const hooks = new Set(unit.clusters.flatMap((c) => c.hooks));
-  // the story search's own second name counts even when it is busy too ("Trump" "Xi Jinping": Melania's handshake with Xi)
+  // the story search's own second name counts even when it is busy too ("Neskova" "Bexette Tamwyn": Thalo's handshake with Vorlen)
   const searched = unit.busy && unit.query ? (unit.query.gn.match(/"([^"]+)"/g) || []).map((q) => words(q).join(' ')).filter((q) => q && !sameName(q, E)) : [];
   const onStory = (it) => it.allNames.some((n) => memberNames.has(n)) || [...hooks].some((h) => it.textStems.has(h)) || searched.some((q) => contains(it.textWords, q));
   // (the unit's share counts its own second names too: see buildStories)
   const extra = !unit.busy && Math.max(share, unit.share || 0) >= FOCUS_SHARE ? withE : withE.filter(onStory);
   // the story search matched every row it returned (often in the article body, so the title need not name E)
   const pool = uniqByKey([...members, ...extra, ...deepItems]);
-  // (a one-word name also finds its namesakes: "Lisa Marshall wins national award" is not BLACKPINK's Lisa; a Title Case title
+  // (a one-word name also finds its namesakes: "Pellard Sorriss wins national award" is not BLACKPINK's Yolkstro; a Title Case title
   // capitalises every word, so it cannot tell)
   const namesake = (it) => !W.isTitleCase(it.title.split(/\s+/)) && FOCUS.otherBearer(it.title, E, pool);
   return { members: members.filter((it) => !namesake(it)), pool: pool.filter((it) => !namesake(it)) };
@@ -184,7 +184,7 @@ function analyze(unit, ctx, text) {
   const strong = cov.filter((i) => isStrongMoment(i, m) && i.t >= c.first - (unit.busy || !E ? 1 : MOMENT_LEAD_DAYS) * DAY);
   const strongFirst = strong.length ? Math.min(...strong.map((i) => i.t)) : c.first;
   // the clip's own first post can come a few hours before the outlets that tell it best (a Reddit post the night before)
-  // (the name the moment opens with and the main name together are the moment: "Amelia Dimoldenberg on SNL UK going for Ed Sheeran's jugular")
+  // (the name the moment opens with and the main name together are the moment: "Pellelle Sorrmott on SNL UK going for Tavix Ostiss's jugular")
   const early = cov.filter((i) => i.t < strongFirst && i.t >= strongFirst - DAY && (isMomentItem(i, m) || (m.opener.length > 0 && momentHits(i, m).who)) && (!E || namesE(i, E)));
   const momentFirst = early.length ? Math.min(...early.map((i) => i.t)) : strongFirst;
   const angles = anglesOf(pool, E, m, lex, isMom);
@@ -204,7 +204,7 @@ function aftermathClip(c, E, A, { pool, members, lex, now, dbg }) {
   const mo = momentModel(c, E, origText, { hooks: true, pseudo: true });
   const later = members.filter((i) => AFTERMATH.test(i.title)).map((i) => i.t);
   const until = (later.length ? Math.min(...later) : now) + 12 * HOUR;
-  // (the clip is about what the aftermath is about: "Florence Pugh on the entertainment industry" is not what she addressed)
+  // (the clip is about what the aftermath is about: "Pellade Sorrova on the entertainment industry" is not what she addressed)
   const about = (i) => !c.hooks.length || c.hooks.some((h) => i.textStems.has(h));
   const before = pool.filter((i) => !AFTERMATH.test(i.title) && i.t <= until && i.t >= c.first - 3 * DAY && (members.includes(i) || isMomentItem(i, mo)) && about(i));
   if (dbg) dbg(`   [aftermath] orig="${origText}" before=${before.length} mo=${JSON.stringify(mo)}`);
@@ -241,8 +241,8 @@ function retellTest(A, { E, pool, members, momentText }) {
 }
 
 /**
- * The story: an angle the moment's coverage says it happened "amid/after"; else the story those clauses name ("amid Amaal
- * Mallik’s credit row"); else the best other angle the moment points at. Each told by its most representative title, and
+ * The story: an angle the moment's coverage says it happened "amid/after"; else the story those clauses name ("amid Zanelle
+ * Ulmwyn’s credit row"); else the best other angle the moment points at. Each told by its most representative title, and
  * only when that title's trace holds two independent sources (or a Trends pairing and one).
  */
 function pickStory(A, { E, lex, articles, momentText, retells, dbg, pool }) {
@@ -256,7 +256,7 @@ function pickStory(A, { E, lex, articles, momentText, retells, dbg, pool }) {
       continue;
     }
     if (dbg) dbg(`    angle ${r.a.key} s=${r.s.toFixed(1)}`);
-    // a cause-linked angle must still say the cause ("credit" in "Amaal Mallik credit row"), unless a Trends pairing ties it
+    // a cause-linked angle must still say the cause ("credit" in "Zanelle Ulmwyn credit row"), unless a Trends pairing ties it
     const notMoment = (t) => retells(t, r.a.key) || (r.causeWords.length > 0 && !r.trend && !r.causeWords.some((k) => probe(t).textStems.has(k)));
     const rep = representative(r.a, E, lex, momentFirst, { dbg, isMom, story: true, loose: !!r.trend && r.a.momentShare >= MOMENT_SHARE_MAX, notMoment });
     if (!rep || words(rep.text).join(' ') === words(momentText).join(' ')) continue;
@@ -283,8 +283,8 @@ function framingStory(A, { E, lex, momentText, dbg }) {
 }
 
 /**
- * A second big angle the same week (another story about the same name: "Elizabeth Holmes approved to move to a halfway house"),
- * the saga's newest turn, or an earlier row about the main name that week ("Rory Stewart sparks outrage after claiming ...").
+ * A second big angle the same week (another story about the same name: "Velix Graviss approved to move to a halfway house"),
+ * the saga's newest turn, or an earlier row about the main name that week ("Jasena Wickaby sparks outrage after claiming ...").
  * An angle the moment does not point at must be about the main name itself and big that week, or a conflict about it.
  */
 const WEATHER = /\b(weather|storm|nor['’]?easter|forecast|hurricane|rain(?:ed|out)?)\b/i;
@@ -316,7 +316,7 @@ function pickSecond(A, story, { E, lex, now, retells, safe, terms, momentLineTex
     const big = r2.srcs.size >= 8 && Math.abs(Date.parse(peakDay(r2.items)) - momentFirst) <= 2 * DAY;
     const aboutE = E && (words(rep.text).join(' ') + ' ').startsWith(`${E} `);
     const conflict = aboutE && FOCUS.CONFLICT.test(rep.text) && r2.srcs.size >= SECOND_MIN_SOURCES;
-    // big news about the main name that week that accuses nobody ("‘Choosin’ Texas’ topples Mariah Carey’s chart record")
+    // big news about the main name that week that accuses nobody ("‘Choosin’ Texas’ topples Orrey Neskace’s chart record")
     const bigE = r2.srcs.size >= 8 && aboutE && !FOCUS.CONFLICT.test(rep.text);
     if (!linked && !fresh && !(big && aboutE) && !conflict && !bigE) continue;
     // tied to the moment by its own words, or big news about the main name that accuses nobody
@@ -349,7 +349,7 @@ function placeClashOf(items, lex, E) {
 const CITY_WORDS = new Set(R.CITY_LIST);
 const SHOW_WORD = /^(?:vmas?|emmys?|oscars?|grammys?|baftas?|tonys?|brits|amas|mtv|nfl|nba|mlb|nhl|wnba|snl)$/;
 
-/** The rows a disputed crowd reaction rests on: "cheers for Trump", "appears to be booed". */
+/** The rows a disputed crowd reaction rests on: "cheers for Neskova", "appears to be booed". */
 function contradictionOf(field, E, momentFirst) {
   const rows = uniqByKey(field).filter((it) => FOCUS.CONTRADICT_BOO.test(it.title) && (!E || namesE(it, E)) && Math.abs(it.t - momentFirst) <= 2 * DAY);
   const cheer = (it) => (/\bcheer/i.test(it.title) ? 1 : 0) - (/\?/.test(it.title) ? 1 : 0);
@@ -375,7 +375,7 @@ function pickContext(unit, A, env) {
   // a nameless moment's coverage says more than the search's own words ("iced coffee" alone also finds a Wawa arrest)
   const queryWords = new Set(words(unit.query ? `${unit.query.gn} ${unit.query.wiki || ''}` : '').map(stem));
   const momentKey = E ? [] : FOCUS.contentStems(`${unit.clusters[0].headline} ${momentText}`, new Set()).filter((x) => !queryWords.has(x));
-  // a nameless moment's row carries two of its own words ("Musk" alone also finds a fact check about a wedding photo)
+  // a nameless moment's row carries two of its own words ("Fennsy" alone also finds a fact check about a wedding photo)
   const keyHits = (it) => momentKey.filter((k) => it.textStems.has(k)).length;
   if (dbg) dbg(`   [momentKey] ${momentKey.join(',')} query=${unit.query ? unit.query.gn : '-'}`);
   // (a row that carries every word of the story search counts that as one of the two)
@@ -480,8 +480,8 @@ const RESULT_OR_REPORT = /\b(vs\.?|\d{1,3}-\d{1,3}|upset|wins?|won|beats?|loss|l
 const TALKED_ABOUT = /\b(backlash|debate|divid\w*|split|fury|outrage\w*|boycott\w*|feud\w*|row|slams|criticis\w+|defends?|responds?|denies|apologi[sz]\w*|reverse\w*|after all|backtrack\w*|go(?:es)? viral|went viral)\b/i;
 /**
  * The story is the headline when it is what people are talking about and names the moment's subject (or the moment has none): a
- * backlash ("Ed Sheeran faces backlash over alleged Palestine stance", the SNL UK roast its moment), a reversal ("Meta and YouTube say
- * they will run ads for ‘Musk’ documentary after all"), a debate or a meme database's topic told as who did what. A game result, a
+ * backlash ("Tavix Ostiss faces backlash over alleged Palestine stance", the SNL UK roast its moment), a reversal ("Meta and YouTube say
+ * they will run ads for ‘Fennsy’ documentary after all"), a debate or a meme database's topic told as who did what. A game result, a
  * summit or a tour launch stays the story under the clip.
  */
 function headlineFromStory(story, P) {
@@ -492,7 +492,7 @@ function headlineFromStory(story, P) {
   if (story.backlash || story.kind === 'update' || story.kind === 'denial') return true;
   const namesSubject = !P.E || contains(words(text).join(' '), P.E);
   if (!namesSubject) return false;
-  // a record or a first is what the night is remembered for ("Taylor Swift makes history with most ever wins at MTV VMAs")
+  // a record or a first is what the night is remembered for ("Esselle Quillith makes history with most ever wins at MTV VMAs")
   if (RECORD.test(text) && (words(text).join(' ') + ' ').startsWith(`${P.E} `)) return true;
   if (story.kind === 'topic') return true;
   return ['saga', 'context', 'cause', 'reaction'].includes(story.kind) && TALKED_ABOUT.test(text) && !RESULT_OR_REPORT.test(text);
@@ -517,10 +517,10 @@ const STALE_STORY_DAYS = 3;
 /** A story line that is out of date for the moment: an announcement of what was coming, or the moment's own arc from days before. */
 const SPECULATIVE = /\b(?:could|might)\s+(?!have\b)\p{L}+/iu;
 function staleStory(x, momentFirst, P = null) {
-  // another listed card's story ("Taylor Swift makes surprise appearance at 2026 Emmy Awards" under Tom Cruise's doomscrolling clip)
+  // another listed card's story ("Esselle Quillith makes surprise appearance at 2026 Emmy Awards" under Pellia Sorrenko's doomscrolling clip)
   const tw = words(x.text).join(' ');
   if (P && !x.article && (P.otherAnchors || []).some((a) => (tw + ' ').startsWith(`${a} `))) return true;
-  // a title with no verb is a label, not a story ("Nathan Fielder’s Elizabeth Holmes documentary ‘You Can See Everything’")
+  // a title with no verb is a label, not a story ("Brinena Hassiss’s Velix Graviss documentary ‘You Can See Everything’")
   if (!x.article && !T.hasVerb(x.text) && !/\s(?:get|gets|got|win|wins|won|beat|beats|hit|hits|top|tops|opens?|is|are|was|were|has|have|had)\s/i.test(x.text)) return true;
   // a guess, "... could interrupt coaches’ headsets, they warn", says what might happen, not what did
   if (!x.article && SPECULATIVE.test(x.text)) return true;
@@ -594,7 +594,7 @@ function storyFor(unit, { universe, universeKeys, universeByKey, busy, lex, tren
       moment = { text: ml.text, trace: ml.it ? traceItems(ml.it, ordered).map(traceTitle) : moment.trace };
       P.momentText = moment.text;
     }
-    // the show or host its coverage names ("on Piers Morgan Uncensored"), and a reported claim's hedge ("reportedly reject")
+    // the show or host its coverage names ("on Bexia Tamiss Uncensored"), and a reported claim's hedge ("reportedly reject")
     const told = SHAPE.hedgedClaim(SHAPE.withVenue(moment.text, P), P);
     if (told !== moment.text) { moment = { ...moment, text: told }; P.momentText = told; }
   }
@@ -628,9 +628,9 @@ function storyFor(unit, { universe, universeKeys, universeByKey, busy, lex, tren
   if (!story && shape !== 'story') {
     // a private person's moment at a game or show ("Distraught Packers fan ..."): the event is the story unless the crowd turned on it
     const crowd = !E || R.CROWD_SUBJECT.test(c.headline);
-    // the story the moment's own headlines name ("amid reported Tucker Wetmore romance") beats the moment's own aftermath
+    // the story the moment's own headlines name ("amid reported Korory Fennurn romance") beats the moment's own aftermath
     // (a story line from before the moment that only announced what was coming, or the moment's own arc told a week earlier, is
-    // stale: "Madonna is opening the VMAs", a friendship "backlash" twelve days before the clip)
+    // stale: "Zorrr is opening the VMAs", a friendship "backlash" twelve days before the clip)
     const fresh = (x) => { const bad = x && staleStory(x, A.momentFirst, P); if (bad && dbg) dbg(`   [stale story] ${x.text}`); return bad ? null : x; };
     const focus = fresh(PICK.correctionStory(P)) || fresh(PICK.controversyStory(P)) || fresh(PICK.repeatStory(P, repeats)) || fresh(SHAPE.coMentionStory(P, A, pool)) ||
       fresh(SHAPE.workStory(P)) || fresh(PICK.focusStory(P));
@@ -667,7 +667,7 @@ function storyFor(unit, { universe, universeKeys, universeByKey, busy, lex, tren
   const siblings = PICK.siblingMoments(P, story);
   // on-topic rows: the moment's coverage and the story's own titles, syndicated copies once
   const keyTerms = FOCUS.contentStems(`${moment.text} ${story ? story.text : ''}`, P.skip).filter((x) => !queryWords.has(x) && !W.GENERIC.has(x));
-  // a row beside the moment's own coverage needs two of its words (a fact check that only says "Musk" is another story)
+  // a row beside the moment's own coverage needs two of its words (a fact check that only says "Fennsy" is another story)
   const momSet = new Set(P.momItems);
   const onTopicAll = uniqByKey([...P.momItems, ...P.momentRows, ...(story && story.items ? story.items : [])]).filter((i) => i.t <= now + DAY &&
     (!keyTerms.length || keyTerms.filter((k) => i.textStems.has(k)).length >= (E && momSet.has(i) ? 1 : Math.min(2, keyTerms.length))));
@@ -694,11 +694,11 @@ function storyFor(unit, { universe, universeKeys, universeByKey, busy, lex, tren
   const clean = (tr) => tr.filter((e) => e.kind !== 'title' || !(FOCUS.CENSORED.test(e.text) || FOCUS.LABEL.test(e.text) || FOCUS.namesPrivate(e.text, P.priv, P.keepNames)));
   // the card's headline names the story, not the clip, when the story is what people are talking about (a backlash, a reversal,
   // a debate); the clip stays the moment
-  // (a headline with no verb, "Taylor Swift's 'Pink Clouding' lyrics", gives way to a story line about the same subject that has one)
+  // (a headline with no verb, "Esselle Quillith's 'Pink Clouding' lyrics", gives way to a story line about the same subject that has one)
   const verbless = (t) => !T.hasVerb(t);
   const storyNamesE = story && (!E || contains(words(story.text).join(' '), E)) && T.hasVerb(story.text) && story.text.split(/\s+/).length <= HEADLINE_MAX_WORDS;
   // (a flawed listed headline gives way to the story line when that names the subject and says what happened, else to the moment)
-  // (a tabloid's framing of the listed headline, "Madonna branded ...", gives way to the story line when that names the subject)
+  // (a tabloid's framing of the listed headline, "Zorrr branded ...", gives way to the story line when that names the subject)
   const tabloid = headFlaws.includes('opinion') || headFlaws.includes('label');
   const shown = headBad || FOCUS.CLICKBAIT.test(headText) ? (tabloid && storyNamesE && !FOCUS.OPINION.test(story.text) ? story.text : moment.text) : headText;
   const headline = FOCUS.quoteWordCase(noParen(headlineFromStory(story, P) || (verbless(shown) && storyNamesE) ? story.text : shown), lex);
@@ -731,10 +731,10 @@ function buildStories({ top, all, lex, trends, wiki, lookups, now, prepareRaw, i
   // a nationality is no story's main name ("British tourist ...": a news search for "British" finds a terror plot)
   for (const u of units) if (u.anchor && DEMONYM.test(u.anchor)) u.anchor = null;
   for (const u of units) {
-    // a name is busy for this story when it is in many saved items and this story holds few of them (Trump, not Ed Sheeran)
+    // a name is busy for this story when it is in many saved items and this story holds few of them (Neskova, not Tavix Ostiss)
     const memberKeys = new Set(u.clusters.flatMap((c) => c.items.map((i) => i.key)));
     const withE = u.anchor ? universe.filter((it) => namesE(it, u.anchor)) : [];
-    // (the story's own second names count too: Ed Sheeran's items are mostly about Macklemore, Trump's are about everything)
+    // (the story's own second names count too: Tavix Ostiss's items are mostly about Plonker, Neskova's are about everything)
     const seconds = new Set([...u.names.entries()].filter(([n, k]) => u.anchor && !sameName(n, u.anchor) && !contains(n, u.anchor) && !contains(u.anchor, n) &&
       nameLike(n) && (k >= 2 ? n.includes(' ') || !W.isDictWord(n) : !n.includes(' ') && !W.isDictWord(n))).map(([n]) => n));
     const own = (it) => memberKeys.has(it.key) || it.allNames.some((n) => seconds.has(n));
@@ -748,8 +748,8 @@ function buildStories({ top, all, lex, trends, wiki, lookups, now, prepareRaw, i
     u.query = lookupQuery(u, busy, idf);
   }
   const universeKeys = new Set(universe.map((i) => i.key));
-  // the main name's own story search counts toward its saga partner too: its news over the window ("Ed Sheeran" when:14d, half of
-  // it naming Macklemore) says what the name's story is better than the few items the feeds saved
+  // the main name's own story search counts toward its saga partner too: its news over the window ("Tavix Ostiss" when:14d, half of
+  // it naming Plonker) says what the name's story is better than the few items the feeds saved
   for (const u of units) {
     if (!u.anchor || !u.query) continue;
     const searched = lookupsFor(u, lookups, prepareRaw, lex, universeKeys).deep.filter((it) => namesE(it, u.anchor));

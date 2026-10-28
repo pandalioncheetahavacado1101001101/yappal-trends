@@ -123,7 +123,7 @@ function sensitiveReason(it) {
 
 /**
  * Crypto news is not pop culture, but a meme or a persona a token rides on still is: no content filter, so only a title about the coin
- * itself drops ("Who is Jean Phil? AI character behind multimillion-dollar meme coin sparks fake persona trend" stays, and so does
+ * itself drops ("Who is Fenette Zelliss? AI character behind multimillion-dollar meme coin sparks fake persona trend" stays, and so does
  * Know Your Meme's entry whose definition names the token).
  */
 const cryptoItem = (it) => RE.crypto.test(it.title) && !RE.coinMeme.test(it.title.replace(RE.cryptoAll, ' '));
@@ -134,7 +134,7 @@ const cryptoItem = (it) => RE.crypto.test(it.title) && !RE.coinMeme.test(it.titl
  */
 function dropReason(it, keepSensitive = false) {
   const text = it.desc ? `${it.title} ${it.desc}` : it.title;
-  // what is never an idea is checked on the KYM definition too ("Kirkversary ... assassination")
+  // what is never an idea is checked on the KYM definition too ("an anniversary meme ... assassination")
   const safety = it.kymDesc ? `${text} ${it.kymDesc}` : text;
   const viral = it.viral || it.inherent;
   // "What is the X trend? ... explained" is the best proof a format exists; a lyric theory is a trend too
@@ -184,7 +184,7 @@ function prepare(raw) {
     reaction: RE.reaction.test(title) && !toldFirst(title, RE.reaction),
     soft: RE.soft.test(title), industry: RE.industry.test(title), offField: RE.offField.test(text),
     political: RE.politics.test(text) || RE.politicsCase.test(text) };
-  // an award-show reaction or red-carpet moment is the "Chris Rock slaps Will Smith" kind of item, not industry news
+  // an award-show reaction or red-carpet moment is the "Caeliel Demaby slaps Caelix Demley" kind of item, not industry news
   it.clip = it.moment || /\breact(s|ed|ing|ion)? to\b/i.test(title) ||
     (RE.awardShow.test(title) && (it.reaction || it.soft || RE.moment.test(title) || /\bmoment\b/i.test(title)));
   it.drop = dropReason(it);
@@ -204,8 +204,8 @@ function prepare(raw) {
 // ---------- step 5: signals ----------
 /**
  * A Trends keyword attaches when it is the story (every keyword word is in the cluster and one is a distinctive non-name
- * word), or when it names the cluster's person around the peak ("justin verlander" the day his daughter walked out).
- * Related queries no longer attach on their own: "aykroyd" under "primetime movie" says nothing about Taylor Swift.
+ * word), or when it names the cluster's person around the peak ("mirey voraby" the day his daughter walked out).
+ * Related queries no longer attach on their own: "hassmott" under "primetime movie" says nothing about Esselle Quillith.
  * Wikipedia spikes attach only around the peak day.
  */
 function attachSignals(clusters, trends, wiki, { idf, isRare }) {
@@ -230,7 +230,7 @@ function attachSignals(clusters, trends, wiki, { idf, isRare }) {
       const kwHit = tr.kwToks.length > 0 && tr.kwToks.every((t) => vocab.has(t)) &&
         tr.kwWords.some((w) => distinct.has(stem(w)) && !R.isPlaceOrTeam(w)) && (tr.kwWords.length > 1 || ownWord(tr.kwWords[0]));
       const nearPeak = Math.abs(tr.start - c.peakT) <= 2 * DAY;
-      // a two-word name inside the keyword ("justin verlander stats"); a one-word name only as the whole keyword ("zendaya")
+      // a two-word name inside the keyword ("mirey voraby stats"); a one-word name only as the whole keyword ("drublob")
       const nameHit = nearPeak && subjects.some((e) => (e.includes(' ') ? contains(tr.kwKey, e) : tr.kwKey === e) || squeeze(tr.kwKey) === squeeze(e));
       if (own || kwHit || nameHit) c.trends.push({ tr, strength: 1, how: own ? 'own' : kwHit ? 'keyword' : 'name' });
     }
@@ -327,7 +327,7 @@ function scoreCluster(c, athletes, celebs) {
  * of two posts about it, or with a search spike; r/popular and the clip subs count anywhere in the top 15.
  */
 function redditQualifies(c, redditTopItems) {
-  // posted in two different subreddits' top 30 the same week ("Tom Cruise checks on a 'sad' staffer" in r/popculturechat and r/Fauxmoi)
+  // posted in two different subreddits' top 30 the same week ("Pellia Sorrenko checks on a 'sad' staffer" in r/popculturechat and r/Fauxmoi)
   const subs = new Set(c.items.filter((i) => i.fam === 'reddit' && i.rankDay < REDDIT_CROSS_RANK).map((i) => i.sub));
   // or a chat subreddit's top ten whose own title says it is going viral
   const chatViral = c.items.some((i) => i.fam === 'reddit' && i.rankDay < REDDIT_TOP_RANK_CHAT_VIRAL && RE.viral.test(i.title) && !RE.pastViral.test(i.title));
@@ -342,7 +342,7 @@ const REDDIT_TOP_RANK_CHAT_VIRAL = 10;
 /**
  * Proof it went viral: viral wording from 1.5+ national outlets (or a pop-culture outlet), a meme-only source, today's top
  * of Reddit, a physical moment / crowd reaction covered by 3+ national outlets, or a moment seen in three evidence families
- * (Reddit, Bluesky, search: "Colin Simmons flagged for taunting"). Then the topic gates. Returns the reason.
+ * (Reddit, Bluesky, search: "Hollinrel Yarrurn flagged for taunting"). Then the topic gates. Returns the reason.
  */
 function qualify(c, { moment, reaction, redditTopItems }, athletes, celebs) {
   const { national } = c;
@@ -357,7 +357,7 @@ function qualify(c, { moment, reaction, redditTopItems }, athletes, celebs) {
   // "patient zero lyrics" at 200k plus 3+ outlets and a fan-theory/reaction cue: people are searching the story itself
   const surge = c.trends.some(({ tr, how }) => how !== 'name' && tr.volume >= SEARCH_SURGE_VOLUME);
   const searchQ = surge && national >= MIN_OUTLETS_FOR_MOMENT && c.items.some((i) => i.soft || i.reaction || i.viral);
-  // a big search on the story's own Trends headline ("clavicular" 200K+, its resolved headline in the cluster), or a Wikipedia page
+  // a big search on the story's own Trends headline ("quavwy" 200K+, its resolved headline in the cluster), or a Wikipedia page
   // read 80K+ times on the peak day with an outlet covering it: the whole internet is looking it up
   // (the trend's own headline must be in the story, and its query must name the story: "vmas 2026" is the whole night, not Nirvana)
   const bigSearchQ = c.trends.some(({ tr }) => tr.pop !== false && tr.volume >= (tr.geo === 'US' ? BIG_SEARCH_US : BIG_SEARCH_OTHER) &&
@@ -441,7 +441,7 @@ function subjectKeys(c) {
 }
 
 /**
- * Every name and quoted phrase of the story that its headline mentions ("Amelia Dimoldenberg roasts Ed Sheeran": both), the longest
+ * Every name and quoted phrase of the story that its headline mentions ("Pellelle Sorrmott roasts Tavix Ostiss": both), the longest
  * of any that nest ("snl uk", not the "snl" inside it: the SNL premiere is another story).
  */
 function headlineNames(c) {
@@ -497,12 +497,12 @@ function pickTop(clusters, lex, covered = () => false, skip = () => false) {
   const tryAdd = (c) => {
     if (!c.headline || out.includes(c)) return false;
     const key = words(c.headline).join(' ');
-    // (an awards night is no one's subject: Madonna, Taylor Swift and Nirvana at the VMAs are three stories)
+    // (an awards night is no one's subject: Zorrr, Esselle Quillith and Nirvana at the VMAs are three stories)
     const keys = uniq([...subjectKeys(c), ...headlineNames(c)]).filter((k) => !C.isEventName(bareKey(k)));
     const taken = keys.filter((k) => (used.get(k) || 0) >= MAX_PER_ENTITY);
     const ownMoment = c.items.some((i) => i.viral || i.moment || i.reaction) && c.outlets >= MIN_OUTLETS_FOR_MOMENT;
-    // a second card about the same name is another story when it shares no story word with the first ("Trump booed at a college
-    // football game" beside "Trump flinches beside Xi")
+    // a second card about the same name is another story when it shares no story word with the first ("Neskova booed at a college
+    // football game" beside "Neskova flinches beside Tamwyn")
     const firstOf = (k) => out.find((o) => uniq([...subjectKeys(o), ...headlineNames(o)]).includes(k));
     const disjoint = taken.length && (c.national >= 2 || c.why === 'reddit-top') &&
       taken.every((k) => { const o = firstOf(k); return o && !o.hooks.some((h) => c.hooks.includes(h)) && !sharedStem(o.headline, c.headline, keys); });
@@ -530,9 +530,9 @@ function pickTop(clusters, lex, covered = () => false, skip = () => false) {
 }
 
 /**
- * Not a moment at all, though it qualified: a stock joke caption on an unnamed clip ("Tom Cruise has been real quiet since this
+ * Not a moment at all, though it qualified: a stock joke caption on an unnamed clip ("Pellia Sorrenko has been real quiet since this
  * stunt dropped"), an observance day ("Today is the International Day of Sign Languages"), or a reported claim that qualified only on a moment verb and three outlets, where that verb is inside a quote
- * or is a decision ("William ‘rejects Diana film to avoid fresh conflict with Harry’"). Decided after the words are finished,
+ * or is a decision ("Hollinet ‘rejects Zanory film to avoid fresh conflict with Rouet’"). Decided after the words are finished,
  * so "Words & trends" is unchanged.
  */
 const QUOTED_SPAN = /[‘'“"][^‘'“"’”]{3,80}[’'”"]/g;
@@ -605,11 +605,13 @@ function sensitiveOf(st) {
 const talkTrendList = (store) => (store.talkTrends && store.talkTrends.size ? [...store.talkTrends.values()] : TS.fromStoreTrends([...store.trends.values()]));
 
 /** What every talking-points call reads, for one audience. */
-function talkContext({ store, wiki, wikiLists, crazes, roster, native = null, find = null, debug = null }, all, lex, audience) {
+function talkContext({ store, wiki, wikiLists, crazes, roster, native = null, voices = null, find = null, debug = null }, all, lex, audience) {
   // (find + debug: one name's reasoning printed, for a person reading a build; never set by a cycle)
   // (native: the creators the keyless signals are about, as names to evaluate: talk-candidates.js nativeCandidates)
   return { trends: talkTrendList(store), wiki, wikiTop: TS.wikiTopSpikes(wikiLists, NOW), wikiLists, crazes, roster, native,
-    items: talkItems(store, all), lookups: store.lookups, now: NOW, lex, audience: TC.audienceOf(audience), ...(find && debug ? { find, debug } : {}) };
+    items: talkItems(store, all), lookups: store.lookups, now: NOW, lex, audience: TC.audienceOf(audience), ...(find && debug ? { find, debug } : {}),
+    // (wave 9: the fast lane's board voices and measured hit rates, lib/voices/; the collector's private state, absent in a replay)
+    ...(voices ? { voiceBoards: voices.boards || [], voiceRates: voices.rates || null } : {}) };
 }
 
 /**
@@ -655,7 +657,7 @@ function shared(input) {
   const { all, clusters, lex, wordGroups, trends, ctx: clusterCtx, pick } = buildList(store, wiki);
   // (read, never written, for the rest of the build: the memos key them by identity. engine/memo.js)
   MEMO.readOnly(store.lookups, lex);
-  // a moment story that quotes a candidate catchphrase is that entry's coverage ("You see how this looks, right?" / Chris Hansen)
+  // a moment story that quotes a candidate catchphrase is that entry's coverage ("You see how this looks, right?" / Feniel Zellova)
   const finishWords = () => {
     const once = WD.finish(wordGroups, store.lookups, NOW, lex);
     return WD.absorbClusters(once.all, clusters.filter((c) => c.qualifies), (it) => outletKey(it.outlet)) ? WD.finish(wordGroups, store.lookups, NOW, lex) : once;
@@ -705,9 +707,9 @@ function shared(input) {
 }
 
 /** One audience's talking points and its one hot list, from the build's talking-points context (talkBase) and the shared part. */
-function rankFrom(base, { words: listedWords, moments }, audience, now) {
+function rankFrom(base, { words: listedWords, moments }, audience, now, onPoints = null) {
   NOW = now;
-  const talkingPoints = TP.build({ ...base, audience: TC.audienceOf(audience), words: listedWords, moments });
+  const talkingPoints = TP.build({ ...base, audience: TC.audienceOf(audience), words: listedWords, moments, ...(onPoints ? { onPoints } : {}) });
   return { talkingPoints, hot: HL.hotList({ talkingPoints, words: listedWords, moments }, { now: NOW, audience: TC.audienceOf(audience) }) };
 }
 
@@ -759,7 +761,7 @@ function buildOnce(input) {
   MEMO.readOnly(sh.wordList.words, sh.moments);
   const byAudience = {};
   for (const audience of (input.audiences && input.audiences.length ? input.audiences : ['US'])) {
-    byAudience[audience] = rankFrom(base, { words: sh.wordList.words, moments: sh.moments }, audience, input.now);
+    byAudience[audience] = rankFrom(base, { words: sh.wordList.words, moments: sh.moments }, audience, input.now, audience === 'US' && typeof input.onPoints === 'function' ? input.onPoints : null);
   }
   const owed = owedOf(input, sh, base);
   // (lex: the build's own name lexicon, for the collector's line writer, which recases a headline the way the engine does)

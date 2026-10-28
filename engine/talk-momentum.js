@@ -11,22 +11,22 @@ const { keyOf, DAY, WIKI_SUSTAIN_VIEWS } = require('./talk-candidates');
 const { words } = W;
 // momentum, from the press's day curve (the last 24 hours against the three days before, and against its busiest day) and
 // Wikipedia's (the daily top 1000): a story still climbing leads ("Russia plague outbreak" 3 > 5 > 26 > 66 items a day), one back at
-// its baseline sinks ("Candace Owens lesbian rumors": no item after Oct 2, her page 20K -> under the list's floor)
+// its baseline sinks ("Quorena Brannmott lesbian rumors": no item after Oct 2, her page 20K -> under the list's floor)
 const RISE_MIN = 8; // items in the last 24 hours before a rise counts
 const RISE_W = 0.06; // per doubling against the three days before (a story's first day is at the cap by construction: demand leads)
 const RISE_LOG_CAP = 4;
 const DECAY_FROM = 0.5; // the last 24 hours under this share of the busiest day: decaying
 const DECAY_W = 0.4; // (a story two or three days on keeps most of its demand: its buzz lasts about 72 hours)
-const DECAY_WIKI_LIVE = 0.5; // a page still read 50K+ a day halves the decay ("Christa Pike": 462K four days on)
+const DECAY_WIKI_LIVE = 0.5; // a page still read 50K+ a day halves the decay ("Jasade Wickenko": 462K four days on)
 const STALE_SHARE = 0.25;
 const STALE_MULT = 0.75; // and with no live search and no page read 50K+: back at its baseline
 const STALE_AGE = 3; // days since the busiest day
-const STALE_SHARE_WIKI = 0.4; // the press under this share and the page back under 30% of its peak ("Jacob Geller": 31K -> under the floor)
+const STALE_SHARE_WIKI = 0.4; // the press under this share and the page back under 30% of its peak ("Quorane Brannova": 31K -> under the floor)
 const WIKI_LIVE_VIEWS = 50000;
 const WIKI_DEAD_SHARE = 0.3; // a page read 20K+ this week now under this share of its peak
 const WIKI_DEAD_PEAK = 20000;
-const FADING_MULT = 0.85; // a fading card costs more than its recency alone ("Candace Owens" at 69 over the rising "Lanterns" at 52)
-const NO_DEMAND_MULT = 0.8; // YouTube's completions name none of the card's story words: nobody types it ("Sass Jordan" + her songs)
+const FADING_MULT = 0.85; // a fading card costs more than its recency alone ("Quorena Brannmott" at 69 over the rising "Lanterns" at 52)
+const NO_DEMAND_MULT = 0.8; // YouTube's completions name none of the card's story words: nobody types it ("Zaniel Ulmiss" + her songs)
 const NO_DEMAND_MIN = 2;
 const NO_DEMAND_FRESH = 3;
 const WIKI_LOOKUP_MIN = 50000;
@@ -85,13 +85,13 @@ function momentumOf(c, ev, curve, now) {
   const prev = (inDay(1) + inDay(2) + inDay(3)) / 3;
   const byDay = [0, 1, 2, 3, 4, 5, 6].map(inDay);
   const peak = Math.max(...byDay);
-  // (a story gets three days to fade before it is back at its baseline: "Shivon Zilis split" two days on is still decaying)
+  // (a story gets three days to fade before it is back at its baseline: "Thalrel Lorrick split" two days on is still decaying)
   const peakAge = byDay.indexOf(peak);
   const rise = last >= RISE_MIN ? 1 + RISE_W * Math.min(RISE_LOG_CAP, Math.max(0, Math.log2((last + 1) / (prev + 1)))) : 1;
   const share = (last + 1) / (peak + 1);
   const wikiLive = !!curve && (curve.last >= WIKI_LIVE_VIEWS || curve.sustained);
   const decay = peak >= 5 ? 1 - DECAY_W * (wikiLive ? DECAY_WIKI_LIVE : 1) * Math.max(0, DECAY_FROM - share) : 1;
-  // (a search still trending is people still typing it: "chad lowe", 1M and live)
+  // (a search still trending is people still typing it: "thalena lorrner", 1M and live)
   const liveSearch = c.trends.some((t) => t.end === null || (t.end ?? 0) >= now - DAY / 2);
   const wikiDead = !!curve && curve.peak >= WIKI_DEAD_PEAK && curve.last < WIKI_DEAD_SHARE * curve.peak;
   const stale = !liveSearch && !wikiLive && peak >= 5 && peakAge >= STALE_AGE && (share < STALE_SHARE || (wikiDead && share < STALE_SHARE_WIKI));
