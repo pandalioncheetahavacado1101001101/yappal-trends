@@ -139,6 +139,7 @@ const TL = require('./talk-lines');
 const SF = require('./story-focus');
 // (Collector only, wave 9: the fast lane, lib/voices/fastlane.js)
 const FL = require('../lib/voices/fastlane');
+const LF = require('../lib/line-first');
 const { outletKey, contains } = require('./util');
 
 const { words } = W;
@@ -266,8 +267,18 @@ function newsIndexOf(lookups) {
   return out;
 }
 const OTHERS_NAME_WORDS = 2;
+// (a lent headline is about the person: it names them whole within its first words, after a role at most, "Actor <name> ...", never
+// "<other> responds to critics ... with <name>". Collector only, wave 10)
+const LEAD_AT = 3;
+function leadsWith(title, key) {
+  const ws = words(title);
+  const nw = key.split(' ');
+  for (let i = 0; i <= Math.min(LEAD_AT, ws.length - nw.length); i++) if (nw.every((w, j) => ws[i + j] === w)) return !/[’']s$/i.test(String(title).split(/\s+/)[i + nw.length - 1] || '');
+  return false;
+}
 
-function evidenceOf(c, { items, lookups, now }) {
+function evidenceOf(c, ctx) {
+  const { items, lookups, now } = ctx;
   const look = lookups.get(`talk-${TS.talkKey(c.key)}`) || {};
   const gn = (r) => ({ title: TN.cleanHeadline(r.title, r.publisher), t: r.t, outlet: r.publisher || 'Google News', fam: 'gnews', url: r.url, searched: true,
     ...(TS.FAR_DOMAIN.test(r.publisherUrl || '') ? { far: true } : {}) });
@@ -294,7 +305,12 @@ function evidenceOf(c, { items, lookups, now }) {
   // (and what the other names' searches found about this one: a whole name of two words or more, or a handle no dictionary spells)
   // (for a name the drama headlines lead with and nobody searches by the tens of thousands: a searched name's own results tell its story)
   const whole = !!c.drama && !c.trends.some((t) => t.volume >= WAVE_SEARCH_MAX) && (c.key.split(' ').length >= OTHERS_NAME_WORDS || !W.inDict(c.key));
-  const others = whole ? TC.mentioning(newsIndexOf(lookups), c.key).filter((r) => r.k !== `talk-${tk}` && named(r.title)).map((r) => ({ title: r.title, t: r.t, outlet: r.outlet, fam: r.fam,
+  // (and, with IDEAS_LINE_FIRST on, a person people search whose own name search has not answered yet: what the other names' searches
+  // already found about them, whole name only, until their own search lands. Collector only, wave 10, lib/line-first.js)
+  const lendable = !whole && !!ctx.lineFirstMode && ctx.lineFirstMode !== 'off' && !look.tpnews && !look.tprecent && c.trends.length > 0 && !c.parent &&
+    c.key.split(' ').length >= OTHERS_NAME_WORDS && TN.personLike(c.key, ctx.lex || null);
+  const borrow = lendable && ctx.lineFirstMode === 'on';
+  const others = whole || borrow ? TC.mentioning(newsIndexOf(lookups), c.key).filter((r) => r.k !== `talk-${tk}` && named(r.title) && (whole || leadsWith(r.title, c.key))).map((r) => ({ title: r.title, t: r.t, outlet: r.outlet, fam: r.fam,
     url: r.url, searched: true, ...(r.far ? { far: true } : {}) })) : [];
   const seen = new Set();
   const rows = [...news, ...story, ...own, ...others].filter((r) => r.t >= now - WINDOW_DAYS * DAY && r.t <= now + DAY).filter((r) => {
@@ -312,6 +328,10 @@ function evidenceOf(c, { items, lookups, now }) {
   const youtube = press.filter((r) => r.youtube).length;
   return {
     rows, press, byDay, peakT, peakCount: days.length ? days[0][1] : 0,
+    // (how many of the rows another name's search lent, wave 10: internal)
+    ...(borrow ? { borrowed: rows.filter((r) => r.searched && others.some((o) => o.title === r.title)).length } : {}),
+    // (in shadow, whether another name's search holds a headline that names it whole: counted for the log line, never read)
+    ...(lendable && !borrow && TC.mentioning(newsIndexOf(lookups), c.key).some((r) => r.k !== `talk-${tk}` && named(r.title) && leadsWith(r.title, c.key) && r.t >= now - WINDOW_DAYS * DAY && r.t <= now + DAY) ? { lendable: true } : {}),
     lastT: Math.max(0, ...rows.map((r) => r.t), ...c.trends.map((t) => t.end ?? now)),
     firstT: Math.min(...[...press.map((r) => r.t), ...c.trends.map((t) => t.start)].filter(Number.isFinite), now),
     outlets: new Set(press.filter((r) => !r.youtube).map((r) => outletKey(r.outlet))).size,
@@ -1307,6 +1327,18 @@ function pointOf(c, ctx) {
     const post = postLine(ev, subject, f, lex);
     if (post) traced = { what: post.what, denied: false, trace: [{ source: 'Reddit', t: post.t, text: post.text }], unsaid: false };
   }
+  // (a person's news card no composed line tells yet is told by the first headline that names them whole and says the noun, as the
+  // outlet wrote it and attributed: "<headline>, <outlet> reports". The composed line replaces it the build it can be built. With
+  // IDEAS_LINE_FIRST unset the line is only counted (shadow). Collector only, wave 10, lib/line-first.js)
+  let firstLine = null;
+  if (!traced.what && f && !said && ctx.lineFirstMode && ctx.lineFirstMode !== 'off') {
+    const whoNow = whoOf(c, ev, subject, work ? 'show' : kindOf(c, noun, screen), lex, ctx.roster);
+    if (LF.personNews(whoNow.tier, f)) {
+      const made = LF.lineOf(ev.rows, { subject, surface, family: f, lex, creatorWorld: !!(c.creator || ev.creatorSub), title: title0 });
+      firstLine = made && made.what ? made : null;
+      if (firstLine && ctx.lineFirstMode === 'on') traced = { what: firstLine.what, denied: firstLine.denied, trace: firstLine.trace, unsaid: false };
+    }
+  }
   // a title is never surer than its line: a show's facet no line tells ("East of Eden ending" over "Pellade Sorrova stars in ...") is
   // the show as searched, and an outbreak its line only suspects is a scare ("Russia plague scare")
   const unsaidSoft = !!(traced.unsaid && f && screen && !work && SOFT.has(f.key));
@@ -1461,8 +1493,13 @@ function pointOf(c, ctx) {
   // (the newest line of a new chapter from an outlet that may word one)
   // (or, for a claim, the subject's own admission or its fallout in the last three days: "Quorane Brannova confirms ... removed from MinnMax")
   const latest = chapter ? [...chapter.rows].filter((r) => !r.blocked).sort((a, b) => b.t - a.t)[0] || null : admissionOf(ev, subject, f, traced.trace, now);
+  // (another name's search tells only a person's news, a creator's or a celebrity's drama or death: any other card of such a name is
+  // weighed as without those rows. Collector only, wave 10: a politician's "<name> attack" was read from another's verbal attack)
+  if (ev.borrowed && !LF.personNews(who.tier, f)) return pointOf(c, { ...ctx, lineFirstMode: 'shadow' });
   return {
     c, ev, noun, subject, title, how, what, denied, kind, generic, aside, work, own, score: heat.score, parts: heat.parts, searchVolume,
+    // (the line-first line, internal: what it would say in shadow, what it says when on. Never published)
+    ...(firstLine ? { lineFirst: { what: firstLine.what, t: firstLine.t, used: ctx.lineFirstMode === 'on' } } : {}),
     // (whether a drama name's newest wave says its noun: lists() judges such a noun's share by that wave, not the week)
     waveHeld: dramaName && !!noun && !!noun.f && waveHolds(ev, noun.f, subject, now, PRESS_NOUN_SHARE),
     out: {
@@ -2015,10 +2052,29 @@ function lists(p, now, ctxLex) {
   if (noun.f.key === 'split' && LOOKS_BACK.test(p.what) && !SPLIT_NOW.test(p.what)) return false;
   // a response on its own is the aftermath of something the card does not name; "X reveal" says nothing until a context word does
   if (noun.f.key === 'reveal' && p.how === 'plain') return false;
+  // (a death its line asks about, doubts or calls a hoax is no death: "Is <name> dead? Fans fear the worst ..." never lists as
+  // "<name> death". Collector only, wave 10: a name another name's search tells reached the list this way in a probe)
+  if (noun.f.key === 'death' && DEATH_DOUBTED.test(p.what)) return false;
+  // (and "<name> ... comments" is the name's own only when the line does not give them to someone else: "<Other> under fire for <name>
+  // comments" are the other's comments about the name. Collector only, wave 10)
+  if ((p.how === 'said' || /\b(?:comments|remarks|post)$/i.test(p.title)) && commentsOfOther(p.what, p.subject)) return false;
   return noun.f.key !== 'response';
 }
 
 const PRESS_NOUN_SHARE = 0.15;
+/** Whether a line says someone else is criticised for comments, remarks or a post about the subject, never the subject's own. */
+function commentsOfOther(line, subject) {
+  if (!line || !subject) return false;
+  const name = subject.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^\\p{L}\\p{N}]+');
+  const m = String(line).match(new RegExp(`\\b(?:for|over|about|after)\\s+(?:his|her|their)?\\s*${name}(?:[’']s)?\\s+(?:\\p{Ll}+\\s+){0,2}(?:comments?|remarks?|posts?|jokes?|quips?)\\b`, 'iu'));
+  if (!m) return false;
+  // (who the line opens with, before that: the subject's own sentence is theirs)
+  const lead = words(String(line).slice(0, m.index)).slice(0, subject.split(' ').length + 2);
+  return !lead.includes(subject.split(' ').slice(-1)[0]);
+}
+// (the death itself asked about, "Is <name> dead?", "<name> dead?", "Did <name> die?", or doubted; never a question about who they were
+// beside a death it states: "Who was <name>? Streamer reportedly found dead ..." is a death)
+const DEATH_DOUBTED = /\bdead\s*[’'"”]?\?|\b(?:did|has)\s+[^?]{0,40}?\b(?:die|died|pass(?:ed)? away)\s*\?|\b(?:hoax\w*|rumou?r(?:s|ed)?|fears?|feared|unconfirmed|unverified|fake[sd]?|speculat\w*|(?:is|still) alive|alive and well|not dead|isn['’]t dead)\b|\bfalse (?:reports?|claims?|rumou?rs?|news)\b/i;
 /**
  * A drama name's newest wave and a family: its headlines of the last WAVE_DAYS (no uploads), and how many of them name it and say the
  * family's word of it (never a word they give to someone else). Collector only, 2026-10-28.
@@ -2208,7 +2264,9 @@ const memesOnce = MEMO.memo('memePoints', memePoints);
 function build(ctx) {
   const items = hayed(ctx.items);
   // (every page of Wikipedia's daily top 1000 by its words: a card's days of reading)
-  const full = { ...ctx, items, wikiIndex: wikiDaysIndex(ctx.wikiLists) };
+  // (wave 10, lib/line-first.js: IDEAS_LINE_FIRST, shadow when unset)
+  const lineFirstMode = LF.mode(process.env);
+  const full = { ...ctx, items, wikiIndex: wikiDaysIndex(ctx.wikiLists), lineFirstMode };
   const cands = candidates(full);
   // (the trending names, for a name that trends for another one's story)
   full.trendKeys = new Set(cands.filter((c) => c.from === 'trends' && searchScore(c.trends) >= ASIDE_HOST_SEARCH).map((c) => c.key));
@@ -2297,6 +2355,7 @@ function build(ctx) {
   // (the fast lane's Early evidence, wave 9: a row its lane listed, or kept under the cut; never one the hand rule lists by heat)
   const fastTagged = new Set(listed.filter((p, i) => p.fastAct === true && (!p.fastHand || i >= LIST_MAX)));
   if (lane.met) FL.report(ctx.audience, laneReport(lane, listed, fastTagged, ctx.moments || []));
+  if (lineFirstMode !== 'off') LF.report(ctx.audience, lineFirstReport(lineFirstMode, weighed, listed, all, kept, extraOf, full));
   // (every card's line printed the card's way: curly quotes, "and" for "&")
   // (and never a clause's own stop before the line's: "... in her apartment;." ends "... in her apartment.". Collector only, 2026-10-29)
   return listed.map((p) => ({ ...p.out, what: p.out.what ? TL.tidyLine(p.out.what).replace(/\s*[;:,]\s*([.!?])$/, '$1') : p.out.what,
@@ -2370,6 +2429,29 @@ function laneReport(lane, listed, fastTagged, moments = []) {
     seen: lane.seen.map((p) => ({ key: p.c.key, noun: p.noun.f.key, tier: p.out.tier, rule: p.fast.rule, at: p.fast.at, first: p.fast.first, voices: p.fast.voices,
       families: p.fast.families.slice(0, 3), hand: handHolds(p) })),
     table: { merged: lane.table.merged, rehosts: lane.table.rehosts, outlets: lane.table.outlets } };
+}
+
+/**
+ * What the line first did to an audience's list (lib/line-first.js), for the cycle's log line: `made`, the person cards a line-first
+ * line was made for; `passed`, those whose card then passes lists(); `would`, those of them the list holds (on) or would hold (shadow:
+ * at or over the cut's heat or kept under it, and no listed card tells the same story); `borrowed`, the cards another name's search
+ * told (on) or could tell (shadow), and in shadow `borrowWould`, those the switch would list. ctx: the build's full context. Counts only.
+ */
+function lineFirstReport(mode, weighed, listed, all, kept, extraOf, ctx) {
+  const made = weighed.filter((p) => p.lineFirst);
+  if (mode === 'on') {
+    const used = made.filter((p) => p.lineFirst.used);
+    return { mode, made: made.length, passed: used.filter((p) => lists(p, ctx.now, ctx.lex)).length, would: listed.filter((p) => p.lineFirst && p.lineFirst.used).length,
+      borrowed: listed.filter((p) => p.ev && p.ev.borrowed).length };
+  }
+  const cut = all.length >= LIST_MAX ? all[LIST_MAX - 1].score : 0;
+  const passed = made.map((p) => ({ ...p, what: p.lineFirst.what, out: { ...p.out, what: p.lineFirst.what } })).filter((p) => lists(p, ctx.now, ctx.lex));
+  const would = passed.filter((p) => (p.score >= cut || extraOf(p)) && !kept.some((k) => samePoint(k, p)));
+  // (and the people another name's search names that the switch would list: their cards weighed again with those rows, read only)
+  const lent = weighed.filter((p) => p.ev && p.ev.lendable);
+  // (a lent card may stand in for a listed card of the same story, as on does: no story test here)
+  const lentWould = lent.map((p) => pointOf(p.c, { ...ctx, lineFirstMode: 'on' })).filter((q) => !!q.ev.borrowed && lists(q, ctx.now, ctx.lex) && (q.score >= cut || extraOf(q)));
+  return { mode, made: made.length, passed: passed.length, would: would.length, borrowed: lent.length, borrowWould: lentWould.length };
 }
 
 /**

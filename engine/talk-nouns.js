@@ -298,6 +298,43 @@ const HOAX = { key: 'hoax', w: 0.85, re: /\b(?:hoax\w*|death rumou?rs?|rumou?rs?
 const NEAR_WORDS = 12;
 const THIN_TITLES = 10;
 
+// ---- a name told only after another person's noun (collector only, 2026-11-01) ----
+// "<Other> dies at 52 after cancer battle, <name> pays tribute", "<Other>, 52, dies; co-star <name> heartbroken", "<Other> sued by former
+// manager, <name> weighs in": the noun is the other person's, whose full name stands before it, and the name only comes after it, past a
+// clause break or with a reaction of its own. A title "<name> death" over such a line says a living person died.
+const TRAIL_REACT = /^\s+(?:also\s+|now\s+|is\s+|was\s+|left\s+)?(?:pa(?:ys|id|ying)\s+tribute|leads?\s+tributes|led\s+tributes|heartbroken|devastated|gutted|shocked|stunned|weigh(?:s|ed|ing)?\s+in|speak(?:s|ing)?\s+out|spoke\s+out|break(?:s|ing)?\s+(?:silence|down)|broke\s+(?:silence|down)|react(?:s|ed|ing)?|respond(?:s|ed|ing)?|defend(?:s|ed|ing)?|mourn(?:s|ed|ing)?|shar(?:es|ed|ing)|remember(?:s|ed|ing)?|honou?r(?:s|ed|ing)|send(?:s|ing)?\s+(?:love|prayers|condolences)|sent\s+(?:love|prayers|condolences))(?![\p{L}\p{N}])/iu;
+const TRAIL_BREAK = /[,;:|]|\s[—–-]\s/;
+/** Whether a text holds a full name other than the name's: two capitalised words in a row, a given name's or two no dictionary spells. */
+function otherFullName(text, own, titleCase) {
+  const toks = String(text || '').split(/\s+/).map((t) => t.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '').replace(/[’']s$/, '')).filter(Boolean);
+  for (let i = 0; i + 1 < toks.length; i++) {
+    const [a, b] = [toks[i], toks[i + 1]];
+    if (!/^\p{Lu}\p{Ll}/u.test(a) || !/^\p{Lu}\p{Ll}/u.test(b)) continue;
+    const pair = `${a.toLowerCase()} ${b.toLowerCase()}`;
+    if (pair.split(' ').some((w) => own.has(w) || NAME_STOP.has(w))) continue;
+    if (personLike(pair, null) || (!titleCase && !W.inDict(a.toLowerCase()) && !W.inDict(b.toLowerCase()))) return true;
+  }
+  return false;
+}
+/**
+ * Whether a family's word in a text (x: { f, surface, index }) is another person's that the name only follows: no word of the name
+ * before it, another full name before it, and every mention of the name after it past a clause break or with a reaction of its own.
+ */
+function trailingOnlooker(text, x, name) {
+  if (!text || !x || !Number.isFinite(x.index) || !name) return false;
+  const s = String(text);
+  const nw = String(name).toLowerCase().split(' ').filter(Boolean);
+  if (nw.length < 1) return false;
+  const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const before = s.slice(0, x.index);
+  const own = new Set(nw);
+  if (nw.some((w) => new RegExp(`(?<![\\p{L}\\p{N}])${esc(w)}(?![\\p{L}\\p{N}])`, 'iu').test(before))) return false;
+  const end = x.index + String(x.surface || '').length;
+  const last = new RegExp(`(?<![\\p{L}\\p{N}])${esc(nw[nw.length - 1])}(?:[’']s)?(?![\\p{L}\\p{N}])`, 'giu');
+  const hits = [...s.matchAll(last)].filter((m) => m.index >= end);
+  if (!hits.length || !otherFullName(before, own, titleCased(s))) return false;
+  return hits.every((m) => TRAIL_BREAK.test(s.slice(end, m.index)) || TRAIL_REACT.test(s.slice(m.index + m[0].length)));
+}
 /**
  * Whether a noun in a headline is someone else's than the name's: a claim made against another name ("Drubzo calls Plonlo's
  * allegations against Bexan Tamard hearsay" is no claim about Drubzo), a noun another name owns ("... reacts to Bexan Tamard's arrest";
@@ -306,6 +343,10 @@ const THIN_TITLES = 10;
  */
 function othersNoun(title, x, name) {
   if (!name || !Number.isFinite(x.index)) return false;
+  // (another's noun the name only follows: "<Other> dies at 52, <name> pays tribute", trailingOnlooker)
+  if (trailingOnlooker(title, x, name)) return true;
+  // (and the tribute the name pays to that death is no tribute to the name: "<name> tribute" would read as a death of its own)
+  if (x.f.key === 'tribute' && familiesIn(title).some((y) => y.f.key === 'death' && trailingOnlooker(title, y, name))) return true;
   const nw = name.split(' ');
   const own = (w) => nw.includes(words(w)[0] || '');
   const after = title.slice(x.index + x.surface.length);
@@ -386,7 +427,7 @@ function onlooker(text, x, name) {
     const m = after.match(OF_OTHER);
     return !!m && !own.has(m[1].toLowerCase().replace(/[’']s$/, '')) && someoneNamed(m[1], titleCased(s)); // (titleCased: the line pick's, below)
   })();
-  if (!named) return ofOther;
+  if (!named) return ofOther || trailingOnlooker(s, x, name);
   const between = before.slice(named.index + named[0].length);
   if (/[,;:—–|]/.test(between)) return false;
   if (ONLOOKER.test(between)) return true;
@@ -1634,6 +1675,6 @@ module.exports = { SAID_FAMS, SAID_RE, saidTopic, postTopic, RECALL, REVIEWS, ME
   // nounOf's answer holds the family itself, kept, and plain values, copied. engine/memo.js)
   nounOf: MEMO.memo('nounOf', nounOf, { copy: (r) => (r ? { ...r } : r) }), nameRuns, personLike, subjectOf, relationOf, personalNear,
   titleWords, caseTitle: MEMO.memo('caseTitle', caseTitle), caseMap, nameSurface, cleanHeadline, whatOf: MEMO.memo('whatOf', whatOf), recaseName, DENIAL, ROLE, WRONGDOING, MAJOR, REPORTED, reported,
-  saidIn, says: saysIt, withoutSpeech, onlooker, rumoured, ANSWERED, coupleQuits, HOAX, POST_CLAIM, statesClaim, reportedClaim, denialClause, capLine, sentenceLine,
+  saidIn, says: saysIt, withoutSpeech, onlooker, trailingOnlooker, rumoured, ANSWERED, coupleQuits, HOAX, POST_CLAIM, statesClaim, reportedClaim, denialClause, capLine, sentenceLine,
   // (collector only: whose a death or an arrest is, read from the headline itself)
   whoseDeath, ownRelation, spanAfter, actsBefore, PERSONAL, LIVING, RELATION_HER, RELATION_HIS, onlyReaction, REACTION_SAID };

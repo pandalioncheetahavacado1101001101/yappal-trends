@@ -164,10 +164,18 @@ jobs:
       IDEAS_PRECURSOR: ${{ vars.IDEAS_PRECURSOR }}
       IDEAS_PRECURSOR_LOG: ${{ vars.IDEAS_PRECURSOR_LOG }}
       IDEAS_PRECURSOR_WEIGHTS: ${{ vars.IDEAS_PRECURSOR_WEIGHTS }}
-      # (the kinds desk, wave 9: deaths, outages, games and tonight rows past the main list. IDEAS_KINDS_OFF is a comma list of those
-      # or "all"; IDEAS_SOURCES_OFF names sources to skip, "kinds" for every read of the desk: lib/kinds-desk.js, lib/sources/fixed.js)
+      # (the kinds desk, wave 9, and the charts desk, wave 10: deaths, outages, games, tonight and charts rows past the main list.
+      # IDEAS_KINDS_OFF is a comma list of those or "all"; IDEAS_SOURCES_OFF names sources to skip, "kinds" for every read of the desk,
+      # "charts" for the whole charts desk, or tts, shazam, kworb, wikt-slang, kym for one of its sources: lib/kinds-desk.js,
+      # lib/desks/charts.js, lib/sources/fixed.js)
       IDEAS_KINDS_OFF: ${{ vars.IDEAS_KINDS_OFF }}
       IDEAS_SOURCES_OFF: ${{ vars.IDEAS_SOURCES_OFF }}
+      # (early name searches, wave 10: on unless IDEAS_SEARCH_EARLY is "0" or "off" ("shadow": counts only). A people-drama name two
+      # fast-lane voices agree on takes one of the cycle's 2 research seats, never an extra request: lib/early-names.js, lib/budget.js)
+      IDEAS_SEARCH_EARLY: ${{ vars.IDEAS_SEARCH_EARLY }}
+      # (the first headline's attributed line, wave 10: shadow unless IDEAS_LINE_FIRST is "on" ("0" or "off": none). Shadow lists
+      # nothing and logs one counts-only [line-first] line a cycle: lib/line-first.js)
+      IDEAS_LINE_FIRST: ${{ vars.IDEAS_LINE_FIRST }}
       FEED_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
       FRESH: ${{ inputs.cold_start && '--fresh' || '' }}
     steps:

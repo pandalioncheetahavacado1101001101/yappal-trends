@@ -1069,6 +1069,44 @@ function candidatesOf({ trends, wiki, wikiTop, items, now, lex, lookups, audienc
   return sorted.filter((c) => picked.has(c));
 }
 
+// ---------- early names (wave 10, collector only: lib/early-names.js) ----------
+/**
+ * The people-drama names the store's last EARLY_HOURS of rows tell, each with the rows that tell it: every drama name of the pool,
+ * `late` or not, and the rows that name it and say a drama family of its own (never a noun someone else owns, one it only watches or
+ * answers, a relative's, a retold old chapter, a question). The collector decides which of them are searched early (lib/early-names.js:
+ * two independent voices, not searched since the chapter began). Weighs nothing and makes no name: what the step made is unchanged.
+ * Returns [{ key, late, creator, rows: [{ t, title, outlet, fam, sub, url, blocked, far, beat }] }] in the pool's order.
+ * Collector only, wave 10.
+ */
+function earlyTold(ctx) {
+  const from = ctx.now - EARLY_HOURS * HOUR_MS;
+  const pool = lookupPool(ctx);
+  const out = [];
+  for (const c of pool) {
+    // (a people-drama name tied to the audiences' world: the drama step's `home` (the roster, a home role or a home outlet), a search of
+    // its own in an audience's country, or the roster's; never a far region's own story, which its own press tells)
+    if (!c.drama || c.sports || !(c.home || c.listed || (c.trends && c.trends.length))) continue;
+    const rows = mentioning(ctx.items, c.key).filter((i) => Number.isFinite(i.t) && i.t >= from && i.t <= ctx.now + HOUR_MS &&
+      namesKey(i.title, c.key, { creatorText: i.fam === 'reddit' || i.beat === true || CREATOR_PRESS.test(i.outlet || '') }) && ownDrama(i.title, c.key));
+    if (!rows.length) continue;
+    // (the other names of the pool each row prints: a story whose rows all name someone already searched is in hand through that search)
+    const othersOf = (i) => pool.filter((o) => o !== c && !contains(o.key, c.key) && !contains(c.key, o.key) && o.key.includes(' ') && mentions(hayOf(i), o.key)).map((o) => o.key).slice(0, EARLY_OTHERS_MAX);
+    out.push({ key: c.key, late: !!c.late || !!c.lateDrama, creator: !!c.creator,
+      rows: rows.map((i) => ({ t: i.t, title: i.title, outlet: i.outlet || null, fam: i.fam, sub: i.sub || null, url: i.url || null, others: othersOf(i),
+        ...(R.PUBLISHER_BLOCK.test(i.outlet || '') ? { blocked: true } : {}), ...(i.far === true ? { far: true } : {}), ...(i.beat === true ? { beat: true } : {}) })) });
+  }
+  return out;
+}
+const EARLY_OTHERS_MAX = 4;
+/** Whether a headline says a drama family of the name's own (as a `late` name's `said` reads it, at any distance): no question either. */
+function ownDrama(title, name) {
+  const t = TN.withoutSpeech(String(title || ''));
+  if (/\?/.test(t.split(/[:;.!]\s/)[0]) || ASKS.test(t) || ASK_LEAD.test(t) || answersOther(title, name)) return false;
+  return TN.familiesIn(t).some((y) => TN.DRAMA_FAMS.has(y.f.key) && !TN.othersNoun(t, y, name) && !TN.onlooker(t, y, name));
+}
+const EARLY_HOURS = 36;
+const HOUR_MS = 3600e3;
+
 /** A name with a search of its own big enough to be a story (not a result: no sports name). */
 const hasDemand = (c) => !c.sports && c.trends.some((t) => t.volume >= LOOKUP_DEMAND_VOLUME);
 
@@ -1138,6 +1176,6 @@ const LOOKUP_DRAMA = 20;
 const LOOKUP_DRAMA_STARS = 8;
 
 
-module.exports = { placeGiven, candidates, lookupNames, dramaLookupNames, relatedCandidates, dramaCandidates, dramaName, dramaNames, longRuns, cutRun, calledCreator, rosterIn, sameHandle, PERSON_VERB, CREATOR_ROLE, CREATOR_PRESS, HONORIFIC, leadName, keyOf, hay, mentions, mentioning, namesKey, isStrictKey, genericKey, catWeight, searchScore, CREATOR_REL, LEAGUE_KW,
+module.exports = { placeGiven, candidates, lookupNames, dramaLookupNames, earlyTold, ownDrama, EARLY_HOURS, relatedCandidates, dramaCandidates, dramaName, dramaNames, longRuns, cutRun, calledCreator, rosterIn, sameHandle, PERSON_VERB, CREATOR_ROLE, CREATOR_PRESS, HONORIFIC, leadName, keyOf, hay, mentions, mentioning, namesKey, isStrictKey, genericKey, catWeight, searchScore, CREATOR_REL, LEAGUE_KW,
   AUDIENCE_GEO_W, audienceOf, geoWeight, homeGeos, forAudience,
   DAY, WINDOW_DAYS, WIKI_MIN_VIEWS, WIKI_SUSTAIN_VIEWS, BURST_MIN_OUTLETS, REDDIT_TOP_RANK, REDDIT_WEEK_RANK, CREATOR_SUBS };

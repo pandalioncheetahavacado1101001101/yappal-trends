@@ -634,7 +634,8 @@ function namesOnce(input) {
   const memeNames = rows.filter((r) => r.src === 'kym-memes').flatMap((r) => r.title.split(' / ').map(stripParen));
   const lex = W.buildLexicon(all.filter((i) => !i.wordsOnly).map((i) => i.title), trends.filter((t) => inWindow(t.start)), input.wiki, memeNames);
   const ctx = { ...talkBase(input, all, lex), audience: TC.audienceOf('mixed') };
-  return { lookup: TP.lookupNames(ctx), drama: TP.dramaLookupNames(ctx), recent: TP.recentNames(ctx) };
+  // (wave 10: and the people-drama names the last 36 hours tell, with their rows, for lib/early-names.js. Collector only)
+  return { lookup: TP.lookupNames(ctx), drama: TP.dramaLookupNames(ctx), recent: TP.recentNames(ctx), told: TC.earlyTold({ ...ctx, items: ctx.items.map((i) => ({ ...i, h: TC.hay(i.title) })) }) };
 }
 
 /** A listed moment's timed evidence, for the collector's series: its own rows, its searches, its page. */

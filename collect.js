@@ -75,6 +75,8 @@ const ARCTIC = require('./lib/sources/arctic');
 const VB = require('./lib/voices/boards');
 const VL = require('./lib/voices/log');
 const FLANE = require('./lib/voices/fastlane');
+const EARLY = require('./lib/early-names');
+const LFIRST = require('./lib/line-first');
 const IVR = require('./lib/sources/ivr');
 const SULLY = require('./lib/sources/sully');
 const BANS = require('./lib/sources/streamerbans');
@@ -88,6 +90,7 @@ const SDESK = require('./lib/search-desk');
 const RDESK = require('./lib/release-desk');
 const KD = require('./lib/kinds-desk');
 const EXT = require('./lib/extension');
+const CHARTS = require('./lib/desks/charts');
 const TTS = require('./lib/sources/tts');
 const ROUNDUPS = require('./lib/sources/roundups');
 const REELS = require('./lib/sources/reels');
@@ -333,6 +336,8 @@ async function runCycle(opts) {
     try { LEDGER.ensure(db); nativeIndex = NS.peopleIndex({ roster: obs.roster, streamers: IVR.streamers() }); } catch (e) { log(`[native] the roster did not read: ${e.message}`); }
     let nativeBooked = 0;
     const nativeStats = { fresh: 0, research: [] };
+    // (wave 10, lib/early-names.js: counts only, for the summary and the log)
+    let earlyStats = null;
     const bookNative = () => {
       const batches = obs.native.slice(nativeBooked);
       nativeBooked = obs.native.length;
@@ -511,10 +516,25 @@ async function runCycle(opts) {
       // Quavwy and a GTA 6 leaker were all in the store, unsearched, two hours after a cold start)
       const beatKeys = beatNames(store, nowMs);
       const beatFirst = (keys) => [...keys.filter((k) => beatKeys.has(k)), ...keys.filter((k) => !beatKeys.has(k))];
-      const picked = B.pickNames({ ...NDESK.ride({ fresh: beatFirst([...byKey.keys()].filter(isNew)), backlog: beatFirst([...byKey.keys()].filter((key) => !isNew(key))) }, { drama: wanted.drama.map(TS.talkKey), store, nowMs }), rows: lastRows.map((r) => ({ ...r, name: TS.talkKey(r.name) })), searchedAt, now: nowS });
+      // (wave 10: the people-drama names two independent voices tell, not searched since their chapter began, take the research seats
+      // of the cycle: lib/early-names.js. Shadow counts them only; off asks nothing of them)
+      const earlyMode = EARLY.mode(env);
+      let earlyPick = { names: [], met: 0 };
+      if (earlyMode !== 'off') {
+        try { earlyPick = EARLY.pick(wanted.told || [], { now: nowMs, searchedAt, talkKey: TS.talkKey, table: FLANE.tableOf(store.lookups) }); } catch (e) { log(`[early-names] not picked, the cycle goes on without them: ${e.message}`); }
+      }
+      const earlyName = new Map(earlyPick.names.map((n) => [n.key, n.name]));
+      const pickArgs = { ...NDESK.ride({ fresh: beatFirst([...byKey.keys()].filter(isNew)), backlog: beatFirst([...byKey.keys()].filter((key) => !isNew(key))) }, { drama: wanted.drama.map(TS.talkKey), store, nowMs }), rows: lastRows.map((r) => ({ ...r, name: TS.talkKey(r.name) })), searchedAt, now: nowS };
+      const picked = B.pickNames({ ...pickArgs, early: earlyMode === 'on' ? earlyPick.names.map((n) => n.key) : [] });
+      if (earlyMode !== 'off') {
+        const queued = new Set([...picked.now, ...picked.later]);
+        const would = earlyMode === 'on' ? picked.early.length : B.pickNames({ ...pickArgs, early: earlyPick.names.map((n) => n.key) }).early.length;
+        earlyStats = { mode: earlyMode, met: earlyPick.met, would, seated: picked.early.length, anyway: earlyPick.names.filter((n) => queued.has(n.key)).length };
+        log(EARLY.line(earlyMode, { met: earlyPick.met, searched: earlyStats.anyway, seated: earlyMode === 'on' ? picked.early.length : would }));
+      }
       const keep = (names) => { if (names.length) meta.set('namesWanted', [...new Set(names.map((n) => TS.talkKey(n)))].slice(0, NAMES_WANTED_KEPT)); };
       keep(wantedNames);
-      const nameOf = (key) => byKey.get(key) || (lastRows.find((r) => TS.talkKey(r.name) === key) || {}).name || key;
+      const nameOf = (key) => byKey.get(key) || earlyName.get(key) || (lastRows.find((r) => TS.talkKey(r.name) === key) || {}).name || key;
       const trendNews = FIXED.trendNewsRequest(obs.momentTrends);
       // (a feed that cannot be asked takes no turn: one turned off, one whose host is in back-off)
       const turnOf = (id) => FIXED.rotationRequests(id, { nowMs, lastReadAt: lastRead.get(id) });
@@ -579,7 +599,9 @@ async function runCycle(opts) {
         VB.surviveTurn(cycle, boardsNow(), nowS, VB.offOf(env)) ? VB.newRequest() : OWED.redditRequest(B.redditTurn(cycle)),
         ...nativeSecond,
         ...rosterNew,
-        ...watch.names.filter((n) => !picked.now.includes(TS.talkKey(n))).map(NAMES.watchRequest),
+        ...watch.names.filter((n) => !picked.now.includes(TS.talkKey(n)) && !picked.early.includes(TS.talkKey(n))).map(NAMES.watchRequest),
+        // (wave 10: the early names in the research seats they took, where those searches stood: as many requests as before)
+        ...picked.early.flatMap((key) => NAMES.nameRequests(nameOf(key), 3)),
         ...picked.later.flatMap((key) => NAMES.nameRequests(nameOf(key), 3)),
         ...ofKind(['story-news', 'story-wiki'], B.STORY_LOOKUPS_PER_CYCLE),
         ...ofKind(['word-wiki', 'word-wikt', 'word-since'], B.WORD_LOOKUPS_PER_CYCLE),
@@ -623,10 +645,10 @@ async function runCycle(opts) {
       const lately = (name) => searchedAt.has(TS.talkKey(name)) && nowS - searchedAt.get(TS.talkKey(name)) < B.PAGE_RESEARCH_SECONDS;
       const gamesWas = meta.get('twitchGames', null);
       const games = obs.games ? DISC.gameMoves(gamesWas, obs.games, t) : null;
-      const shown = [...SOCIAL.newCreators(obs.x, inputs0.roster, t).slice(0, X_NAMES_PER_CYCLE), ...(games ? games.fresh.map((g) => g.name) : [])].filter((name) => !lately(name) && !picked.now.includes(TS.talkKey(name)));
+      const shown = [...SOCIAL.newCreators(obs.x, inputs0.roster, t).slice(0, X_NAMES_PER_CYCLE), ...(games ? games.fresh.map((g) => g.name) : [])].filter((name) => !lately(name) && !picked.now.includes(TS.talkKey(name)) && !picked.early.includes(TS.talkKey(name)));
       if (shown.length) log(`[discover] ${shown.join(', ')}`);
       // (and who the creator-native signals are about, or the shortlist names, that no search has looked at lately: L6, L10)
-      nativeStats.research = NDESK.research(peopleNow(), { lately: (name) => lately(name) || picked.now.includes(TS.talkKey(name)) });
+      nativeStats.research = NDESK.research(peopleNow(), { lately: (name) => lately(name) || picked.now.includes(TS.talkKey(name)) || picked.early.includes(TS.talkKey(name)) });
       if (nativeStats.research.length) log(`[native] worth a search: ${nativeStats.research.join(', ')}`);
       // GDELT's slot, read again for the names the list does not hold that break out in the press (lib/discover.js gdeltStep, P13):
       // no request of its own. Counted whether or not it acts, so its baseline is warm the day it is switched on; on, a name that
@@ -634,7 +656,7 @@ async function runCycle(opts) {
       try {
         const held = new Set([...lastRows.map((r) => keyOf(r.name || '')), ...platformNames.map((n) => n.key)].filter(Boolean));
         gdeltCycle = DISC.gdeltStep(meta.get('gdeltNames', null), obs.gdeltArticles, { slot: obs.gdelt ? obs.gdelt.slot : null, on: gdeltOn, nowMs,
-          searched: (name) => lately(name) || picked.now.includes(TS.talkKey(name)), known: (name) => held.has(keyOf(name)) });
+          searched: (name) => lately(name) || picked.now.includes(TS.talkKey(name)) || picked.early.includes(TS.talkKey(name)), known: (name) => held.has(keyOf(name)) });
         if (gdeltCycle.stats) {
           meta.set('gdeltNames', gdeltCycle.state);
           for (const row of gdeltCycle.rows) ST.upsertRow(store, row, nowMs);
@@ -648,7 +670,7 @@ async function runCycle(opts) {
       const sent = new Set(thirdRound.map((r) => TS.talkKey((r.request.args || {}).name || '')));
       if (gdeltCycle) gdeltCycle.searched = gdeltCycle.fresh.filter((name) => sent.has(TS.talkKey(name))).length;
       for (const name of flared) { const key = TS.talkKey(name); if (!sent.has(key)) { if (watchState.carried && watchState.carried[key]) carried[key] = watchState.carried[key]; else delete carried[key]; } }
-      const gamesSent = !games || games.fresh.every((g) => sent.has(TS.talkKey(g.name)) || lately(g.name) || picked.now.includes(TS.talkKey(g.name)));
+      const gamesSent = !games || games.fresh.every((g) => sent.has(TS.talkKey(g.name)) || lately(g.name) || picked.now.includes(TS.talkKey(g.name)) || picked.early.includes(TS.talkKey(g.name)));
       if (games && gamesSent) meta.set('twitchGames', games.state);
       meta.set('rosterWatch', { cursor: watch.cursor, carried });
       // the trends' size over their lives (D4 `size`): its share kept back from the rounds before, by rank, kept in the state (lib/size/cycle.js)
@@ -737,6 +759,11 @@ async function runCycle(opts) {
       const bc = VB.counts(boards);
       log(`${step.line}; boards ${bc.lead} posts held, ${bc.checked} re-read, ${bc.survived} survived; census ${bc.census} posts, ${bc.censusChecked} re-read`);
     } catch (e) { log(`[fastlane] the voice log was not kept: ${e.message}`); }
+    // (wave 10: what the line first listed, or would list with IDEAS_LINE_FIRST unset, lib/line-first.js; counts only)
+    try {
+      const lfLine = LFIRST.logLine(LFIRST.takeReports(), opts.audiences.includes('US') ? 'US' : opts.audiences[0]);
+      if (lfLine) log(lfLine);
+    } catch (e) { log(`[line-first] no count: ${e.message}`); }
     const isBeat = (outlet) => TC.CREATOR_PRESS.test(outlet) || TN.MAJOR.test(outlet);
     // (the desk never holds a list back: should it fail on a row nobody foresaw, that audience's rows go out as the engine made them)
     // (the enrich pass's stories by meaning, P8: one slot late, imported here; none and the desk's own rules decide alone)
@@ -825,11 +852,17 @@ async function runCycle(opts) {
       const others = Object.values(rowsByAudience).flat();
       const kindsMade = {};
       const kindsDesk = (ctx) => { kindsMade[ctx.audience] = kindsCache ? KD.rows({ ...kindsCtx, audience: ctx.audience, rows: [...ctx.rows, ...others] }) : []; return kindsMade[ctx.audience]; };
-      const stillDesk = (ctx) => SDESK.extended({ ...ctx, rows: [...ctx.rows, ...(kindsMade[ctx.audience] || [])] });
-      const extDesks = [kindsDesk, stillDesk];
+      // (the charts desk, lib/desks/charts.js: sounds and slang new to their charts or climbing them, from the chart reads already made
+      // (+0 requests), each row in the "charts" section with its clock. IDEAS_KINDS_OFF=charts or IDEAS_SOURCES_OFF=charts: none)
+      const chartsOff = CHARTS.offOf(env);
+      const chartsMade = {};
+      const chartsDesk = (ctx) => { chartsMade[ctx.audience] = CHARTS.rows({ ...ctx, ledger: ledgerP, items: kindsCtx.items, trends: kindsCtx.trends, off: chartsOff }); return chartsMade[ctx.audience]; };
+      const stillDesk = (ctx) => SDESK.extended({ ...ctx, rows: [...ctx.rows, ...(kindsMade[ctx.audience] || []), ...(chartsMade[ctx.audience] || [])] });
+      const extDesks = [kindsDesk, chartsDesk, stillDesk];
       const extCtx = (a) => ({ rows: rowsByAudience[a] || [], trends: [...(store.talkTrends || new Map()).values()], resolved, news: searchNews, lookups: store.lookups, t, audience: a, store, things, releases, wikiLists: inputs.wikiLists });
       const kindsStarted = Date.now();
       try { extCandidates = EXT.candidates(opts.audiences, extDesks, extCtx, { log }); } catch (e) { log(`[extension] no rows made: ${e.message}`); extCandidates = {}; }
+      try { const c = CHARTS.census(chartsMade[mainAudience] || []); log(`[charts] ${mainAudience}: ${c.rows} rows (sounds ${c.sounds}, songs ${c.songs}, slang ${c.slang})`); } catch (e) { log(`[charts] not counted: ${e.message}`); }
       try { const c = KD.census(kindsCache, kindsMade[mainAudience] || [], nowS); log(`[kinds] ${c.deaths} names on the deaths page, ${c.incidents} incidents of ${c.services} services read, ${c.sellers} top sellers (${c.apps} games known); rows ${KD.SECTIONS.map((k) => `${k} ${c.rows[k]}`).join(', ')} (${Date.now() - kindsStarted} ms)`); } catch (e) { log(`[kinds] not counted: ${e.message}`); }
     }
     lap('build');
@@ -1100,7 +1133,7 @@ async function runCycle(opts) {
     log(`[time] fetch ${seconds.fetch}s, build ${seconds.build}s, identity + history ${seconds.measure}s, lines ${seconds.lines}s, editor ${seconds.editor}s, feed ${seconds.feed}s, write + publish ${seconds.publish}s`);
     const summary = { cycle, slot: instant(t), requests: outcome.sent, blocked: stale, items: Object.fromEntries(good.map((a) => [a, feeds.lists[a].items.length])), modelLines, ms: Date.now() - started,
       answered: outcome.ok, seconds, byHost: status.requests.byHost, bytes: Object.fromEntries(good.map((a) => [a, written.bytes[`${PUB.fileOf(a)}.json`]])), counts, ...(enrich ? { enrich } : {}),
-      ...(storiesOut ? { stories: storiesOut } : {}), gdelt: gdeltOut, extension };
+      ...(storiesOut ? { stories: storiesOut } : {}), gdelt: gdeltOut, extension, ...(earlyStats ? { early: earlyStats } : {}) };
     return { code: 0, summary };
   } finally {
     if (state) state.close();
