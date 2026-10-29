@@ -140,6 +140,8 @@ const SF = require('./story-focus');
 // (Collector only, wave 9: the fast lane, lib/voices/fastlane.js)
 const FL = require('../lib/voices/fastlane');
 const LF = require('../lib/line-first');
+// (Collector only, wave 11: the board noun, lib/board-noun.js)
+const BN = require('../lib/board-noun');
 const { outletKey, contains } = require('./util');
 
 const { words } = W;
@@ -1188,6 +1190,16 @@ function pointOf(c, ctx) {
       noun0 = killed >= ARREST_OTHERS_MIN ? { f: TN.FAMILY.get('death'), noun: 'death', count: killed, share: killed / Math.max(1, titles.length), explained: noun0.explained } : null;
     }
   }
+  // (a person's story only the boards tell so far, no outlet's headline saying a noun of theirs, is named by the boards themselves: a
+  // board's own flair, or two boards saying the same. With IDEAS_BOARD_NOUN unset the noun is only counted (shadow). Collector only,
+  // wave 11, lib/board-noun.js)
+  // (a noun only a post gave, postNoun above, is the boards' too: their stricter reading stands over it)
+  const postOnly = !!posted && !!noun0 && noun0.f === posted.f;
+  const boardN = boardNounOf(c, ev, near, postOnly ? null : noun0, dramaName || creatorName, ctx);
+  if (boardN && ctx.boardNounMode === 'on' && (!noun0 || !noun0.f || noun0.f.key === 'response' || postOnly)) {
+    // (the boards are its coverage: like a post's noun, it is its own wave, never an aside of the name's week)
+    noun0 = { f: boardN.f, noun: boardN.noun, count: boardN.count, share: boardN.count / Math.max(1, titles.length), explained: 0, board: boardN.how, wave: true };
+  }
   const f0 = noun0 && noun0.f;
   const names = namesAround(c, titles, ev.completions, lex);
   let subject0 = TN.subjectOf(c.key, f0, titles, names);
@@ -1338,6 +1350,12 @@ function pointOf(c, ctx) {
       firstLine = made && made.what ? made : null;
       if (firstLine && ctx.lineFirstMode === 'on') traced = { what: firstLine.what, denied: firstLine.denied, trace: firstLine.trace, unsaid: false };
     }
+  }
+  // (and a story only the boards tell, by the board that tells it: "A post on r/<Board> tagged Drama says ...". Collector only, wave 11)
+  let boardLine = null;
+  if (boardN && !traced.what && (!f || f.key === boardN.f.key)) {
+    boardLine = BN.lineOf(boardN, ev.rows, { subject, surface, lex, title: title0 });
+    if (boardLine && boardLine.what && ctx.boardNounMode === 'on' && f && f.key === boardN.f.key) traced = { what: boardLine.what, denied: boardLine.denied, trace: boardLine.trace, unsaid: false };
   }
   // a title is never surer than its line: a show's facet no line tells ("East of Eden ending" over "Pellade Sorrova stars in ...") is
   // the show as searched, and an outbreak its line only suspects is a scare ("Russia plague scare")
@@ -1500,6 +1518,9 @@ function pointOf(c, ctx) {
     c, ev, noun, subject, title, how, what, denied, kind, generic, aside, work, own, score: heat.score, parts: heat.parts, searchVolume,
     // (the line-first line, internal: what it would say in shadow, what it says when on. Never published)
     ...(firstLine ? { lineFirst: { what: firstLine.what, t: firstLine.t, used: ctx.lineFirstMode === 'on' } } : {}),
+    // (the board noun, internal: what it would title and say in shadow, what it does when on. Never published)
+    ...(boardN ? { boardNoun: { how: boardN.how, key: boardN.f.key, noun: boardN.noun, what: boardLine && boardLine.what ? boardLine.what : null,
+      used: ctx.boardNounMode === 'on' && !!noun && noun.board === boardN.how && !!boardLine && boardLine.what === what } } : {}),
     // (whether a drama name's newest wave says its noun: lists() judges such a noun's share by that wave, not the week)
     waveHeld: dramaName && !!noun && !!noun.f && waveHolds(ev, noun.f, subject, now, PRESS_NOUN_SHARE),
     out: {
@@ -2062,6 +2083,21 @@ function lists(p, now, ctxLex) {
 }
 
 const PRESS_NOUN_SHARE = 0.15;
+/**
+ * The board noun of a card (lib/board-noun.js), or null: only for a name that reads as a person's (a drama or creator name, or two
+ * words), with no noun of its own but a response or one only a post gave, and no outlet's headline naming it that says a drama family or a death: a story only
+ * the boards tell so far. Collector only, wave 11.
+ */
+function boardNounOf(c, ev, near, noun0, person, ctx) {
+  if (!ctx.boardNounMode || ctx.boardNounMode === 'off' || c.parent || c.generic) return null;
+  if (noun0 && noun0.f && noun0.f.key !== 'response') return null;
+  if (!(person || ev.creatorSub || near.includes(' '))) return null;
+  const last = near.split(' ').slice(-1)[0];
+  const told = ev.rows.some((r) => r.fam !== 'reddit' && !r.youtube && mentions(hay(r.title), last) && TN.familiesIn(r.title).some((x) => TN.DRAMA_FAMS.has(x.f.key) || x.f.key === 'death'));
+  if (told) return null;
+  const bn = BN.nounOf(ev.rows, { subject: near, now: ctx.now, flairs: ctx.boardFlairs || null });
+  return bn && bn.f ? bn : null;
+}
 /** Whether a line says someone else is criticised for comments, remarks or a post about the subject, never the subject's own. */
 function commentsOfOther(line, subject) {
   if (!line || !subject) return false;
@@ -2266,7 +2302,9 @@ function build(ctx) {
   // (every page of Wikipedia's daily top 1000 by its words: a card's days of reading)
   // (wave 10, lib/line-first.js: IDEAS_LINE_FIRST, shadow when unset)
   const lineFirstMode = LF.mode(process.env);
-  const full = { ...ctx, items, wikiIndex: wikiDaysIndex(ctx.wikiLists), lineFirstMode };
+  // (wave 11, lib/board-noun.js: IDEAS_BOARD_NOUN, shadow when unset)
+  const boardNounMode = BN.mode(process.env);
+  const full = { ...ctx, items, wikiIndex: wikiDaysIndex(ctx.wikiLists), lineFirstMode, boardNounMode };
   const cands = candidates(full);
   // (the trending names, for a name that trends for another one's story)
   full.trendKeys = new Set(cands.filter((c) => c.from === 'trends' && searchScore(c.trends) >= ASIDE_HOST_SEARCH).map((c) => c.key));
@@ -2356,6 +2394,7 @@ function build(ctx) {
   const fastTagged = new Set(listed.filter((p, i) => p.fastAct === true && (!p.fastHand || i >= LIST_MAX)));
   if (lane.met) FL.report(ctx.audience, laneReport(lane, listed, fastTagged, ctx.moments || []));
   if (lineFirstMode !== 'off') LF.report(ctx.audience, lineFirstReport(lineFirstMode, weighed, listed, all, kept, extraOf, full));
+  if (boardNounMode !== 'off') BN.report(ctx.audience, boardNounReport(boardNounMode, weighed, listed, all, kept, extraOf, full));
   // (every card's line printed the card's way: curly quotes, "and" for "&")
   // (and never a clause's own stop before the line's: "... in her apartment;." ends "... in her apartment.". Collector only, 2026-10-29)
   return listed.map((p) => ({ ...p.out, what: p.out.what ? TL.tidyLine(p.out.what).replace(/\s*[;:,]\s*([.!?])$/, '$1') : p.out.what,
@@ -2437,6 +2476,22 @@ function laneReport(lane, listed, fastTagged, moments = []) {
  * at or over the cut's heat or kept under it, and no listed card tells the same story); `borrowed`, the cards another name's search
  * told (on) or could tell (shadow), and in shadow `borrowWould`, those the switch would list. ctx: the build's full context. Counts only.
  */
+/**
+ * The board noun's counts for the cycle's log line (lib/board-noun.js): cards it named (by a flair, by two boards), lines it made, and
+ * what it lists (on) or would list (shadow: those cards weighed again with the switch on, read only). Counts only.
+ */
+function boardNounReport(mode, weighed, listed, all, kept, extraOf, ctx) {
+  const made = weighed.filter((p) => p.boardNoun);
+  const base = { mode, made: made.length, flair: made.filter((p) => p.boardNoun.how === 'flair').length, boards: made.filter((p) => p.boardNoun.how === 'boards').length,
+    lines: made.filter((p) => p.boardNoun.what).length };
+  if (mode === 'on') return { ...base, passed: made.filter((p) => p.boardNoun.used && lists(p, ctx.now, ctx.lex)).length, would: listed.filter((p) => p.boardNoun && p.boardNoun.used).length };
+  const cut = all.length >= LIST_MAX ? all[LIST_MAX - 1].score : 0;
+  const on = made.filter((p) => p.boardNoun.what).map((p) => pointOf(p.c, { ...ctx, boardNounMode: 'on' })).filter((q) => q.boardNoun && q.boardNoun.used);
+  const passed = on.filter((q) => lists(q, ctx.now, ctx.lex));
+  const would = passed.filter((q) => (q.score >= cut || extraOf(q)) && !kept.some((k) => samePoint(k, q)));
+  return { ...base, passed: passed.length, would: would.length };
+}
+
 function lineFirstReport(mode, weighed, listed, all, kept, extraOf, ctx) {
   const made = weighed.filter((p) => p.lineFirst);
   if (mode === 'on') {

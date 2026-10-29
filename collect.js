@@ -76,13 +76,18 @@ const VB = require('./lib/voices/boards');
 const VL = require('./lib/voices/log');
 const FLANE = require('./lib/voices/fastlane');
 const EARLY = require('./lib/early-names');
+const NLOG = require('./lib/voices/native-log');
 const LFIRST = require('./lib/line-first');
+// (wave 11: the board noun, lib/board-noun.js; IDEAS_BOARD_NOUN)
+const BNOUN = require('./lib/board-noun');
+const BOARD_FLAIR_DAYS = 3;
 const IVR = require('./lib/sources/ivr');
 const SULLY = require('./lib/sources/sully');
 const BANS = require('./lib/sources/streamerbans');
 const FAMOUS = require('./lib/sources/famous');
 const ONTD = require('./lib/sources/ontd');
 const PRESS = require('./lib/sources/press');
+const HFEEDS = require('./lib/sources/headline-feeds');
 const BING = require('./lib/sources/bing');
 const PS = require('./lib/platform-signals');
 const PDESK = require('./lib/platform-desk');
@@ -143,6 +148,8 @@ const HOST_NAMES = { 'news.google.com': 'google-news', 'trends.google.com': 'goo
   'www.youtube.com': 'youtube-roster', 'arctic-shift.photon-reddit.com': 'arctic-shift', 'api.livestreamfails.com': 'livestreamfails', 'api.ivr.fi': 'ivr', 'sullygnome.com': 'sullygnome',
   'streamerbans.com': 'streamerbans', 'www.famousbirthdays.com': 'famous-birthdays', 'ohnotheydidnt.livejournal.com': 'ontd', 'api.bing.com': 'bing-completions', 'www.bing.com': 'bing-news',
   'pagesix.com': 'page-six', 'www.ladbible.com': 'ladbible', 'www.complex.com': 'complex', 'theshaderoom.com': 'the-shade-room', 'www.hotnewhiphop.com': 'hotnewhiphop',
+  // (the outlets that print people first: lib/sources/headline-feeds.js)
+  'www.dailymail.com': 'daily-mail', 'www.film-news.co.uk': 'film-news', 'variety.com': 'variety', 'radaronline.com': 'radar-online',
   // (the platform, word and craze sources, M)
   'trendingtiktoksongs.com': 'trending-tiktok-songs', 'later.com': 'later', 'www.ramd.am': 'ramdam', 'creatordb.app': 'creatordb-reels-audio', 'www.shazam.com': 'shazam', 'kworb.net': 'kworb',
   'dumps.wikimedia.org': 'wikipedia-hourly', 'storage.googleapis.com': 'gdelt', 'trends.pinterest.com': 'pinterest-trends', 'rss.marketingtools.apple.com': 'apple-top-free', 'itunes.apple.com': 'apple-photo-video',
@@ -155,7 +162,7 @@ const HOST_NAMES = { 'news.google.com': 'google-news', 'trends.google.com': 'goo
 // (a native row is never "on the page" by where it was put: it sits past the page until the series tags it. lib/native-desk.js)
 const NATIVE_RANK_FROM = 21;
 // every adapter id of the keyless drama sources (L): what IDEAS_SOURCES_OFF names to switch them off, one or all
-const NATIVE_SOURCES = ['asked', 'asked-bing', 'yt-roster', 'lsf', 'arctic', 'ivr', 'sully', 'streamerbans', 'famous', 'ontd', 'bing-news', ...PRESS.OUTLETS.map((o) => o.id)];
+const NATIVE_SOURCES = ['asked', 'asked-bing', 'yt-roster', 'lsf', 'arctic', 'ivr', 'sully', 'streamerbans', 'famous', 'ontd', 'bing-news', ...PRESS.OUTLETS.map((o) => o.id), ...HFEEDS.FEEDS.map((f) => f.id)];
 // every adapter id of the platform, word and craze sources (M): what IDEAS_SOURCES_OFF names to switch them off, one or all
 const PLATFORM_SOURCES = ['tts', ...ROUNDUPS.PAGES.map((p) => `roundup-${p.id}`), 'reels', 'shazam', 'kworb', 'wiki-hourly', 'gdelt', 'wikt-slang', 'typed', 'pinterest', 'apps', 'roblox', 'steam'];
 // (how many of the list's people the hourly files and GDELT are read for, and how many hours read are remembered)
@@ -501,8 +508,13 @@ async function runCycle(opts) {
       const inputs0 = { ...engineInputs(paths.wiki, nowMs), native: nativeNames(people0) };
       const lastRows = meta.get('lastRows', []) || [];
       const searchedAt = new Map([...store.lookups.entries()].filter(([k, l]) => k.startsWith('talk-') && l.tpnewsAt).map(([k, l]) => [k.slice(5), Math.floor(l.tpnewsAt / 1000)]));
+      // (wave 11: the creators' own world's voices for the early names, lib/early-names.js creatorVoices: times and kinds from the ledger
+      // this cycle already read, no request more; not read at all with IDEAS_CREATOR_NATIVE=off or IDEAS_SEARCH_EARLY=off)
+      const nativeMode = EARLY.mode(env) === 'off' ? 'off' : EARLY.nativeMode(env);
+      let creatorVoices = null;
+      if (nativeMode !== 'off') { try { creatorVoices = EARLY.creatorVoices(people0, nowMs); } catch (e) { log(`[creator-native] not read, the early names go on without it: ${e.message}`); } }
       let wanted = { lookup: [], drama: [] };
-      try { wanted = ENGINE.names({ store, ...inputs0, now: nowMs }); } catch (e) { log(`[collect] names pass failed: ${e.message}`); }
+      try { wanted = ENGINE.names({ store, ...inputs0, now: nowMs, ...(creatorVoices ? { creatorVoices } : {}) }); } catch (e) { log(`[collect] names pass failed: ${e.message}`); }
       // the names never searched, the people-drama names first (creators lead them), then the engine's own order: the ones that first
       // showed this cycle are tier 1's "new"; the ones already waiting (a cold start's whole backlog) drain behind the list's own rows
       const wantedNames = [...new Set([...wanted.drama, ...wanted.lookup])];
@@ -523,6 +535,13 @@ async function runCycle(opts) {
       if (earlyMode !== 'off') {
         try { earlyPick = EARLY.pick(wanted.told || [], { now: nowMs, searchedAt, talkKey: TS.talkKey, table: FLANE.tableOf(store.lookups) }); } catch (e) { log(`[early-names] not picked, the cycle goes on without them: ${e.message}`); }
       }
+      // (wave 11: the same rule with the creator-native voice as a third family; on: it is the pick; shadow: counted only)
+      let nativePick = null;
+      if (creatorVoices) {
+        try { nativePick = EARLY.pick(wanted.told || [], { now: nowMs, searchedAt, talkKey: TS.talkKey, table: FLANE.tableOf(store.lookups), native: true }); } catch (e) { log(`[creator-native] not picked: ${e.message}`); }
+      }
+      const nativeAdded = nativePick ? nativePick.names.filter((n) => !earlyPick.names.some((x) => x.key === n.key)) : [];
+      if (nativeMode === 'on' && nativePick) earlyPick = nativePick;
       const earlyName = new Map(earlyPick.names.map((n) => [n.key, n.name]));
       const pickArgs = { ...NDESK.ride({ fresh: beatFirst([...byKey.keys()].filter(isNew)), backlog: beatFirst([...byKey.keys()].filter((key) => !isNew(key))) }, { drama: wanted.drama.map(TS.talkKey), store, nowMs }), rows: lastRows.map((r) => ({ ...r, name: TS.talkKey(r.name) })), searchedAt, now: nowS };
       const picked = B.pickNames({ ...pickArgs, early: earlyMode === 'on' ? earlyPick.names.map((n) => n.key) : [] });
@@ -531,6 +550,25 @@ async function runCycle(opts) {
         const would = earlyMode === 'on' ? picked.early.length : B.pickNames({ ...pickArgs, early: earlyPick.names.map((n) => n.key) }).early.length;
         earlyStats = { mode: earlyMode, met: earlyPick.met, would, seated: picked.early.length, anyway: earlyPick.names.filter((n) => queued.has(n.key)).length };
         log(EARLY.line(earlyMode, { met: earlyPick.met, searched: earlyStats.anyway, seated: earlyMode === 'on' ? picked.early.length : would }));
+        if (nativePick) {
+          // (counts only: the names the creator-native voice adds, the seats they take or would take, and the kinds of voice they carry)
+          const added = new Set(nativeAdded.map((n) => n.key));
+          const seats = nativeMode === 'on' ? picked.early : B.pickNames({ ...pickArgs, early: nativePick.names.map((n) => n.key) }).early;
+          const kindsOf = (k) => new Set(((wanted.told || []).find((x) => TS.talkKey(x.key) === k) || {}).native?.map((v) => v.k) || []);
+          const count = (kind) => nativeAdded.filter((n) => kindsOf(n.key).has(kind)).length;
+          // (and the names it added a day ago that a search or the list then joined: the private log, lib/voices/native-log.js)
+          let day = { joined: null, settled: null };
+          try {
+            const words = (x) => String(x || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+            const st = NLOG.step(NLOG.read(NLOG.fileOf(opts.state)), { added: nativeAdded.map((n) => ({ key: n.name, kinds: [...kindsOf(n.key)] })), now: nowMs,
+              trends: [...store.trends.values()].map((x) => ({ keyword: x.keyword, start: x.start })), listed: new Set(lastRows.map((r) => words(r.name))) });
+            NLOG.write(NLOG.fileOf(opts.state), st.entries);
+            day = { joined: st.joined, settled: st.settled };
+          } catch (e) { log(`[creator-native] the join log was not kept: ${e.message}`); }
+          const native = { mode: nativeMode, added: added.size, voiced: (wanted.told || []).filter((x) => Array.isArray(x.native) && x.native.length).length, seated: seats.filter((k) => added.has(k)).length, uploads: count('upload'), clusters: count('cluster'), platform: count('platform'), ...day };
+          earlyStats = { ...earlyStats, native };
+          log(EARLY.nativeLine(nativeMode, native));
+        }
       }
       const keep = (names) => { if (names.length) meta.set('namesWanted', [...new Set(names.map((n) => TS.talkKey(n)))].slice(0, NAMES_WANTED_KEPT)); };
       keep(wantedNames);
@@ -560,8 +598,12 @@ async function runCycle(opts) {
       // feed, the hourly tables, the outlets that are due, Bing News for a few listed names, and the titles of busy threads
       const askedBing = ASKED.bingRequests(meta.get('askedBingCursor', 0) || 0);
       const threadKnown = db.prepare('SELECT 1 FROM native_items WHERE source = ? AND key = ?');
+      const hlTried = meta.get('hlTried', {}) || {};
       const nativeSecond = [...askedBing.requests, BANS.bansRequest(), SULLY.sullyRequest(lastRead.get('sully-losers'), nowS), FAMOUS.famousRequest(lastRead.get('famous-trending'), nowS),
         ONTD.ontdRequest(lastRead.get('ontd'), nowS), ...PRESS.due(lastRead, nowS).map(PRESS.pressRequest), ...BING.pick(lastRows, lastRead, nowS).map(BING.newsRequest),
+        // (wave 11: one of the outlets that print people first, in turn, at most +1 request a cycle; a replay asks only what it recorded)
+        // (a feed's turn moves on any try, kept in meta 'hlTried' as the roster's; a host in back-off takes no turn)
+        ...HFEEDS.requests(lastRead, nowS, { off, env, tried: new Map(Object.entries(hlTried)), open: (host) => B.hostOpen(hosts.get(host), nowS), folder: opts.replay ? path.join(opts.replay, String(t)) : null }),
         ARCTIC.idsRequest(obs.arcticBusy.filter((id) => !obs.arcticKnown.has(id) && !threadKnown.get('arctic', id))),
         // (wave 9: the lead boards' newest posts every half hour and the leaks census hourly, in what the mirror's cap leaves: last)
         ...ARCTIC.leadRequests(nowS, new Map([...lastRead, ...ARCTIC.turn(cycle).map((sub) => [`arctic-posts-${sub.toLowerCase()}`, nowS])]), meta.get('arcticSlow', {}) || {}, VB.offOf(env))].filter(Boolean);
@@ -613,7 +655,10 @@ async function runCycle(opts) {
         ...platformSecond,
         ...tiktok,
       ];
-      await round(second);
+      const secondRound = await round(second);
+      // (the headline feeds asked this cycle, whatever they answered: their turn has passed. lib/sources/headline-feeds.js)
+      const hlAsked = secondRound.filter((r) => r.tried > 0 && HFEEDS.feedOf(r.request.id)).map((r) => r.request.id);
+      if (hlAsked.length || Object.keys(hlTried).length) meta.set('hlTried', HFEEDS.triedAfter(hlTried, hlAsked, t));
       bookNative();
       await wikiJob;
       bookPlatform();
@@ -737,8 +782,18 @@ async function runCycle(opts) {
     // (the precursor's private log: the engine's candidates of the US build, kept and dropped; lib/precursor)
     let preCands = null;
     const onPoints = PRE.mode(env) === 'off' ? null : (pts, keptOf) => { preCands = PRE.observePoints(pts, keptOf, nowMs); };
+    // (wave 11: the boards' flair by post id, from reads already made: the boards' private record and the mirror's posts in the ledger.
+    // The board noun's, lib/board-noun.js: +0 requests; none with IDEAS_BOARD_NOUN=off)
+    let boardFlairs = null;
+    if (BNOUN.mode(env) !== 'off') {
+      try {
+        const ledgerPosts = db.prepare("SELECT key, data FROM native_items WHERE source = 'arctic' AND last_seen >= ?").all(nowS - BOARD_FLAIR_DAYS * 86400)
+          .map((r) => { let d = {}; try { d = JSON.parse(r.data || '{}') || {}; } catch { d = {}; } return { id: r.key, flair: d.flair || null }; });
+        boardFlairs = BNOUN.flairsOf(boardsNow(), ledgerPosts);
+      } catch (e) { log(`[board-noun] the flair was not read: ${e.message}`); }
+    }
     try {
-      built = ENGINE.build({ store, ...inputs, now: nowMs, audiences: opts.audiences, native: nativeNames(people), voices: { boards: VB.voices(boardsNow(), nowS), rates: VL.rates(voiceLog) }, onPoints });
+      built = ENGINE.build({ store, ...inputs, now: nowMs, audiences: opts.audiences, native: nativeNames(people), voices: { boards: VB.voices(boardsNow(), nowS), rates: VL.rates(voiceLog), ...(boardFlairs ? { flairs: boardFlairs } : {}) }, onPoints });
     } catch (e) {
       log(`[collect] the engine failed, the feed already out stays: ${e.stack || e.message}`);
       meta.set('cycle', cycle);
@@ -764,6 +819,12 @@ async function runCycle(opts) {
       const lfLine = LFIRST.logLine(LFIRST.takeReports(), opts.audiences.includes('US') ? 'US' : opts.audiences[0]);
       if (lfLine) log(lfLine);
     } catch (e) { log(`[line-first] no count: ${e.message}`); }
+    // (wave 11: what the board noun listed, or would list with IDEAS_BOARD_NOUN unset, lib/board-noun.js; counts only)
+    try {
+      const bnLine = BNOUN.logLine(BNOUN.takeReports(), opts.audiences.includes('US') ? 'US' : opts.audiences[0]);
+      // (and how many posts' flair the reads held: counts only)
+      if (bnLine) log(`${bnLine}; flair known for ${boardFlairs ? boardFlairs.size : 0} posts`);
+    } catch (e) { log(`[board-noun] no count: ${e.message}`); }
     const isBeat = (outlet) => TC.CREATOR_PRESS.test(outlet) || TN.MAJOR.test(outlet);
     // (the desk never holds a list back: should it fail on a row nobody foresaw, that audience's rows go out as the engine made them)
     // (the enrich pass's stories by meaning, P8: one slot late, imported here; none and the desk's own rules decide alone)

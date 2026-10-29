@@ -1082,6 +1082,9 @@ function earlyTold(ctx) {
   const from = ctx.now - EARLY_HOURS * HOUR_MS;
   const pool = lookupPool(ctx);
   const out = [];
+  // (wave 11: the creators' own world's voices, lib/early-names.js creatorVoices, by name squeezed of its spaces: times and kinds only)
+  const native = new Map();
+  if (ctx.creatorVoices instanceof Map) for (const [k, vs] of ctx.creatorVoices) if (typeof k === 'string' && Array.isArray(vs)) native.set(k.replace(/ /g, ''), vs);
   for (const c of pool) {
     // (a people-drama name tied to the audiences' world: the drama step's `home` (the roster, a home role or a home outlet), a search of
     // its own in an audience's country, or the roster's; never a far region's own story, which its own press tells)
@@ -1091,9 +1094,12 @@ function earlyTold(ctx) {
     if (!rows.length) continue;
     // (the other names of the pool each row prints: a story whose rows all name someone already searched is in hand through that search)
     const othersOf = (i) => pool.filter((o) => o !== c && !contains(o.key, c.key) && !contains(c.key, o.key) && o.key.includes(' ') && mentions(hayOf(i), o.key)).map((o) => o.key).slice(0, EARLY_OTHERS_MAX);
+    // (the name's creator-native voices inside the same 36 hours: one family, read by lib/early-names.js only where IDEAS_CREATOR_NATIVE says)
+    const cn = (native.get(c.key.replace(/ /g, '')) || []).filter((v) => v && Number.isFinite(v.t) && v.t >= from && v.t <= ctx.now).map((v) => ({ t: v.t, k: v.k }));
     out.push({ key: c.key, late: !!c.late || !!c.lateDrama, creator: !!c.creator,
       rows: rows.map((i) => ({ t: i.t, title: i.title, outlet: i.outlet || null, fam: i.fam, sub: i.sub || null, url: i.url || null, others: othersOf(i),
-        ...(R.PUBLISHER_BLOCK.test(i.outlet || '') ? { blocked: true } : {}), ...(i.far === true ? { far: true } : {}), ...(i.beat === true ? { beat: true } : {}) })) });
+        ...(R.PUBLISHER_BLOCK.test(i.outlet || '') ? { blocked: true } : {}), ...(i.far === true ? { far: true } : {}), ...(i.beat === true ? { beat: true } : {}) })),
+      ...(cn.length ? { native: cn } : {}) });
   }
   return out;
 }

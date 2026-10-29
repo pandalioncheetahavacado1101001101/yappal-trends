@@ -168,6 +168,8 @@ jobs:
       # IDEAS_KINDS_OFF is a comma list of those or "all"; IDEAS_SOURCES_OFF names sources to skip, "kinds" for every read of the desk,
       # "charts" for the whole charts desk, or tts, shazam, kworb, wikt-slang, kym for one of its sources: lib/kinds-desk.js,
       # lib/desks/charts.js, lib/sources/fixed.js)
+      # (wave 11: IDEAS_SOURCES_OFF also takes "headlines" for the four headline feeds, or one of hl-filmnews, hl-radar, hl-dailymail,
+      # hl-variety: lib/sources/headline-feeds.js)
       IDEAS_KINDS_OFF: ${{ vars.IDEAS_KINDS_OFF }}
       IDEAS_SOURCES_OFF: ${{ vars.IDEAS_SOURCES_OFF }}
       # (early name searches, wave 10: on unless IDEAS_SEARCH_EARLY is "0" or "off" ("shadow": counts only). A people-drama name two
@@ -176,6 +178,15 @@ jobs:
       # (the first headline's attributed line, wave 10: shadow unless IDEAS_LINE_FIRST is "on" ("0" or "off": none). Shadow lists
       # nothing and logs one counts-only [line-first] line a cycle: lib/line-first.js)
       IDEAS_LINE_FIRST: ${{ vars.IDEAS_LINE_FIRST }}
+      # (the creators' own voices for the early names, wave 11: shadow unless IDEAS_CREATOR_NATIVE is "on" ("off": not read). Counts
+      # only, +0 requests; no effect while IDEAS_SEARCH_EARLY is off: lib/early-names.js)
+      IDEAS_CREATOR_NATIVE: ${{ vars.IDEAS_CREATOR_NATIVE }}
+      # (the board noun, wave 11: shadow unless IDEAS_BOARD_NOUN is "on" ("0" or "off": off, no flair read). +0 requests; keep unset
+      # until its precision log passes: lib/board-noun.js)
+      IDEAS_BOARD_NOUN: ${{ vars.IDEAS_BOARD_NOUN }}
+      # (the owner's switched sources: hl-dailymail, hl-variety (needs permission from each publisher), youtube-results, tiktok-sound,
+      # tiktok-profile. Unset: none: lib/sources/switch.js)
+      IDEAS_SOURCES_ON: ${{ vars.IDEAS_SOURCES_ON }}
       FEED_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
       FRESH: ${{ inputs.cold_start && '--fresh' || '' }}
     steps:

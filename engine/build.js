@@ -611,7 +611,9 @@ function talkContext({ store, wiki, wikiLists, crazes, roster, native = null, vo
   return { trends: talkTrendList(store), wiki, wikiTop: TS.wikiTopSpikes(wikiLists, NOW), wikiLists, crazes, roster, native,
     items: talkItems(store, all), lookups: store.lookups, now: NOW, lex, audience: TC.audienceOf(audience), ...(find && debug ? { find, debug } : {}),
     // (wave 9: the fast lane's board voices and measured hit rates, lib/voices/; the collector's private state, absent in a replay)
-    ...(voices ? { voiceBoards: voices.boards || [], voiceRates: voices.rates || null } : {}) };
+    ...(voices ? { voiceBoards: voices.boards || [], voiceRates: voices.rates || null } : {}),
+    // (wave 11: the boards' flair by post id, from the reads already made, for the board noun: lib/board-noun.js)
+    ...(voices && voices.flairs ? { boardFlairs: voices.flairs } : {}) };
 }
 
 /**
@@ -634,8 +636,10 @@ function namesOnce(input) {
   const memeNames = rows.filter((r) => r.src === 'kym-memes').flatMap((r) => r.title.split(' / ').map(stripParen));
   const lex = W.buildLexicon(all.filter((i) => !i.wordsOnly).map((i) => i.title), trends.filter((t) => inWindow(t.start)), input.wiki, memeNames);
   const ctx = { ...talkBase(input, all, lex), audience: TC.audienceOf('mixed') };
-  // (wave 10: and the people-drama names the last 36 hours tell, with their rows, for lib/early-names.js. Collector only)
-  return { lookup: TP.lookupNames(ctx), drama: TP.dramaLookupNames(ctx), recent: TP.recentNames(ctx), told: TC.earlyTold({ ...ctx, items: ctx.items.map((i) => ({ ...i, h: TC.hay(i.title) })) }) };
+  // (wave 10: and the people-drama names the last 36 hours tell, with their rows, for lib/early-names.js; wave 11: with the creators' own
+  // world's voices (lib/early-names.js creatorVoices), and fenced: a fault there costs the early names only, never the names pass. Collector only)
+  const told = () => { try { return TC.earlyTold({ ...ctx, items: ctx.items.map((i) => ({ ...i, h: TC.hay(i.title) })), creatorVoices: input.creatorVoices || null }); } catch { return []; } };
+  return { lookup: TP.lookupNames(ctx), drama: TP.dramaLookupNames(ctx), recent: TP.recentNames(ctx), told: told() };
 }
 
 /** A listed moment's timed evidence, for the collector's series: its own rows, its searches, its page. */
