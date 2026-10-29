@@ -155,6 +155,8 @@ const DRAMA_FAMS = new Set(['allegations', 'arrest', 'lawsuit', 'feud', 'backlas
   'threats', 'scam', 'remarks', 'hoax', 'tears', 'retirement', 'desist', 'cheating']);
 // families whose card adds the denial when a title carries one
 const DENIABLE = new Set(['allegations', 'rumors', 'lawsuit', 'arrest', 'attack', 'leak', 'fight', 'stabbing', 'threats', 'cheating']);
+// (and a romance the person denies: "<name> engagement" told while a headline has them deny it says so. Collector only, wave 12)
+const DENIED_TOO = new Set([...DENIABLE, 'romance']);
 // families that are claims about a person: the "what" must report them ("accused", "allegations", "claims", "reportedly")
 const CLAIMS = new Set(['allegations', 'rumors', 'attack', 'stabbing', 'fight', 'leak', 'threats', 'scam', 'cheating']);
 // a line that reports its claim: a word that hedges it ("accused of", "alleged", "claims", "reportedly", a denial, an investigation), or
@@ -1579,7 +1581,7 @@ function whatOf(rows, subject, family, peakT, lex, context = [], { rumor = false
   let denied = false;
   // (a suit the subject brought is denied by the other side, not by the subject: "Wyno Pymace launches legal action")
   const plaintiff = family && family.key === 'lawsuit' && new RegExp(`\\b${last}\\b[^.;:]*?\\b(?:sues|sued|suing|launch\\w* (?:a )?legal|files?|filed|tak(?:es?|ing|en) legal action|legal challenge|challeng(?:es|ed|ing))\\b|\\b${last}(?: s|s)? legal (?:action|challenge|bid|fight|case)\\b`, 'i').test(words(best.line).join(' ') + ' ' + best.line);
-  if (family && DENIABLE.has(family.key) && !plaintiff) {
+  if (family && DENIED_TOO.has(family.key) && !plaintiff) {
     const pron = pronounOf(usable, subject);
     const name0 = nameSurface(subject, usable.map((r) => r.title));
     // (a person the line already names whole is named again by the surname: "Bexan Tamard responds to ...; Tamard denies it")
@@ -1670,11 +1672,171 @@ function recaseName(line, name, surface) {
   return capLine(out, surface);
 }
 
+// ---------- a person's soft news (collector only, wave 12: lib/line-soft.js, IDEAS_SOFT_NEWS) ----------
+// A searched person's news that is no drama, read from one outlet's headline that leads with the person and says it of them: a health
+// update, an engagement, a wedding, a pregnancy, a baby, a role, an award, a tour, an album or a song, a return, an interview. Its own
+// families, apart from FAMILIES: nounOf never reads them, so no card's noun changes but through softRead. Each is said in the clause right
+// after the name ("<name> announces engagement to <partner>", "<name>, 45, welcomes baby"), never of someone else, never only rumoured.
+// `lead`: an interview is said by the verb right after the name ("<name> opens up about ...", "<name> says she ..."; never an admission,
+// which the reveal and admission readings tell); the others anywhere in that clause. `hedged`: one only rumoured, feared or hinted at is no title of its own ("pregnancy rumours", "fans fear for <name>'s
+// health", "reportedly in talks to star"). `noun`: the title's word for what the headline says.
+const SOFT_FAMILIES = [
+  { key: 'health', w: 0.6, hedged: true, re: /\b(?:diagnos(?:is|ed|es)|misdiagnos\w+|hospitali[sz]ed|surger(?:y|ies)|cancer|tumou?rs?|chemo\w*|stroke(?! of)|heart attack|illness|health (?:update|scare|battle|issues?|condition|news|struggles?|crisis|journey|setback)|recover(?:ing|y|s|ed) from|rehab|treatment|(?:eye|heart|skin|medical|rare|chronic) condition|disease|dementia|sclerosis|leuka?emia|lymphoma|lupus|seizures?)\b/i,
+    noun: () => 'health update' },
+  { key: 'pregnancy', w: 0.6, hedged: true, couple: true, re: /\b(?:pregnant|pregnancy|expecting (?:a |their |her |his |baby|twins|first|second|third|fourth|child)|baby (?:no\.?\s*\d|number \w+|on the way|bump))\b/i,
+    noun: () => 'pregnancy' },
+  { key: 'baby', w: 0.6, hedged: true, couple: true, re: /\b(?:welcom(?:es|ed|ing) (?:(?:a|their|her|his|baby|first|second|third|fourth|new|magical|healthy)\s+)*(?:baby|son|daughter|child|twins|boy|girl)|gives? birth|gave birth|new baby|newborn|becomes? (?:a )?(?:mom|mum|dad|mother|father|parents?)|baby (?:boy|girl))\b/i,
+    noun: () => 'baby' },
+  { key: 'engagement', w: 0.6, hedged: true, couple: true, re: /\b(?:engaged|engagement|propos(?:es|ed) to|pops the question|popped the question)\b/i, noun: () => 'engagement' },
+  { key: 'wedding', w: 0.6, hedged: true, couple: true, re: /\b(?:marries|weds|ties the knot|tied the knot|wedding(?! anniversary)|(?:gets|got|getting) married|exchange(?:s|d)? vows|walks? down the aisle)\b/i,
+    noun: () => 'wedding' },
+  { key: 'casting', w: 0.6, hedged: true, re: /\b(?:cast (?:as|in)|joins? (?:the )?cast|to star (?:in|as|opposite|alongside)|set to (?:star|play|lead|host)|will (?:star|play|lead|host) |stars? as|to play\b(?=[^,;:]{0,50}\b(?:in|opposite|role|lead|part|alongside)\b)|lands? (?:a |the |her |his |their )?(?:new |lead |starring |leading )?(?:role|part|lead|gig)|boards (?:the |a |an )?(?:cast|film|movie|series|project|show|sequel|remake|adaptation|biopic)|signs? on (?:to|for)|tapped (?:to|for|as))/i,
+    noun: () => 'casting' },
+  { key: 'award', w: 0.6, hedged: true, re: /\b(?:to receive|receives?|received|wins?|won|earns?|earned|accepts?|honou?red (?:with|at|by)|is honou?red|inducted into|named \w+ of the year|nominated for|(?:lands?|scores?|earns?|gets?) (?:a |an |her |his |their )?(?:\w+ )?nomination|gets? (?:a )?star on)\b[^,;:]{0,60}?\b(?:awards?|prize|honou?r|trophy|grammys?|emmys?|oscars?|tony|golden globes?|baftas?|hall of fame|walk of fame|medal|of the year|nominations?)\b/i,
+    noun: (s) => (/nominat/i.test(s) ? 'nomination' : 'award') },
+  { key: 'tour', w: 0.6, re: /\b(?:announces?|unveils?|reveals?|kicks? off|launches?|adds|extends?|confirms?|postpones?|cancels?|wraps?)\b[^,;:]{0,40}?\b(?:tour(?! bus)|residency)\b/i, noun: () => 'tour' },
+  { key: 'album', w: 0.6, re: /\b(?:announces?|unveils?|reveals?|drops?(?! out)|dropped(?! out)|releases?|released|teases?|shares?|debuts?|premieres?)\b[^,;:]{0,40}?\b(?:album|ep|mixtape|single|song|music video)\b/i,
+    noun: (s) => (/\b(?:single|song|music video)\b/i.test(s) ? 'new song' : 'album') },
+  { key: 'return', w: 0.6, re: /\b(?:returns? to|returning to|makes? (?:a |an |her |his |their )?(?:\w+ )?(?:return|comeback)|is back (?:on|to|with)|comes? back to|back (?:on|to) (?:stage|screen|tv|the stage|instagram|social media|youtube|twitch|streaming))\b/i,
+    noun: () => 'return' },
+  { key: 'interview', w: 0.5, lead: true, re: /\b(?:opens? up|gets? candid|gets? real|reveals?|recalls?|reflects? on|talks?|speaks? (?:out )?(?:about|on)|says? (?:she|he|they|her|his|it|that|i|being)|shares? (?:why|how|what|that|rare|candid|emotional|heartfelt|details|(?:her|his|their) (?:story|experience|journey|struggles?|thoughts))|explains?|discusses|dishes on)\b/i,
+    noun: () => 'interview' },
+];
+const SOFT_FAMILY = new Map(SOFT_FAMILIES.map((f) => [f.key, { ...f, soft: true }]));
+// (only rumoured, feared, hinted at or denied: no title of its own; it stays reported where a drama card or none tells it)
+const SOFT_HEDGE = /\b(?:reportedly|allegedly|rumou?r\w*|speculat\w*|sources?|insiders?|claims?|claimed|purportedly|apparently|seemingly|appears? to|could|might|may|hints?|hinted|hinting|sparks?|sparked|fuels?|fueled|fuelled|fans (?:think|believe|suspect|speculate|wonder|worry|fear|notice|convinced)|concerns?|concerned|fears?|feared|worr(?:y|ies|ied)|in talks|eyed|frontrunner|odds|denies|denied|deny|shuts? down|not|no longer|never|isn['’]t|wasn['’]t|won['’]t|doesn['’]t|didn['’]t|fake|hoax\w*|amid|jok(?:es|ed|ing|e)|quips?|quipped|kid(?:s|ding)|trolls?|trolled|pranks?|pranked|parod\w+|food baby|theor(?:y|ies|ists?)|blind items?)\b/i;
+// (looks back: no news of today's for a title, "<name> recalls her first pregnancy"; an interview may look back, it is today's)
+const SOFT_RETRO = /\b(?:recalls?|recalled|remembers?|reflects? on|looks? back|looking back|years? ago|decades? ago|throwback|anniversary|once|former|ex-|past|reminisces?|regrets?|at \d{1,2})\b/i;
+// (a story the drama families tell is told by them: the soft reading never stands in for a claim, a fight, a split, a death)
+const SOFT_BLOCK = new Set([...DRAMA_FAMS, 'death', 'execution', 'verdict', 'sentencing', 'mistrial', 'prison', 'crash', 'cheating', 'outbreak', 'riots'].filter((k) => !['remarks', 'tears', 'retirement'].includes(k)));
+// someone of the person's, a relative or a helper: their news is their own ("<name> says daughter's cancer ...")
+const SOFT_THEIRS = /(?<![\p{L}\p{N}])(?:daughters?|sons?|wife|husband|mother|mom|mum|father|dad|sisters?|brothers?|family|kids|children|parents?|grand(?:mother|father|ma|pa|son|daughter)|cousin|uncle|aunt|niece|nephew|ex|partner|girlfriend|boyfriend|fianc[eé]e?|friend|friends|co-?stars?|bandmates?|manager|pet|dog|cat)(?![\p{L}\p{N}])/iu;
+// (what may stand before the name: a role, a show in quotes, a partner's possessive, "<Other> and" for a couple; never an object of someone's verb)
+const SOFT_PREFIX_END = /(?<![\p{L}\p{N}])(?:with|for|to|by|from|of|at|on|as|vs\.?|versus|about|against|over|after|like|than|calls|tells|says|slams|praises|thanks|joins|meets|congratulates|hugs|kisses|and|&)\s*$/iu;
+const SOFT_PARTNER_PREFIX = /^(?:\S+\s+){0,3}\S+[’']s\s+(?:(?:new|longtime|long-time)\s+)?(?:boyfriend|girlfriend|husband|wife|fianc[eé]e?|partner)\s*$/iu;
+const SOFT_AND_PARTNER = /^\s+(?:and|&)\s+(?:(?:her|his|their)\s+)?(?:(?:new|longtime|long-time)\s+)?(?:(?:boyfriend|girlfriend|husband|wife|fianc[eé]e?|partner)\s+)?(?:\p{Lu}[\p{L}\p{N}’'.-]*\s+){1,3}/u;
+// (a verb whose object is someone else's news: "<name> congratulates <other> on engagement", "<name> attends wedding of ...")
+const SOFT_OTHERS_VERB = /(?<![\p{L}\p{N}])(?:congratulat\w*|prais\w*|react\w*|respond\w*|slam\w*|mock\w*|roast\w*|support\w*|defend\w*|attend\w*|crash\w*|officiat\w*|toast\w*|gush\w*|wish\w*|celebrates? (?:with|for)|hosts?|throws?|plans?|joins|visits?|comforts?|consol\w*|mourn\w*|honou?r\w*|blesses|thanks|meets|surprises?)(?![\p{L}\p{N}])/iu;
+/**
+ * Whether a span names someone: in a sentence-case headline any capitalised word but "I"; in a Title Case one a given name, or two words
+ * in a row no dictionary spells.
+ */
+function someoneIn(span, nw, titleCase) {
+  const toks = String(span || '').split(/\s+/).map((t) => t.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '').replace(/[’']s$/, '')).filter(Boolean);
+  const named = (t) => /^\p{Lu}/u.test(t) && t !== 'I' && !nw.includes(t.toLowerCase());
+  if (!titleCase) return toks.some(named);
+  const unknown = (t) => named(t) && /^\p{L}{3,}$/u.test(t) && !W.inDict(t.toLowerCase());
+  return toks.some((t) => named(t) && W.isFirstName(t.toLowerCase())) || toks.some((t, i) => i + 1 < toks.length && unknown(t) && unknown(toks[i + 1]));
+}
+// (a disaster word anywhere in the headline: no soft family stands)
+const SOFT_DISASTER = /\b(?:hurricanes?|storms?|typhoons?|cyclones?|tornado(?:es)?|wildfires?|bushfires?|fire|blaze|flood(?:s|ed|ing)?|earthquakes?|quakes?|tsunamis?|landslides?|mudslides?|eruptions?|evacuat\w*)\b/i;
+const SOFT_LEAD_AT = 6;
+const SOFT_BETWEEN_WORDS = 10;
+const SOFT_SAID_WORDS = 2;
+const SOFT_APPOSITIVE = /^\s*,\s*(?:\d{1,3}|[^,]{1,40}),/;
+
+/**
+ * Which soft family a headline says of the person, or null: { f, noun, surface, index }. `name`: the person's key ("orla venn"); `lex`:
+ * the lexicon (a person-like other name). The name whole within the first SOFT_LEAD_AT words, nothing before it but a role, a show or a
+ * partner's possessive (or "<Other> and" for a couple's news); the family said after it in the same clause, nobody else named or someone
+ * of theirs between; no drama family, death or claim anywhere in it; never a question; a family that can be only rumoured, not hedged.
+ */
+function softSaid(text, name) {
+  const s = String(text || '');
+  if (!s || !name || /\?/.test(s) || QUESTION.test(s) || EXPLAINED.test(s)) return null;
+  const nw = String(name).toLowerCase().split(' ').filter(Boolean);
+  const ws = words(s);
+  const at = nameAt(ws, nw.join(' '));
+  if (!at.length || at[0] > SOFT_LEAD_AT) return null;
+  if (familiesIn(s).some((x) => SOFT_BLOCK.has(x.f.key))) return null;
+  // (where the name ends in the text itself: its last word's first mention)
+  const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = s.match(new RegExp(`(?<![\\p{L}\\p{N}])${nw.map(esc).join('[\\s.-]+')}(?![\\p{L}\\p{N}])`, 'iu'));
+  if (!m) return null;
+  const prefix = s.slice(0, m.index);
+  if (/:/.test(prefix)) return null;
+  // (a disaster in the headline is no one's soft news: "<place> boards up as hurricane nears", "<name> evacuates as wildfire spreads")
+  if (SOFT_DISASTER.test(s)) return null;
+  // (a baby lost is a death: never a soft card)
+  if (/\b(?:born sleeping|stillb(?:orn|irth)|miscarri\w+|lost (?:the|their|her|his|our) baby)\b/i.test(s)) return null;
+  let after = s.slice(m.index + m[0].length);
+  // (the name's own possessive is someone of theirs or a thing of theirs: "<name>'s daughter", never the name's own news)
+  if (/^[’']s\b/.test(after)) return null;
+  const titleCase = titleCased(s);
+  const couple = /^\s*(?:\p{Lu}[\p{L}\p{N}’'.-]*\s+){1,3}(?:and|&)(?:\s+\p{Ll}[\p{L}-]*){0,2}\s*$/u.test(prefix);
+  if (prefix.trim() && !couple && !SOFT_PARTNER_PREFIX.test(prefix) &&
+    (SOFT_PREFIX_END.test(prefix) || /[’']s\s/.test(prefix) || otherFullName(prefix, new Set(nw), titleCase))) return null;
+  const app = after.match(SOFT_APPOSITIVE);
+  const base = m.index + m[0].length + (app ? app[0].length : 0);
+  if (app) after = after.slice(app[0].length);
+  // (the clause that follows the name: to its first stop, colon, dash or "as"/"after" that starts another story)
+  const stop = after.search(/[;:|]|\s[—–-]\s|,\s+(?!\d)|\s(?:after|amid|while|following|weeks after|days after)\s/i);
+  const clause = stop < 0 ? after : after.slice(0, stop);
+  for (const f0 of SOFT_FAMILIES) {
+    const f = SOFT_FAMILY.get(f0.key);
+    if (couple && !f.couple) continue;
+    const hit = clause.match(f.re);
+    if (!hit) continue;
+    // (a couple's news may name the partner right after the name: "<name> and boyfriend <partner> announce engagement")
+    const between = f.couple ? clause.slice(0, hit.index).replace(SOFT_AND_PARTNER, ' ') : clause.slice(0, hit.index);
+    if (f.lead && !/^\s+(?:(?:finally|candidly|tearfully|emotionally|openly|now|also)\s+)?$/i.test(between)) continue;
+    // (an interview says what was said: two words of it at least after the verb, "<name> opens up" says nothing)
+    if (f.lead && words(clause.slice(hit.index + hit[0].length)).filter((w) => w.length > 2 && !W.STOP.has(w)).length < SOFT_SAID_WORDS) continue;
+    // (nobody else's: no other name, no one of theirs, no possessive before the family's word; and then the headline is that other
+    // person's soft news, never this name's interview: "<name> reveals husband's cancer diagnosis" is the husband's)
+    if (words(between).length > SOFT_BETWEEN_WORDS) continue;
+    if (!f.lead && (SOFT_THEIRS.test(between) || SOFT_OTHERS_VERB.test(between) || /[’']s\s+(?:[\p{L}-]+\s+){0,2}$/u.test(between) ||
+      otherFullName(between, new Set(nw), titleCase) || someoneIn(between, nw, titleCase))) return null;
+    if (f.hedged && (SOFT_HEDGE.test(s) || SOFT_RETRO.test(clause))) continue;
+    // (another person named inside the family's own words is that person's doing: "<name> reveals <Other> filled her tour bus")
+    if (!f.lead && otherFullName(hit[0], new Set(nw), titleCase)) return null;
+    const tail = clause.slice(hit.index + hit[0].length, hit.index + hit[0].length + 60);
+    if ((f.couple || f.key === 'award') && (/\bon behalf of\b/i.test(tail) || (f.couple && /^\s*(?:\S+\s+){0,2}(?:of|for)\b/i.test(tail) && (SOFT_THEIRS.test(tail) || /[’']s\b/.test(tail) || someoneIn(tail, nw, titleCase))))) return null;
+    if ((f.couple || f.key === 'award') && /\b(?:at|attends?|attending|performs? at|sings? at|stuns? at|dazzles? at)\s+(?:(?:a|an|the|lavish|royal|star-studded|celebrity|intimate|surprise|glamorous|private)\s+){0,3}$/i.test(clause.slice(0, hit.index))) return null;
+    if (f.key === 'health' && /\b(?:charit\w*|research|awareness|fundrais\w*|foundation|campaign|donat\w*|benefit|telethon|marathon|patients)\b/i.test(clause)) return null;
+    // (an interview that tells another named person's news is theirs: "<name> opens up about <Other>'s overdose")
+    if (f.lead && /(?:^|\s)\p{Lu}[\p{L}-]+\s+\p{Lu}[\p{L}-]+[’']s\b/u.test(clause.slice(hit.index + hit[0].length))) return null;
+    // (and one whose said part opens on another person, "<name> reveals <Other> filled her tour bus": the other's doing, not her news)
+    if (f.lead && otherFullName(words(clause.slice(hit.index + hit[0].length)).length ? clause.slice(hit.index + hit[0].length).split(/\s+/).filter(Boolean).slice(0, 3).join(' ') : '', new Set(nw), titleCase)) return null;
+    return { f, noun: f.noun(hit[0]), surface: hit[0], index: base + hit.index };
+  }
+  return null;
+}
+
+/**
+ * The soft news of a searched person's card, or null: the soft family its newest outlet headlines say of it (rows: the card's evidence
+ * rows, each { title, outlet, t, blocked, far, youtube, fam }), within `days` of now, most headlines first and then the families' order.
+ * -> { f, noun, count, rows } (rows: the headlines that say it, oldest first).
+ */
+function softRead(rows, name, { now = 0, days = 3 } = {}) {
+  const by = new Map();
+  for (const r of rows || []) {
+    if (!r || !r.title || r.youtube || r.fam === 'reddit' || r.fam === 'bluesky' || r.blocked || r.far) continue;
+    if (now && Number.isFinite(r.t) && now - r.t > days * DAY_MS) continue;
+    const said = softSaid(cleanHeadline(r.title, r.outlet), name);
+    if (!said) continue;
+    const e = by.get(said.f.key) || { f: said.f, nouns: new Map(), rows: [] };
+    e.nouns.set(said.noun, (e.nouns.get(said.noun) || 0) + 1);
+    e.rows.push(r);
+    by.set(said.f.key, e);
+  }
+  if (!by.size) return null;
+  const order = SOFT_FAMILIES.map((f) => f.key);
+  const outlets = (e) => new Set(e.rows.map((r) => String(r.outlet || '').toLowerCase())).size;
+  const best = [...by.values()].sort((a, b) => outlets(b) - outlets(a) || order.indexOf(a.f.key) - order.indexOf(b.f.key))[0];
+  const noun = [...best.nouns.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
+  return { f: best.f, noun, count: best.rows.length, rows: [...best.rows].sort((a, b) => a.t - b.t) };
+}
+
 module.exports = { SAID_FAMS, SAID_RE, saidTopic, postTopic, RECALL, REVIEWS, MEMOIR, RELATION, OFFICIAL, FAMILIES, FAMILY, SPORTS_TALK, DRAMA_FAMS, DENIABLE, CLAIMS, FACETS, EXPLAINED, QUESTION, familiesIn, othersNoun, othersSaid, nameAt,
+  // (collector only, wave 12: a person's soft news, lib/line-soft.js)
+  SOFT_FAMILIES, SOFT_FAMILY, softSaid, softRead,
   // (collector only: nounOf, caseTitle and whatOf are asked of the same headlines for every audience's list, answered once a build;
   // nounOf's answer holds the family itself, kept, and plain values, copied. engine/memo.js)
   nounOf: MEMO.memo('nounOf', nounOf, { copy: (r) => (r ? { ...r } : r) }), nameRuns, personLike, subjectOf, relationOf, personalNear,
   titleWords, caseTitle: MEMO.memo('caseTitle', caseTitle), caseMap, nameSurface, cleanHeadline, whatOf: MEMO.memo('whatOf', whatOf), recaseName, DENIAL, ROLE, WRONGDOING, MAJOR, REPORTED, reported,
   saidIn, says: saysIt, withoutSpeech, onlooker, trailingOnlooker, rumoured, ANSWERED, coupleQuits, HOAX, POST_CLAIM, statesClaim, reportedClaim, denialClause, capLine, sentenceLine,
   // (collector only: whose a death or an arrest is, read from the headline itself)
-  whoseDeath, ownRelation, spanAfter, actsBefore, PERSONAL, LIVING, RELATION_HER, RELATION_HIS, onlyReaction, REACTION_SAID };
+  whoseDeath, ownRelation, spanAfter, actsBefore, PERSONAL, LIVING, RELATION_HER, RELATION_HIS, onlyReaction, REACTION_SAID,
+  // (collector only, wave 12 release: engine/grave-own.js)
+  otherFullName };

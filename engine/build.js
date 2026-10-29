@@ -715,7 +715,8 @@ function shared(input) {
 function rankFrom(base, { words: listedWords, moments }, audience, now, onPoints = null) {
   NOW = now;
   const talkingPoints = TP.build({ ...base, audience: TC.audienceOf(audience), words: listedWords, moments, ...(onPoints ? { onPoints } : {}) });
-  return { talkingPoints, hot: HL.hotList({ talkingPoints, words: listedWords, moments }, { now: NOW, audience: TC.audienceOf(audience) }) };
+  // (collector only, wave 12: the cards the talking points' cut left under it, for the extension's "More" past rank 80: lib/desks/more.js)
+  return { talkingPoints, hot: HL.hotList({ talkingPoints, words: listedWords, moments }, { now: NOW, audience: TC.audienceOf(audience) }), overflow: TP.overflowOf(TC.audienceOf(audience)) };
 }
 
 /**
@@ -750,7 +751,7 @@ function owedOf(input, { wordGroups, wordList, built }, base) {
 }
 
 /**
- * One build: { words, bubbling, moments, byAudience: { [audience]: { talkingPoints, hot } }, owed, lex }. The words and the moments
+ * One build: { words, bubbling, moments, byAudience: { [audience]: { talkingPoints, hot, overflow } }, owed, lex }. The words and the moments
  * once, the talking points and the hot list per audience, every step the audiences ask alike answered once (engine/memo.js: one
  * scope a build, nothing kept after it). `owed`: the lookups the lists still need, for the collector's queue.
  * input: { store, wiki (most-read rows), wikiLists (daily top lists), crazes, roster, now (ms), audiences, native }.

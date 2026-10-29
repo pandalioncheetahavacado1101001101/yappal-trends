@@ -80,6 +80,8 @@ const NLOG = require('./lib/voices/native-log');
 const LFIRST = require('./lib/line-first');
 // (wave 11: the board noun, lib/board-noun.js; IDEAS_BOARD_NOUN)
 const BNOUN = require('./lib/board-noun');
+// (wave 12: a searched person's soft news, lib/line-soft.js; IDEAS_SOFT_NEWS)
+const SOFTN = require('./lib/line-soft');
 const BOARD_FLAIR_DAYS = 3;
 const IVR = require('./lib/sources/ivr');
 const SULLY = require('./lib/sources/sully');
@@ -96,6 +98,8 @@ const RDESK = require('./lib/release-desk');
 const KD = require('./lib/kinds-desk');
 const EXT = require('./lib/extension');
 const CHARTS = require('./lib/desks/charts');
+const CCHARTS = require('./lib/sources/country-charts');
+const MORE = require('./lib/desks/more');
 const TTS = require('./lib/sources/tts');
 const ROUNDUPS = require('./lib/sources/roundups');
 const REELS = require('./lib/sources/reels');
@@ -750,6 +754,22 @@ async function runCycle(opts) {
             booked: (r) => { outcome.sent += r.tried; outcome.byHost[r.request.host] = (outcome.byHost[r.request.host] || 0) + r.tried; if (r.status === 200) outcome.ok += 1; putFetch.run(cycle, r.request.id, r.request.host, t, r.status, r.bytes, r.ms); saveHost(r.request.host); } });
         } catch (e) { log(`[size] the step failed, the details keep what the state held: ${e.message}`); }
       }
+      // (wave 12: each audience's own countries' song charts, lib/sources/country-charts.js: the US pages this cycle saved read again (+0),
+      // then one chart's read at most, in turn, and only while the cycle has asked fewer than HEADROOM requests: last of all, so the count
+      // it reads is the cycle's own. Off with the charts desk, the extension, or IDEAS_SOURCES_OFF=country-charts. A replay asks only what
+      // its recording holds)
+      if ((real || opts.replay) && EXT.on(env) && !CHARTS.offOf(env).all) {
+        try {
+          const cc = await CCHARTS.step({ cache: meta.get('countryCharts', null), nowS, off, sent: outcome.sent, rawDir: paths.raw, open: (host) => B.hostOpen(hosts.get(host), clock()),
+            send: (requests) => F.send(opts.replay ? CCHARTS.recordedOnly(requests, path.join(opts.replay, String(t))) : requests, { budget, hosts, clock, deadlineMs: fetchDeadline, transport, ...(opts.replay ? { gap: () => 0 } : {}) }) });
+          meta.set('countryCharts', cc.cache);
+          for (const r of cc.results) {
+            outcome.sent += r.tried; outcome.byHost[r.request.host] = (outcome.byHost[r.request.host] || 0) + r.tried; if (r.status === 200) outcome.ok += 1; putFetch.run(cycle, r.request.id, r.request.host, t, r.status, r.bytes, r.ms); saveHost(r.request.host);
+            if (opts.record) { fs.mkdirSync(path.join(opts.record, String(t)), { recursive: true }); fs.writeFileSync(path.join(opts.record, String(t), encodeURIComponent(r.request.id)), r.text || ''); recorded[r.request.id] = { status: r.status, kind: r.request.kind, host: r.request.host, bytes: r.bytes }; }
+            if (r.status !== 200) log(`[fetch] ${r.request.id}: ${r.status || r.error || 'failed'}`);
+          }
+        } catch (e) { log(`[country-charts] not read, the rows keep what the state held: ${e.message}`); }
+      }
       // (the first plan ever was made on tier 0 alone: the names the rest of this cycle's replies brought are already waiting, they
       // are not "new" to the next cycle, which reads the list's own rows first)
       if (!Array.isArray(wantedBefore)) {
@@ -825,6 +845,11 @@ async function runCycle(opts) {
       // (and how many posts' flair the reads held: counts only)
       if (bnLine) log(`${bnLine}; flair known for ${boardFlairs ? boardFlairs.size : 0} posts`);
     } catch (e) { log(`[board-noun] no count: ${e.message}`); }
+    // (wave 12: what the soft news listed, or would list with IDEAS_SOFT_NEWS=shadow, lib/line-soft.js; counts only)
+    try {
+      const snLine = SOFTN.logLine(SOFTN.takeReports(), opts.audiences.includes('US') ? 'US' : opts.audiences[0]);
+      if (snLine) log(snLine);
+    } catch (e) { log(`[soft-news] no count: ${e.message}`); }
     const isBeat = (outlet) => TC.CREATOR_PRESS.test(outlet) || TN.MAJOR.test(outlet);
     // (the desk never holds a list back: should it fail on a row nobody foresaw, that audience's rows go out as the engine made them)
     // (the enrich pass's stories by meaning, P8: one slot late, imported here; none and the desk's own rules decide alone)
@@ -917,13 +942,22 @@ async function runCycle(opts) {
       // (+0 requests), each row in the "charts" section with its clock. IDEAS_KINDS_OFF=charts or IDEAS_SOURCES_OFF=charts: none)
       const chartsOff = CHARTS.offOf(env);
       const chartsMade = {};
-      const chartsDesk = (ctx) => { chartsMade[ctx.audience] = CHARTS.rows({ ...ctx, ledger: ledgerP, items: kindsCtx.items, trends: kindsCtx.trends, off: chartsOff }); return chartsMade[ctx.audience]; };
-      const stillDesk = (ctx) => SDESK.extended({ ...ctx, rows: [...ctx.rows, ...(kindsMade[ctx.audience] || []), ...(chartsMade[ctx.audience] || [])] });
-      const extDesks = [kindsDesk, chartsDesk, stillDesk];
+      const countryCharts = meta.get('countryCharts', null);
+      const chartsDesk = (ctx) => { chartsMade[ctx.audience] = CHARTS.rows({ ...ctx, ledger: ledgerP, countryCharts, items: kindsCtx.items, trends: kindsCtx.trends, off: chartsOff }); return chartsMade[ctx.audience]; };
+      // (wave 12: the cards the talking points' cut left under it, lib/desks/more.js, under `more` after the main rows past 80; made before
+      // the still-searched rows, so a search a card tells is that card's. Each through the desk's edit beside the main list's engine rows,
+      // as deskOf edits those: the main rows themselves are deskOf's, untouched. IDEAS_KINDS_OFF=more: none)
+      const moreOff = MORE.offOf(env);
+      const moreMade = {};
+      const moreEdit = (a) => (rows) => DESK.edit([...ROWS.rowsOf(a, built.byAudience[a], built), ...rows], { recent, now: nowMs, isBeat, lex: built.lex, roster: obs.roster, stories }).rows;
+      const moreDesk = (ctx) => { moreMade[ctx.audience] = moreOff ? [] : MORE.rows({ ...ctx, built, now: nowMs, edit: moreEdit(ctx.audience) }); return moreMade[ctx.audience]; };
+      const stillDesk = (ctx) => SDESK.extended({ ...ctx, rows: [...ctx.rows, ...(kindsMade[ctx.audience] || []), ...(chartsMade[ctx.audience] || []), ...(moreMade[ctx.audience] || [])] });
+      const extDesks = [kindsDesk, chartsDesk, moreDesk, stillDesk];
       const extCtx = (a) => ({ rows: rowsByAudience[a] || [], trends: [...(store.talkTrends || new Map()).values()], resolved, news: searchNews, lookups: store.lookups, t, audience: a, store, things, releases, wikiLists: inputs.wikiLists });
       const kindsStarted = Date.now();
       try { extCandidates = EXT.candidates(opts.audiences, extDesks, extCtx, { log }); } catch (e) { log(`[extension] no rows made: ${e.message}`); extCandidates = {}; }
-      try { const c = CHARTS.census(chartsMade[mainAudience] || []); log(`[charts] ${mainAudience}: ${c.rows} rows (sounds ${c.sounds}, songs ${c.songs}, slang ${c.slang})`); } catch (e) { log(`[charts] not counted: ${e.message}`); }
+      try { const c = CHARTS.census(chartsMade[mainAudience] || []); const cc = CCHARTS.census(countryCharts, t); log(`[charts] ${mainAudience}: ${c.rows} rows (sounds ${c.sounds}, songs ${c.songs}, slang ${c.slang}; own countries' charts ${c.own}); country charts held ${cc.charts} (${cc.fresh} read in 2 days)`); } catch (e) { log(`[charts] not counted: ${e.message}`); }
+      try { const c = MORE.census(built, mainAudience, moreMade[mainAudience] || []); log(`[more] ${mainAudience}: ${c.under} cards under the cut, ${c.rows} rows made, ${c.grave} left under it (a grave noun not its subject's, or a noun its headlines never say)`); } catch (e) { log(`[more] not counted: ${e.message}`); }
       try { const c = KD.census(kindsCache, kindsMade[mainAudience] || [], nowS); log(`[kinds] ${c.deaths} names on the deaths page, ${c.incidents} incidents of ${c.services} services read, ${c.sellers} top sellers (${c.apps} games known); rows ${KD.SECTIONS.map((k) => `${k} ${c.rows[k]}`).join(', ')} (${Date.now() - kindsStarted} ms)`); } catch (e) { log(`[kinds] not counted: ${e.message}`); }
     }
     lap('build');

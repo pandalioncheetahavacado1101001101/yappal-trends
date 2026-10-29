@@ -475,4 +475,23 @@ function sentenceVerb(line, subject) {
   return [...toks.slice(0, at + 1), aux, ...toks.slice(at + 1)].join(' ');
 }
 
-module.exports = { decap, sentenceVerb, majorityChecks, rolesIn, tidyLine, dropMiddleName, quoteWorks, pairedOf, plainLine, plainWords, nameIndex, fullNames, HEDGE };
+// ---------- a person's claim only a gossip outlet carries (collector only, wave 12) ----------
+// The celebrity gossip sites and the tabloids: a story only one of them carries is told as theirs, by name. Outlets, never people.
+const GOSSIP = /^(?:radar ?online|radar|tmz|page six|ok!?(?: magazine)?|in ?touch(?: weekly)?|life ?& ?style|star magazine|national enquirer|the enquirer|hollywood ?life|mediatakeout|the shade room|bossip|bollywoodshaadis|daily mail|mail ?online|the sun|the us sun|daily star|the mirror|daily mirror|celebitchy|deuxmoi|blind gossip|the blast|celebrity insider|the list|reality tea|crazy days and nights)$/i;
+const isGossip = (outlet) => GOSSIP.test(String(outlet || '').trim().replace(/\.(?:com|co\.uk)$/i, ''));
+const SAYS_SOURCE = /\b(?:reports?|reported|according to|says|said|claims?|alleg\w+|reportedly)\b/i;
+/**
+ * A person's line told by one gossip outlet alone, its outlet named: "<line>, <Outlet> reports." when every headline of the card naming
+ * the person (rows: the card's outlet rows, each { title, outlet }; `last`: the person's surname; `says`: whether a headline says the
+ * card's thing) is that one outlet's and the line names no source of its own. Else the line as it was.
+ */
+function gossipOnly(line, rows, last, says) {
+  if (!line || !last) return line;
+  const told = (rows || []).filter((r) => r && r.title && r.outlet && !r.youtube && r.fam !== 'reddit' && new RegExp(`(?<![\\p{L}\\p{N}])${last.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'iu').test(r.title) && says(r.title));
+  const outlets = new Set(told.map((r) => outletKey(r.outlet)));
+  if (outlets.size !== 1 || !isGossip(told[0].outlet) || SAYS_SOURCE.test(line)) return line;
+  return `${line.replace(/[.!]+(['’"”]?)$/, '$1')}, ${String(told[0].outlet).trim()} reports.`;
+}
+
+module.exports = { decap, sentenceVerb, majorityChecks, rolesIn, tidyLine, dropMiddleName, quoteWorks, pairedOf, plainLine, plainWords, nameIndex, fullNames, HEDGE,
+  gossipOnly, isGossip };

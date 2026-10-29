@@ -142,6 +142,11 @@ const FL = require('../lib/voices/fastlane');
 const LF = require('../lib/line-first');
 // (Collector only, wave 11: the board noun, lib/board-noun.js)
 const BN = require('../lib/board-noun');
+// (wave 12: a searched person's soft news, lib/line-soft.js; IDEAS_SOFT_NEWS)
+const SN = require('../lib/line-soft');
+// (the families a gossip outlet's story about a person is told in: its claims, its admissions; a romance only when it is a claim, an affair,
+// a pregnancy, who is dating whom. Wave 12)
+const GOSSIP_FAMS = new Set([...TN.DRAMA_FAMS, 'reveal']);
 const { outletKey, contains } = require('./util');
 
 const { words } = W;
@@ -788,7 +793,7 @@ function heatOf(c, ev, noun, now, extra = {}) {
   // (the week's people-drama is still a talking point while it is still told: headlines or creators' uploads in the last three days)
   if (extra.still) recency = Math.max(recency, STILL_RECENCY);
   // (a film or show searched as such is the talking point itself, as a work is: "Verity movie")
-  const nounMult = extra.work || extra.screen ? 1 : !noun || !noun.f ? NO_NOUN_MULT : noun.f.key === 'response' ? RESPONSE_MULT : 1;
+  const nounMult = extra.work || extra.screen ? 1 : !noun || !noun.f || noun.soft ? NO_NOUN_MULT : noun.f.key === 'response' ? RESPONSE_MULT : 1;
   // a death, a tribute or a trial with no uploads, no thread and no denial: nothing to argue about
   // (a million searches is a talking point whatever its noun: "Wynia Pymick death" under "jaso")
   const volume = Math.max(0, ...c.trends.map((t) => t.volume));
@@ -1200,6 +1205,15 @@ function pointOf(c, ctx) {
     // (the boards are its coverage: like a post's noun, it is its own wave, never an aside of the name's week)
     noun0 = { f: boardN.f, noun: boardN.noun, count: boardN.count, share: boardN.count / Math.max(1, titles.length), explained: 0, board: boardN.how, wave: true };
   }
+  // (a searched person's news that no noun tells, a health update, an engagement, a role, an award, an interview, is titled by what its
+  // newest outlet headline says of them: "Orla Venn engagement", told as the outlet wrote it, attributed. In shadow (IDEAS_SOFT_NEWS=shadow)
+  // only counted. Collector only, wave 12, lib/line-soft.js)
+  // (over no noun, a response or a reveal, which list nothing on their own, or a noun only its searches type, no headline saying it)
+  const softable = !!ctx.softNewsMode && ctx.softNewsMode !== 'off' && (!noun0 || !noun0.f || SN.OVER.has(noun0.f.key) || noun0.count === 0) && c.trends.length > 0 && !c.parent && !c.generic;
+  // (fenced: a fault in the soft reading leaves the card as it was, never the build)
+  let softN = null;
+  try { softN = softable ? SN.nounOf(c, ev, near, { now, lex, tier: whoOf(c, ev, near, kindOf(c, null, false), lex, ctx.roster).tier }) : null; } catch { softN = null; }
+  if (softN && ctx.softNewsMode === 'on') noun0 = softN.noun;
   const f0 = noun0 && noun0.f;
   const names = namesAround(c, titles, ev.completions, lex);
   let subject0 = TN.subjectOf(c.key, f0, titles, names);
@@ -1234,6 +1248,8 @@ function pointOf(c, ctx) {
   // the words people search with the name: its related queries, fresh completions and trend keywords
   const searched = new Set([...phrases, ...(c.parentRelated || [])].flatMap((q) => q.split(' ')));
   let { ws: tw, how } = TN.titleWords(subject, noun ? noun.noun || '' : '', f, phrases, titles, names, searched);
+  // (a soft card is the name and the family's word: "Orla Venn health update")
+  if (noun && noun.soft) { tw = [...subject.split(' '), ...words(noun.noun)]; how = 'soft'; }
   // (something said that people hit back at is searched by what it was about: "Drubzo women comments", "Nimvane slavery comments";
   // a drama name's by its newest wave of headlines)
   let said = null;
@@ -1324,10 +1340,11 @@ function pointOf(c, ctx) {
   // (a hyphenated noun keeps its hyphen: "long-lost son")
   const titleOf = (ws, n) => hyphenate(TN.caseTitle(ws, subject, work && work.work ? [...visible, ...visible.map((t) => t.replace(/[‘'“"]/g, ' '))] : visible, lex), n)
     .replace(surface0, surface);
-  let title0 = titleOf(tw, noun);
+  // (a soft card's word in the card's own case, whatever case its headline printed it in: "Orla Venn award", never "... Award")
+  let title0 = noun && noun.soft ? `${titleOf(tw.slice(0, tw.length - words(noun.noun).length), null)} ${noun.noun}` : titleOf(tw, noun);
   const lineWords = tw.filter((w) => !subject.split(' ').includes(w) && !(noun && words(noun.noun || '').includes(w)));
   const lineOpts = { rumor, stronger, now, debug: ctx.find && ctx.debug && (mentions(` ${c.key} `, keyOf(ctx.find)) || mentions(` ${keyOf(tw.join(' '))} `, keyOf(ctx.find))) ? ctx.debug : null };
-  let traced = TN.whatOf(ev.rows, subject, said || f, ev.peakT, lex, lineWords, lineOpts);
+  let traced = noun && noun.soft && softN ? { ...softN.line } : TN.whatOf(ev.rows, subject, said || f, ev.peakT, lex, lineWords, lineOpts);
   // (a creators'-world story only the outlets the moments block wrote up, the ones that write up every streamer's week, is told by
   // their headline: never a far country's own outlet's, never an upload's)
   if (!traced.what && f && (c.creator || ev.creatorSub)) {
@@ -1401,7 +1418,9 @@ function pointOf(c, ctx) {
   const ownShow = work && work.work ? work.work : work || kindOf(c, noun, screen) === 'show' ? surface : null;
   // (and a word a headline capitalised that the others print lowercase is no name: "‘distracting’ superfans", "cops tasing him")
   const tidy = (line) => TL.decap(TL.quoteWorks(TL.dropMiddleName(TN.recaseName(line, subject, surface), subject, surface), visible, ownShow), titles, subject);
-  const told = tidy(traced.what);
+  // (a soft card's line is tidied as every line is, the outlet it is attributed to spelt as the outlet spells itself: "The Kit reports")
+  const softOutlet = noun && noun.soft && softN && softN.line.trace.length ? String(softN.line.trace[0].source || '') : '';
+  const told = softOutlet ? tidy(traced.what).replace(new RegExp(softOutlet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), () => softOutlet) : tidy(traced.what);
   // (an election its line tells by the country, never naming the candidate whole, is searched by the country: "Brazil election
   // runoff" for "Brazil gears up for Drubdot-Ulmith presidential runoff", not "Zanade Ulmith election")
   // (an official nobody searches by name, by the league and the job its searches type: "NFL referee suspension")
@@ -1433,7 +1452,14 @@ function pointOf(c, ctx) {
   // (a death the list has carried for days is told by what followed it, once several outlets tell the same follow-up: "Jaso
   // Wickick launches petition to combat 'harassment and cyberbullying' after partner Wynia Pymick's death")
   const after = traced.what && f && f.key === 'death' ? aftermathLine(ev, subject, f, lex, now) : null;
-  const what = fresh2 || (owned ? owned.what : null) || (after ? tidy(after.what) : null) || (traced.what && chapter && f && f.key === 'allegations' ? withChapter(told, chapter) : told);
+  const what0 = fresh2 || (owned ? owned.what : null) || (after ? tidy(after.what) : null) || (traced.what && chapter && f && f.key === 'allegations' ? withChapter(told, chapter) : told);
+  // (a person's claim, admission or claimed romance only one gossip outlet carries is told as that outlet's: "<line>, <Outlet> reports." Collector
+  // only, wave 12: a gossip site's "<name> admits ..." stood as a plain fact)
+  // (IDEAS_SOFT_NEWS=off: as before)
+  const gossipy = !!ctx.softNewsMode && ctx.softNewsMode !== 'off' && !!f && !(noun && noun.soft) && (TN.personLike(subject, lex) || subject.includes(' ')) &&
+    (GOSSIP_FAMS.has(f.key) || (f.key === 'romance' && TN.statesClaim(what0 || '', f, subject.split(' ').slice(-1)[0])));
+  let what = what0;
+  try { if (gossipy) what = TL.gossipOnly(what0, ev.press, subject.split(' ').slice(-1)[0], (t) => TN.says(t, said || f)); } catch { what = what0; }
   const denied = owned ? false : traced.denied;
   const trace = owned ? [...owned.trace, ...traced.trace] : after ? [...after.trace, ...traced.trace] : traced.trace;
   const generic = c.generic && how !== 'search' && how !== 'reviews' && !namedAfterAll(c.key, titles, lex);
@@ -1518,6 +1544,8 @@ function pointOf(c, ctx) {
     c, ev, noun, subject, title, how, what, denied, kind, generic, aside, work, own, score: heat.score, parts: heat.parts, searchVolume,
     // (the line-first line, internal: what it would say in shadow, what it says when on. Never published)
     ...(firstLine ? { lineFirst: { what: firstLine.what, t: firstLine.t, used: ctx.lineFirstMode === 'on' } } : {}),
+    // (the soft noun, internal: what it would title and say in shadow, what it does when on. Never published)
+    ...(softN ? { softNews: { key: softN.noun.f.key, noun: softN.noun.noun, what: softN.line.what, used: ctx.softNewsMode === 'on' && !!noun && !!noun.soft } } : {}),
     // (the board noun, internal: what it would title and say in shadow, what it does when on. Never published)
     ...(boardN ? { boardNoun: { how: boardN.how, key: boardN.f.key, noun: boardN.noun, what: boardLine && boardLine.what ? boardLine.what : null,
       used: ctx.boardNounMode === 'on' && !!noun && noun.board === boardN.how && !!boardLine && boardLine.what === what } } : {}),
@@ -2304,7 +2332,9 @@ function build(ctx) {
   const lineFirstMode = LF.mode(process.env);
   // (wave 11, lib/board-noun.js: IDEAS_BOARD_NOUN, shadow when unset)
   const boardNounMode = BN.mode(process.env);
-  const full = { ...ctx, items, wikiIndex: wikiDaysIndex(ctx.wikiLists), lineFirstMode, boardNounMode };
+  // (wave 12, lib/line-soft.js: IDEAS_SOFT_NEWS, on when unset)
+  const softNewsMode = SN.mode(process.env);
+  const full = { ...ctx, items, wikiIndex: wikiDaysIndex(ctx.wikiLists), lineFirstMode, boardNounMode, softNewsMode };
   const cands = candidates(full);
   // (the trending names, for a name that trends for another one's story)
   full.trendKeys = new Set(cands.filter((c) => c.from === 'trends' && searchScore(c.trends) >= ASIDE_HOST_SEARCH).map((c) => c.key));
@@ -2321,6 +2351,8 @@ function build(ctx) {
   for (const p of points) {
     const at = kept.findIndex((k) => samePoint(k, p));
     if (at < 0) kept.push(p);
+    // (a soft card never takes a story another card tells: that card stands, as with no soft card at all. Wave 12, lib/line-soft.js)
+    else if (kept[at].noun && kept[at].noun.soft && !(p.noun && p.noun.soft)) kept[at] = p;
     else if (sameFilm(kept[at], p)) films.set(at, [...(films.get(at) || [kept[at]]), p]);
     // (one story under two names is the card of the one the list leads with, at the pair's heat: "Brinix Hassard split", a creator's, over
     // "Jasix Wickova split", the same breakup told by the name nobody is called a creator for)
@@ -2349,6 +2381,8 @@ function build(ctx) {
   // when the lane is off; the desk would otherwise leave the moment out for the card. Collector only, wave 9: a replay's page-one death
   // moment became a lane card at rank 70)
   if (lane.mode === 'act') kept.splice(0, kept.length, ...kept.filter((k) => !(k.fastAct === true && !k.fastHand && momentTells(ctx.moments, k))));
+  // (and a soft card yields to a moment that tells its story the same way: the moment keeps its own row. Wave 12, lib/line-soft.js)
+  if (softNewsMode === 'on') kept.splice(0, kept.length, ...kept.filter((k) => !(k.noun && k.noun.soft && momentTells(ctx.moments, k))));
   // (a card the moments list tells under the same title takes the moments' vetted line: "Tavix Ostiss faces backlash over alleged
   // Palestine stance")
   // (and a card with no search of its own, a Reddit or press name, takes the moments' title too when they tell its subject: the
@@ -2376,7 +2410,11 @@ function build(ctx) {
   });
   const memes = memes0.filter((m) => !words0.some((w) => covers(w, m)));
   const crazes = crazePoints(ctx.crazes, full).filter((w) => !taken(w) && ![...words0, ...memes].some((x) => contains(x.subject, w.subject) || contains(w.subject, x.subject)));
-  const all = blend(kept, [...words0, ...memes, ...crazes]).sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+  // (a soft card never takes a person's drama or death card's seat at the cut: it waits just under it instead. Rank, never filter. Wave 12)
+  const order = blend(kept, [...words0, ...memes, ...crazes]).sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+  let softCut = { all: order, yielded: 0 };
+  try { if (softNewsMode === 'on') softCut = SN.yieldSoft(order, LIST_MAX); } catch { softCut = { all: order, yielded: 0 }; }
+  const all = softCut.all;
   if (ctx.debug) for (const p of all.slice(0, 50)) ctx.debug(`${p.score.toFixed(2)} ${p.title} | ${p.c ? `${p.c.from} ${p.c.key} ${JSON.stringify(Object.fromEntries(Object.entries(p.parts).map(([k, v]) => [k, +v.toFixed(2)])))} out=${p.ev.outlets} yt=${p.ev.youtube} n=${p.noun ? `${p.noun.noun}:${p.noun.count}` : '-'}` : 'word'}`);
   // (the list's first LIST_MAX by heat, and the people-drama cards just under the cut: the one list leads with them)
   // (the creators' own first among them: a small streamer's story has its turn under "Show more" before a celebrity's aside)
@@ -2393,15 +2431,25 @@ function build(ctx) {
   // (the fast lane's Early evidence, wave 9: a row its lane listed, or kept under the cut; never one the hand rule lists by heat)
   const fastTagged = new Set(listed.filter((p, i) => p.fastAct === true && (!p.fastHand || i >= LIST_MAX)));
   if (lane.met) FL.report(ctx.audience, laneReport(lane, listed, fastTagged, ctx.moments || []));
+  if (softNewsMode !== 'off') { try { SN.report(ctx.audience, softNewsReport(softNewsMode, weighed, listed, all, kept, extraOf, full, softCut.yielded)); } catch { /* (the count's loss only) */ } }
   if (lineFirstMode !== 'off') LF.report(ctx.audience, lineFirstReport(lineFirstMode, weighed, listed, all, kept, extraOf, full));
   if (boardNounMode !== 'off') BN.report(ctx.audience, boardNounReport(boardNounMode, weighed, listed, all, kept, extraOf, full));
   // (every card's line printed the card's way: curly quotes, "and" for "&")
   // (and never a clause's own stop before the line's: "... in her apartment;." ends "... in her apartment.". Collector only, 2026-10-29)
-  return listed.map((p) => ({ ...p.out, what: p.out.what ? TL.tidyLine(p.out.what).replace(/\s*[;:,]\s*([.!?])$/, '$1') : p.out.what,
-    ...(p.out.latest ? { latest: { ...p.out.latest, text: TL.tidyLine(p.out.latest.text) } } : {}),
+  const printed = (p) => ({ ...p.out, what: p.out.what ? TL.tidyLine(p.out.what).replace(/\s*[;:,]\s*([.!?])$/, '$1') : p.out.what,
+    ...(p.out.latest ? { latest: { ...p.out.latest, text: TL.tidyLine(p.out.latest.text) } } : {}) });
+  // (collector only, wave 12: the cards every rule of lists() passed that sit under the cut, printed the same way, kept beside the list
+  // for the extension's "More" past rank 80 (lib/desks/more.js); the list itself is unchanged)
+  OVERFLOW.set(ctx.audience, all.slice(LIST_MAX).filter((p) => !extra.has(p)).slice(0, OVERFLOW_MAX).map(printed));
+  return listed.map((p) => ({ ...printed(p),
     // (the fast lane's young chapter: the Early tag's evidence, lib/measure.js earlyStep `fastLane`. Internal, never published)
     ...(fastTagged.has(p) && p.out.meta ? { meta: { ...p.out.meta, fastAt: p.fast.at } } : {}) }));
 }
+// (collector only, wave 12: each audience's cards under the cut of its last build, for the extension; overflowOf reads them)
+const OVERFLOW = new Map();
+const OVERFLOW_MAX = 120;
+/** The cards of an audience's last build that every rule of lists() passed and the cut left under it (heat order); [] before a build. */
+const overflowOf = (audience) => OVERFLOW.get(audience) || [];
 
 /**
  * Collector only, wave 9 (lib/voices/fastlane.js; IDEAS_FASTLANE). The points lists() passes, and with the switch at `act` a person's
@@ -2492,6 +2540,19 @@ function boardNounReport(mode, weighed, listed, all, kept, extraOf, ctx) {
   return { ...base, passed: passed.length, would: would.length };
 }
 
+function softNewsReport(mode, weighed, listed, all, kept, extraOf, ctx, yielded = 0) {
+  const made = weighed.filter((p) => p.softNews);
+  const families = {};
+  for (const p of made) families[p.softNews.key] = (families[p.softNews.key] || 0) + 1;
+  const base = { mode, made: made.length, families, yielded };
+  if (mode === 'on') return { ...base, passed: made.filter((p) => p.softNews.used && lists(p, ctx.now, ctx.lex)).length, would: listed.filter((p) => p.softNews && p.softNews.used).length };
+  const cut = all.length >= LIST_MAX ? all[LIST_MAX - 1].score : 0;
+  const on = made.map((p) => pointOf(p.c, { ...ctx, softNewsMode: 'on' })).filter((q) => q.softNews && q.softNews.used);
+  const passed = on.filter((q) => lists(q, ctx.now, ctx.lex));
+  const would = passed.filter((q) => (q.score >= cut || extraOf(q)) && !kept.some((k) => samePoint(k, q)));
+  return { ...base, passed: passed.length, would: would.length };
+}
+
 function lineFirstReport(mode, weighed, listed, all, kept, extraOf, ctx) {
   const made = weighed.filter((p) => p.lineFirst);
   if (mode === 'on') {
@@ -2557,7 +2618,7 @@ function lookupNamesAll(ctx) {
 const MEME_LOOKUP_AT = 20;
 const MEME_LOOKUP_MAX = 6;
 
-module.exports = { build, lists, nativePair, postNoun, postLine, leadNoun, candidates, relatedCandidates, lookupNames: lookupNamesAll, dramaLookupNames: (ctx) => TC.dramaLookupNames({ ...ctx, items: hayed(ctx.items) }), recentNames, evidenceOf, pointOf, leadName, wordPoints, momentPoints, crazePoints, crazeTitle, WINDOW_DAYS,
+module.exports = { build, overflowOf, lists, nativePair, postNoun, postLine, leadNoun, candidates, relatedCandidates, lookupNames: lookupNamesAll, dramaLookupNames: (ctx) => TC.dramaLookupNames({ ...ctx, items: hayed(ctx.items) }), recentNames, evidenceOf, pointOf, leadName, wordPoints, momentPoints, crazePoints, crazeTitle, WINDOW_DAYS,
   wikiDaysIndex, wikiCurveOf, momentumOf, makesClaim, quotedRun, hoaxOf, POST_PLAY, POST_HEDGE, laneReport,
   // (the collector's own rules, held by test/honesty.test.js)
   arrestStated, arrestGiven, arrestOf, whoseArrest, claimedOf, admissionNoun, eventText, dropKicker, ARREST_OVER,

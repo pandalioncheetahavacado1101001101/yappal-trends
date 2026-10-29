@@ -170,6 +170,10 @@ jobs:
       # lib/desks/charts.js, lib/sources/fixed.js)
       # (wave 11: IDEAS_SOURCES_OFF also takes "headlines" for the four headline feeds, or one of hl-filmnews, hl-radar, hl-dailymail,
       # hl-variety: lib/sources/headline-feeds.js)
+      # (wave 12: IDEAS_KINDS_OFF also takes "more" for the cards under the talking points' cut; IDEAS_SOURCES_OFF takes "country-charts"
+      # for the eleven country chart reads, or apple-music, kworb-country, shazam-country, tts-country, or one chart id apple-music-us,
+      # apple-music-gb, apple-music-au, apple-music-ca, kworb-gb, kworb-au, kworb-ca, shazam-gb, shazam-au, shazam-ca, tts-ca:
+      # lib/desks/more.js, lib/sources/country-charts.js)
       IDEAS_KINDS_OFF: ${{ vars.IDEAS_KINDS_OFF }}
       IDEAS_SOURCES_OFF: ${{ vars.IDEAS_SOURCES_OFF }}
       # (early name searches, wave 10: on unless IDEAS_SEARCH_EARLY is "0" or "off" ("shadow": counts only). A people-drama name two
@@ -184,6 +188,9 @@ jobs:
       # (the board noun, wave 11: shadow unless IDEAS_BOARD_NOUN is "on" ("0" or "off": off, no flair read). +0 requests; keep unset
       # until its precision log passes: lib/board-noun.js)
       IDEAS_BOARD_NOUN: ${{ vars.IDEAS_BOARD_NOUN }}
+      # (soft news, wave 12: a searched creator's or celebrity's news with no drama noun titled "<name> <word>", one outlet headline,
+      # attributed; on unless IDEAS_SOFT_NEWS is "0" or "off" ("shadow": counts only). +0 requests: lib/line-soft.js)
+      IDEAS_SOFT_NEWS: ${{ vars.IDEAS_SOFT_NEWS }}
       # (the owner's switched sources: hl-dailymail, hl-variety (needs permission from each publisher), youtube-results, tiktok-sound,
       # tiktok-profile. Unset: none: lib/sources/switch.js)
       IDEAS_SOURCES_ON: ${{ vars.IDEAS_SOURCES_ON }}
