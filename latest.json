@@ -1,0 +1,367 @@
+{
+ "schema": 1,
+ "name": "yappal-ideas-scoreboard",
+ "spec": {
+  "version": 4,
+  "hash": "012e34e60c54"
+ },
+ "generatedAt": "2026-10-31T07:08:31Z",
+ "minN": 15,
+ "matcher": {
+  "version": 3,
+  "audit": {
+   "day": "2026-10-19",
+   "audited": 41,
+   "wrong": 2,
+   "rate": 0.049
+  }
+ },
+ "latest": {
+  "day": "2026-10-29",
+  "spec": "012e34e60c54",
+  "at": "2026-10-31T07:08:31Z",
+  "lead": {
+   "gt": {
+    "n": 0,
+    "first": 0,
+    "tie": 0,
+    "late": 0,
+    "medianHours": null,
+    "shareFirst": null,
+    "status": "insufficient",
+    "excluded": 7,
+    "listedLate": 0
+   },
+   "kym": {
+    "n": 0,
+    "first": 0,
+    "tie": 0,
+    "late": 0,
+    "medianHours": null,
+    "shareFirst": null,
+    "status": "insufficient",
+    "excluded": 3,
+    "listedLate": 0
+   },
+   "viral50": {
+    "n": 0,
+    "first": 0,
+    "tie": 0,
+    "late": 0,
+    "medianHours": null,
+    "shareFirst": null,
+    "status": "insufficient",
+    "excluded": 0,
+    "listedLate": 0
+   }
+  },
+  "pooled": {
+   "gt": {
+    "n": 52,
+    "days": 7,
+    "status": "ok",
+    "medianHours": 0,
+    "shareFirst": 0.038,
+    "ci": [
+     0,
+     0
+    ],
+    "shareFirstCi": [
+     0,
+     0.096
+    ]
+   },
+   "kym": {
+    "n": 5,
+    "days": 7,
+    "status": "insufficient",
+    "medianHours": null,
+    "shareFirst": null,
+    "ci": null,
+    "shareFirstCi": null
+   },
+   "viral50": {
+    "n": 0,
+    "days": 7,
+    "status": "insufficient",
+    "medianHours": null,
+    "shareFirst": null,
+    "ci": null,
+    "shareFirstCi": null
+   }
+  },
+  "coverage": {
+   "gt": {
+    "n": 0,
+    "covered": 0,
+    "first": 0,
+    "via": 0,
+    "excluded": 19,
+    "share": null,
+    "firstShare": null,
+    "status": "insufficient",
+    "stages": {
+     "listedLate": 0,
+     "outside": 0,
+     "notListed": 0,
+     "readOnly": 0,
+     "unseen": 0
+    }
+   },
+   "kym": {
+    "n": 0,
+    "covered": 0,
+    "first": 0,
+    "via": 0,
+    "excluded": 6,
+    "share": null,
+    "firstShare": null,
+    "status": "insufficient",
+    "stages": {
+     "listedLate": 0,
+     "outside": 0,
+     "notListed": 0,
+     "readOnly": 0,
+     "unseen": 0
+    }
+   },
+   "viral50": {
+    "n": 0,
+    "covered": 0,
+    "first": 0,
+    "via": 0,
+    "excluded": 10,
+    "share": null,
+    "firstShare": null,
+    "status": "insufficient",
+    "stages": {
+     "listedLate": 0,
+     "outside": 0,
+     "notListed": 0,
+     "readOnly": 0,
+     "unseen": 0
+    }
+   },
+   "x": {
+    "n": 0,
+    "covered": 0,
+    "first": 0,
+    "via": 0,
+    "excluded": 1,
+    "share": null,
+    "firstShare": null,
+    "status": "insufficient",
+    "stages": {
+     "listedLate": 0,
+     "outside": 0,
+     "notListed": 0,
+     "readOnly": null,
+     "unseen": null
+    },
+    "top": 20,
+    "classed": 10
+   }
+  },
+  "breadth": {
+   "status": "nolists",
+   "pooled": {
+    "days": 4,
+    "stories": 30,
+    "gtStarts": 78,
+    "ratio": 0.38,
+    "status": "ok"
+   }
+  },
+  "precision": {
+   "lists": [],
+   "gate": null
+  },
+  "speed": {
+   "runs": 93,
+   "published": 92,
+   "failed": 0,
+   "lagMedianMinutes": 7.6,
+   "lagP90Minutes": 8.9,
+   "meanAgeMinutes": 16.6,
+   "ageCoveredShare": 1,
+   "maxGapMinutes": 70.5,
+   "probeN": 0,
+   "probeMeanAgeMinutes": null
+  },
+  "reads": {
+   "gt": "ok",
+   "kym": "ok",
+   "viral50": "ok",
+   "x": "ok"
+  },
+  "meets": {
+   "lead": false,
+   "breadth": false,
+   "precision": false,
+   "coverage": {
+    "gt": false,
+    "kym": false,
+    "viral50": false
+   },
+   "speed": false
+  }
+ },
+ "rolling": {
+  "days": 5,
+  "from": "2026-10-25",
+  "to": "2026-10-29",
+  "lead": {
+   "gt": {
+    "n": 52,
+    "days": 14,
+    "status": "ok",
+    "medianHours": 0,
+    "shareFirst": 0.038,
+    "ci": [
+     0,
+     0
+    ],
+    "shareFirstCi": [
+     0,
+     0.096
+    ]
+   },
+   "kym": {
+    "n": 5,
+    "days": 14,
+    "status": "insufficient",
+    "medianHours": null,
+    "shareFirst": null,
+    "ci": null,
+    "shareFirstCi": null
+   },
+   "viral50": {
+    "n": 0,
+    "days": 14,
+    "status": "insufficient",
+    "medianHours": null,
+    "shareFirst": null,
+    "ci": null,
+    "shareFirstCi": null
+   }
+  },
+  "coverage": {
+   "gt": {
+    "days": 5,
+    "n": 78,
+    "covered": 31,
+    "first": 2,
+    "share": 0.397,
+    "firstShare": 0.065,
+    "status": "ok",
+    "stages": {
+     "listedLate": 3,
+     "outside": 2,
+     "notListed": 1,
+     "readOnly": 41,
+     "unseen": 0
+    }
+   },
+   "kym": {
+    "days": 5,
+    "n": 17,
+    "covered": 5,
+    "first": 1,
+    "share": 0.294,
+    "firstShare": 0.2,
+    "status": "ok",
+    "stages": {
+     "listedLate": 0,
+     "outside": 0,
+     "notListed": 0,
+     "readOnly": 11,
+     "unseen": 1
+    }
+   },
+   "viral50": {
+    "days": 5,
+    "n": 40,
+    "covered": 24,
+    "first": 0,
+    "share": 0.6,
+    "firstShare": 0,
+    "status": "ok",
+    "stages": {
+     "listedLate": 7,
+     "outside": 9,
+     "notListed": 0,
+     "readOnly": 0,
+     "unseen": 0
+    }
+   },
+   "x": {
+    "days": 5,
+    "n": 5,
+    "covered": 4,
+    "first": 1,
+    "share": null,
+    "firstShare": null,
+    "status": "insufficient",
+    "stages": {
+     "listedLate": 0,
+     "outside": 0,
+     "notListed": 0,
+     "readOnly": null,
+     "unseen": null
+    }
+   }
+  },
+  "breadth": {
+   "days": 4,
+   "stories": 30,
+   "gtStarts": 78,
+   "ratio": 0.38,
+   "status": "ok"
+  },
+  "precision": {
+   "checkedDays": 4,
+   "gateDays": 0,
+   "lists": 8,
+   "rows": 160,
+   "live": 56,
+   "liveV3": 53
+  },
+  "speed": {
+   "days": 5,
+   "meanAgeMinutes": 15.2,
+   "lagMedianMinutes": 6.1
+  }
+ },
+ "targets": {
+  "lead": {
+   "gt": {
+    "shareFirst": 0.75,
+    "medianHours": 6,
+    "ciLowAbove": 0
+   },
+   "kym": {
+    "shareFirst": 0.75,
+    "medianHours": 24,
+    "ciLowAbove": 0
+   }
+  },
+  "coverage": {
+   "gt": 0.6,
+   "kym": 0.8,
+   "viral50": 0.8,
+   "firstShare": 0.5
+  },
+  "breadth": 3,
+  "precision": {
+   "liveMin": 18,
+   "duplicatesMax": 0,
+   "fadingMax": 3
+  },
+  "speedMeanAgeMinutes": 15
+ },
+ "claim": {
+  "consecutiveDays": 0,
+  "needed": 14,
+  "holds": false
+ }
+}

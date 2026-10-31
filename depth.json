@@ -1,0 +1,166 @@
+{
+ "schema": 1,
+ "name": "yappal-ideas-depth",
+ "spec": {
+  "v4": "012e34e60c54",
+  "depth": 1
+ },
+ "generatedAt": "2026-10-31T07:08:44Z",
+ "day": "2026-10-29",
+ "listDepth": 150,
+ "mainRows": 80,
+ "at150": {
+  "lead": {
+   "gt": {
+    "n": 0,
+    "first": 0,
+    "tie": 0,
+    "late": 0,
+    "medianHours": null,
+    "shareFirst": null,
+    "status": "insufficient",
+    "excluded": 9,
+    "listedLate": 0
+   },
+   "kym": {
+    "n": 0,
+    "first": 0,
+    "tie": 0,
+    "late": 0,
+    "medianHours": null,
+    "shareFirst": null,
+    "status": "insufficient",
+    "excluded": 3,
+    "listedLate": 0
+   },
+   "viral50": {
+    "n": 0,
+    "first": 0,
+    "tie": 0,
+    "late": 0,
+    "medianHours": null,
+    "shareFirst": null,
+    "status": "insufficient",
+    "excluded": 0,
+    "listedLate": 0
+   }
+  },
+  "coverage": {
+   "gt": {
+    "n": 0,
+    "covered": 0,
+    "first": 0,
+    "via": 0,
+    "excluded": 19,
+    "share": null,
+    "firstShare": null,
+    "status": "insufficient",
+    "stages": {
+     "listedLate": 0,
+     "outside": 0,
+     "notListed": 0,
+     "readOnly": 0,
+     "unseen": 0
+    }
+   },
+   "kym": {
+    "n": 0,
+    "covered": 0,
+    "first": 0,
+    "via": 0,
+    "excluded": 6,
+    "share": null,
+    "firstShare": null,
+    "status": "insufficient",
+    "stages": {
+     "listedLate": 0,
+     "outside": 0,
+     "notListed": 0,
+     "readOnly": 0,
+     "unseen": 0
+    }
+   },
+   "viral50": {
+    "n": 0,
+    "covered": 0,
+    "first": 0,
+    "via": 0,
+    "excluded": 10,
+    "share": null,
+    "firstShare": null,
+    "status": "insufficient",
+    "stages": {
+     "listedLate": 0,
+     "outside": 0,
+     "notListed": 0,
+     "readOnly": 0,
+     "unseen": 0
+    }
+   },
+   "x": {
+    "n": 0,
+    "covered": 0,
+    "first": 0,
+    "via": 0,
+    "excluded": 1,
+    "share": null,
+    "firstShare": null,
+    "status": "insufficient",
+    "stages": {
+     "listedLate": 0,
+     "outside": 0,
+     "notListed": 0,
+     "readOnly": null,
+     "unseen": null
+    },
+    "top": 20,
+    "classed": 10
+   }
+  },
+  "breadth": {
+   "status": "nolists"
+  }
+ },
+ "tailFirst": {
+  "gt": 0,
+  "kym": 0,
+  "viral50": 0,
+  "x": 0
+ },
+ "rows": {
+  "lines": 93,
+  "median": 153,
+  "least": 125,
+  "at150Lines": 49,
+  "under120Lines": 0,
+  "extension": {
+   "stillSearched": 16,
+   "tonight": 0,
+   "charts": 4,
+   "games": 3,
+   "niche": 1,
+   "remembered": 3,
+   "more": 41
+  },
+  "fresh": 0.316,
+  "status": "ok"
+ },
+ "sections": {},
+ "check": {
+  "v4At80": true,
+  "v4Hash": "012e34e60c54"
+ },
+ "fivex": {
+  "status": "shadow",
+  "leadShareFirst80": null,
+  "breadthRatio150": null
+ },
+ "meets": {
+  "rowsLines": false,
+  "rowsFloor": true,
+  "extLive": null,
+  "soundLive": null,
+  "fresh": null,
+  "notListed150": true
+ }
+}
